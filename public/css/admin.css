@@ -231,7 +231,7 @@ textarea { height: 80px; text-align: left; padding: 10px; }
     word-break: break-all; 
 }
 .list-editor li span { margin-right: 10px; color: #555; }
-.list-editor li .delete-item-btn { 
+.list-content li .delete-item-btn { 
     background: var(--color-danger-light); 
     color: white; 
     border: none; 
@@ -469,4 +469,12 @@ textarea { height: 80px; text-align: left; padding: 10px; }
 
 #card-superadmin input[type="password"] {
     margin-top: 10px;
+}
+
+/* --- 15. 修正 V3.2 CSP 造成的行內樣式錯誤 --- */
+#resetAllConfirm {
+    display: none;
+}
+#card-superadmin {
+    display: none;
 }
