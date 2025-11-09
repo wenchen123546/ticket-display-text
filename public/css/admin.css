@@ -79,7 +79,7 @@ body {
 #login-container button:hover { opacity: 0.9; }
 #login-error { color: var(--color-danger); margin-top: 15px; height: 1.2rem; }
 
-/* --- 2. 【GridStack】 卡片佈局 --- */
+/* --- 2. 【新】 靜態卡片佈局 --- */
 
 #admin-panel { 
     display: none; 
@@ -90,19 +90,32 @@ body {
 #admin-panel h1 { font-size: 3rem; color: var(--color-danger); margin-bottom: 30px; }
 #number { font-size: 5rem; color: var(--color-primary); margin: 20px 0; }
 
-.grid-stack-item-content {
+.card-container {
+    display: flex;
+    flex-wrap: nowrap; /* 預設不換行 */
+    gap: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.card-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex: 1; /* 每欄等寬 */
+    min-width: 300px; /* 最小寬度 */
+}
+
+.admin-card {
     background: var(--color-bg-light);
     border-radius: 10px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-.grid-stack-item-content .admin-card {
     padding: 20px;
     text-align: left; 
-    height: 100%; 
     box-sizing: border-box; 
     display: flex;
-    flex-direction: column; 
+    flex-direction: column;
+    height: 100%; /* 讓卡片在同一行時等高 (雖然這裡是不同行) */
 }
 
 .admin-card h3 {
@@ -115,7 +128,8 @@ body {
     border-bottom: 1px solid #eee;
     padding-bottom: 10px;
     font-weight: bold;
-    cursor: move !important;
+    /* 【修改】 移除 cursor: move */
+    /* cursor: move !important; */
 }
 .admin-card h3 .card-icon {
     font-size: 1.2rem;
@@ -296,6 +310,11 @@ textarea { height: 80px; text-align: left; padding: 10px; }
     #admin-panel h1 { font-size: 2.2rem; } 
     #number { font-size: 4rem; } 
     .list-editor { padding: 10px; } 
+    
+    /* 【新】 卡片容器在手機上改為單欄 */
+    .card-container {
+        flex-direction: column;
+    }
 }
 
 /* --- 8. 連線狀態提示條 --- */
