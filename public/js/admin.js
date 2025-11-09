@@ -22,10 +22,7 @@ const clearLogBtn = document.getElementById("clear-log-btn");
 const resetAllBtn = document.getElementById("resetAll");
 const resetAllConfirmBtn = document.getElementById("resetAllConfirm");
 const logoutBtn = document.getElementById("logout-btn"); // 登出按鈕
-// 【新增】 JWT 期限設定相關 DOM
-const jwtExpiryHoursInput = document.getElementById("jwt-expiry-hours");
-const currentJwtExpiryEl = document.getElementById("current-jwt-expiry");
-const setJwtExpiryBtn = document.getElementById("set-jwt-expiry-btn");
+// 【移除】 JWT 期限設定相關 DOM 已移除
 
 const superAdminCard = document.getElementById("card-superadmin");
 
@@ -154,7 +151,7 @@ socket.on("disconnect", () => {
 socket.on("connect_error", (err) => {
     console.error("Socket 連線失敗:", err.message);
     if (err.message.includes("Authentication failed")) { 
-        alert("認證已過期或無效，請重新登入。");
+        alert("認證無效，請重新登入。"); // 移除「已過期」的描述
         showLogin(); 
     }
 });
@@ -224,7 +221,7 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
 
         if (!res.ok) {
             if (res.status === 401 || res.status === 403) {
-                alert("認證已過期，請重新登入。");
+                alert("認證無效，請重新登入。"); // 移除「已過期」的描述
                 showLogin();
             } else {
                 const errorMsg = responseData.error || "未知錯誤";
@@ -528,38 +525,8 @@ async function deleteAdmin(username) {
     }
 }
 
-// 【新增】 JWT 期限設定功能
-async function loadJwtExpiry() {
-    const data = await apiRequest("/api/admin/get-jwt-expiry", {}, true);
-    if (data && data.hours) {
-        currentJwtExpiryEl.textContent = data.hours;
-        jwtExpiryHoursInput.value = data.hours;
-    } else {
-        currentJwtExpiryEl.textContent = "載入失敗";
-    }
-}
-
-async function setJwtExpiry() {
-    const hours = Number(jwtExpiryHoursInput.value);
-    
-    if (isNaN(hours) || hours < 1 || hours > 720 || !Number.isInteger(hours)) {
-        showToast("❌ 期限必須是 1 到 720 之間的整數", "error");
-        return;
-    }
-    
-    if (!confirm(`確定要將 JWT 期限設定為 ${hours} 小時嗎？\n (所有用戶需重新登入才生效)`)) return;
-    
-    const success = await apiRequest("/api/admin/set-jwt-expiry", { hours });
-    if (success) {
-        showToast(`✅ JWT 期限已設為 ${hours} 小時`, "success");
-        currentJwtExpiryEl.textContent = hours;
-        
-        // 【重要】 提醒 Super Admin 重新登入以立即更新自己的 Token
-        if (confirm("為了讓此設定立即對您的帳號生效，您需要重新登入。\n是否立即登出？")) {
-             showLogin();
-        }
-    }
-}
+// 【移除】 loadJwtExpiry 函式
+// 【移除】 setJwtExpiry 函式
 
 
 // 【最終修正】 初始化 Super Admin 按鈕綁定
@@ -572,11 +539,8 @@ function initSuperAdminBindings() {
     if (addAdminBtn) addAdminBtn.onclick = addAdmin;
     if (setPwBtn) setPwBtn.onclick = setAdminPassword;
     
-    // 【新增】 綁定 JWT 期限設定
-    if (setJwtExpiryBtn) setJwtExpiryBtn.onclick = setJwtExpiry;
-    
-    // 【新增】 載入目前的 JWT 期限設定
-    loadJwtExpiry();
+    // 【移除】 綁定 JWT 期限設定的程式碼已移除
+    // 【移除】 載入目前的 JWT 期限設定的程式碼已移除
 }
 
 
