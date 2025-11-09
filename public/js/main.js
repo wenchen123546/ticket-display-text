@@ -14,7 +14,7 @@ const soundPrompt = document.getElementById("sound-prompt");
 const copyLinkPrompt = document.getElementById("copy-link-prompt"); 
 
 // --- 3. 前台全域狀態 ---
-let isSoundEnabled = true;
+let isSoundEnabled = false; // 【修改】 預設改為 false (關閉)
 let isLocallyMuted = false;
 let lastUpdateTime = null;
 let isPublic = true;
@@ -215,7 +215,7 @@ function updateMuteButtons(mutedState) {
             soundPrompt.innerHTML = '<span class="emoji">🔊</span> 點此啟用提示音效';
             soundPrompt.classList.remove("is-active");
         } else {
-            soundPrompt.innerHTML = '<span class="emoji">🔇</span> 點此關閉提示音效'; // 靜音時用🔇
+            soundPrompt.innerHTML = '<span class="emoji">🔇</span> 點此關閉提示音效'; // 静音時用🔇
             soundPrompt.classList.add("is-active");
         }
     }
