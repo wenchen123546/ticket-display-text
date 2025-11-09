@@ -77,7 +77,14 @@ const redis = new Redis(REDIS_URL, {
     }
 });
 redis.on('connect', () => { console.log("✅ 成功連線到 Upstash Redis 資料庫。"); });
-redis.on('error', (err) => { console.error("❌ Redis 連線錯誤:", err); process.exit(1); });
+
+// --- 【!!! 關鍵錯誤修正 !!!】 ---
+// 移除 process.exit(1)，以避免伺服器因暫時性的 Redis 連線錯誤而陷入崩潰循環
+redis.on('error', (err) => { 
+    console.error("❌ Redis 連線錯誤 (非致命):", err); 
+    // process.exit(1); // <-- 移除此行
+});
+// --- 【錯誤修正結束】 ---
 
 redis.defineCommand("decrIfPositive", {
     numberOfKeys: 1,
@@ -356,7 +363,8 @@ const protectedAPIs = [
     "/api/passed/add", "/api/passed/remove", "/api/passed/clear",
     "/api/featured/add", "/api/featured/remove", "/api/featured/clear",
     "/set-sound-enabled", "/set-public-status", "/reset",
-    "/api/logs/clear"
+    "/api/logs/clear",
+    "/api/get-all-state" // <-- 【架構修正】 新增 API 路由
 ];
 app.use(protectedAPIs, apiLimiter, authMiddleware);
 
@@ -512,6 +520,57 @@ app.post("/reset", async (req, res) => {
 });
 
 
+// --- 【架構修正】 新增 API 路由 ---
+app.post("/api/get-all-state", async (req, res) => {
+    try {
+        const pipeline = redis.multi();
+        pipeline.get(KEY_CURRENT_NUMBER);
+        pipeline.zrange(KEY_PASSED_NUMBERS, 0, -1);
+        pipeline.lrange(KEY_FEATURED_CONTENTS, 0, -1);
+        pipeline.get(KEY_SOUND_ENABLED);
+        pipeline.get(KEY_IS_PUBLIC);
+        pipeline.lrange(KEY_ADMIN_LOG, 0, 50); // 同時獲取日誌
+        
+        const results = await pipeline.exec();
+        
+        // 檢查 pipeline 錯誤
+        if (results.some(res => res[0])) {
+            const firstError = results.find(res => res[0])?.[0] || new Error("Unknown Redis Multi Error");
+            throw new Error(`Redis multi 執行失敗: ${firstError.message}`);
+        }
+        
+        const [
+            [err0, currentNumberRaw],
+            [err1, passedNumbersRaw],
+            [err2, featuredContentsJSONs],
+            [err3, soundEnabledRaw],
+            [err4, isPublicRaw],
+            [err5, logs]
+        ] = results;
+
+        const currentNumber = Number(currentNumberRaw || 0);
+        const passedNumbers = (passedNumbersRaw || []).map(Number);
+        const featuredContents = (featuredContentsJSONs || []).map(JSON.parse);
+        const isSoundEnabled = soundEnabledRaw === null ? true : (soundEnabledRaw === "1");
+        const isPublic = isPublicRaw === null ? true : (isPublicRaw === "1");
+
+        res.json({
+            success: true,
+            currentNumber,
+            passedNumbers,
+            featuredContents,
+            isSoundEnabled,
+            isPublic,
+            logs
+        });
+
+    } catch (e) {
+        console.error("API /get-all-state 失敗:", e);
+        res.status(500).json({ success: false, error: "無法載入伺服器狀態" });
+    }
+});
+
+
 // --- 12. Socket.io 連線處理 ---
 
 // 【修正 v2.1】 Socket.io Middleware (區分公/私)
@@ -541,8 +600,11 @@ io.use((socket, next) => {
     }
 });
 
+// --- 【架構修正】 ---
+// 大幅簡化連線處理，移除所有初始資料的發送
+// Socket.io 現在只負責「加入房間」和「即時轉發」
 io.on("connection", async (socket) => {
-    // 【修正 v2.1】 檢查 socket.user.role (在 middleware 中設定)
+    
     const isAdmin = (socket.user && socket.user.role !== 'public');
 
     if (isAdmin) {
@@ -552,64 +614,16 @@ io.on("connection", async (socket) => {
             console.log(`🔌 Admin (${socket.user.username}) ${socket.id} 斷線: ${reason}`);
         });
 
-        // Admin 連線時，傳送日誌歷史
-        try {
-            const logs = await redis.lrange(KEY_ADMIN_LOG, 0, 50);
-            socket.emit("initAdminLogs", logs); // 只傳送給這個剛連線的 admin
-        } catch (e) {
-            console.error("讀取日誌歷史失敗:", e);
-        }
+        // (移除 Admin 連線時自動發送 initAdminLogs 的邏輯)
+        // (這現在由 /api/get-all-state 統一處理)
+
     } else {
         console.log("🔌 一個 Public User 連線", socket.id);
         socket.join('public_room'); // 加入公開房間
     }
 
-    // --- 廣播初始狀態給所有人 (不論身分) ---
-    try {
-        const pipeline = redis.multi();
-        pipeline.get(KEY_CURRENT_NUMBER);
-        pipeline.zrange(KEY_PASSED_NUMBERS, 0, -1);
-        pipeline.lrange(KEY_FEATURED_CONTENTS, 0, -1);
-        pipeline.get(KEY_LAST_UPDATED);
-        pipeline.get(KEY_SOUND_ENABLED);
-        pipeline.get(KEY_IS_PUBLIC); 
-        
-        const results = await pipeline.exec();
-        // 確保正確檢查 Redis multi 的錯誤
-        if (results.some(res => res[0])) {
-            const firstErrorResult = results.find(res => res[0]);
-            const firstError = firstErrorResult ? firstErrorResult[0] : new Error("Unknown Redis Multi Error");
-            throw new Error(`Redis multi 執行失敗: ${firstError.message}`);
-        }
-        
-        const [
-            [err0, currentNumberRaw],
-            [err1, passedNumbersRaw],
-            [err2, featuredContentsJSONs],
-            [err3, lastUpdatedRaw],
-            [err4, soundEnabledRaw],
-            [err5, isPublicRaw]
-        ] = results;
-
-        const currentNumber = Number(currentNumberRaw || 0);
-        const passedNumbers = (passedNumbersRaw || []).map(Number);
-        const featuredContents = (featuredContentsJSONs || []).map(JSON.parse);
-        const lastUpdated = lastUpdatedRaw || new Date().toISOString();
-        const isSoundEnabled = soundEnabledRaw === null ? "1" : soundEnabledRaw;
-        const isPublic = isPublicRaw === null ? "1" : isPublicRaw; 
-
-        socket.emit("update", currentNumber);
-        socket.emit("updatePassed", passedNumbers);
-        socket.emit("updateFeaturedContents", featuredContents);
-        socket.emit("updateTimestamp", lastUpdated);
-        socket.emit("updateSoundSetting", isSoundEnabled === "1");
-        socket.emit("updatePublicStatus", isPublic === "1"); 
-
-    }
-    catch (e) {
-        console.error("Socket 連線處理失敗:", e);
-        socket.emit("initialStateError", "無法載入初始資料，請稍後重新整理。");
-    }
+    // (移除所有 "廣播初始狀態給所有人" 的 try...catch 區塊)
+    // (這現在由 /api/get-all-state 統一處理)
 });
 
 
