@@ -130,12 +130,21 @@
                 <h3><span class="card-icon">👑</span> 超管：用戶管理</h3>
                 
                 <div class="control-group list-editor">
-                    <label>普通管理員列表</label>
+                    <label>管理員列表</LAbel>
                     <ul id="user-list-ui">
                         <li>(載入中...)</li>
                     </ul>
                 </div>
                 
+                <div class="control-group form-group-boxed">
+                    <label>設定用戶綽號</label>
+                    <label for="set-nick-username" class="sr-only">目標帳號</label>
+                    <input type="text" id="set-nick-username" placeholder="目標帳號 (例如 superadmin)">
+                    <label for="set-nick-nickname" class="sr-only">新綽號</label>
+                    <input type="text" id="set-nick-nickname" placeholder="新的綽號" style="margin-top: 5px;">
+                    <button id="set-nickname-btn" type="button" class="btn-secondary" style="margin-top: 10px;">設定綽號</button>
+                </div>
+
                 <div class="control-group form-group-boxed">
                     <label>新增普通管理員</label>
                     <label for="new-user-username" class="sr-only">新帳號</label>
@@ -154,5 +163,5 @@
 
 <div id="toast-notification"></div>
 
-<script src="/js/admin.js?v=9"></script> </body>
+<script src="/js/admin.js?v=10"></script> </body>
 </html>
