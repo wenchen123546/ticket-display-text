@@ -71,7 +71,7 @@
                 <label>新增精選連結</label>
                 <div class="input-group">
                     <input type="text" id="new-link-text" placeholder="連結顯示文字" />
-                    <input type="url" id="new-link-url" placeholder="網址 (需以 http/https 開頭)" />
+                    <input type="url" id="new-link-url" placeholder="網址 (需以 http/s 開頭)" />
                 </div>
                 <button id="add-featured-btn" type="button" class="btn-success">新增連結</button>
                 <ul id="featured-list-ui"></ul>
@@ -116,15 +116,14 @@
 
             <div class="control-group">
                 <label>新增管理員</label>
-                <input type="text" id="new-admin-username" placeholder="新使用者名稱" />
-                <input type="password" id="new-admin-password" placeholder="新密碼" />
-                <select id="new-admin-role">
-                    <option value="admin">Admin (一般管理員)</option>
-                    <option value="superadmin">Super Admin (超級管理員)</option>
-                </select>
-                <button id="add-admin-btn" type="button" class="btn-success">新增</button>
+                <div class="input-group"> <input type="text" id="new-admin-username" placeholder="新使用者名稱" />
+                    <input type="password" id="new-admin-password" placeholder="新密碼" />
+                    <select id="new-admin-role">
+                        <option value="admin">Admin (一般管理員)</option>
+                        <option value="superadmin">Super Admin (超級管理員)</option>
+                    </select>
+                </div> <button id="add-admin-btn" type="button" class="btn-success">新增</button>
             </div>
-
             <div class="control-group" id="set-password-group">
                 <label>重設密碼 (限 Super Admin)</label>
                 <input type="text" id="set-pw-username" placeholder="要重設的使用者名稱" />
