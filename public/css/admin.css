@@ -79,6 +79,11 @@ body {
 #login-container button:hover { opacity: 0.9; }
 #login-error { color: var(--color-danger); margin-top: 15px; height: 1.2rem; }
 
+/* 【新增】 管理密碼輸入框的上間距 */
+#password-input {
+    margin-top: 15px;
+}
+
 /* --- 2. 卡片佈局 --- */
 
 #admin-panel { 
@@ -498,6 +503,7 @@ input[type="url"] {
     background-color: var(--color-neutral); 
     margin-top: 10px;
     flex-shrink: 0; 
+    display: none; /* 【新增】 預設隱藏 (由 JS 控制顯示) */
 }
 .admin-log-container .btn-clear-log:hover { opacity: 0.9; }
 
@@ -572,4 +578,9 @@ input[type="url"] {
     font-weight: normal;
     color: var(--color-neutral);
     margin-left: 5px;
+}
+
+/* 【新增】 超管卡片預設隱藏 (由 JS 控制顯示) */
+#card-user-management {
+    display: none;
 }
