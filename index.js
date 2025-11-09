@@ -144,6 +144,17 @@ const superAdminAuthMiddleware = (req, res, next) => {
 
 
 // --- 8. 輔助函式 ---
+
+/**
+ * 簡易的 HTML 標籤過濾函式 (防止 XSS)
+ * @param {string} str 
+ * @returns {string}
+ */
+function sanitize(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/<[^>]*>?/gm, '');
+}
+
 async function updateTimestamp() {
     const now = new Date().toISOString();
     await redis.set(KEY_LAST_UPDATED, now);
@@ -341,20 +352,24 @@ app.post("/api/passed/remove", async (req, res) => {
 
 app.post("/api/featured/add", async (req, res) => {
     try {
-        const { linkText, linkUrl } = req.body;
-        const nickname = req.user.nickname; 
+        const { linkText, linkUrl } = req.body; //
+        const nickname = req.user.nickname; //
         if (!linkText || !linkUrl) {
-            return res.status(400).json({ error: "文字和網址皆必填。" });
+            return res.status(400).json({ error: "文字和網址皆必填。" }); //
         }
         if (!linkUrl.startsWith('http://') && !linkUrl.startsWith('https://')) {
-            return res.status(400).json({ error: "網址請務必以 http:// 或 https:// 開頭。" });
+            return res.status(400).json({ error: "網址請務必以 http:// 或 https:// 開頭。" }); //
         }
-        const item = { linkText, linkUrl };
-        await redis.rpush(KEY_FEATURED_CONTENTS, JSON.stringify(item));
-        await addAdminLog(nickname, `精選連結新增: ${linkText}`); 
-        await broadcastFeaturedContents();
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+        
+        // 【修改】 對 linkText 進行過濾
+        const sanitizedText = sanitize(linkText);
+        const item = { linkText: sanitizedText, linkUrl }; // 使用過濾後的文字
+        
+        await redis.rpush(KEY_FEATURED_CONTENTS, JSON.stringify(item)); //
+        await addAdminLog(nickname, `精選連結新增: ${sanitizedText}`); //
+        await broadcastFeaturedContents(); //
+        res.json({ success: true }); //
+    } catch (e) { res.status(500).json({ error: e.message }); } //
 });
 
 app.post("/api/featured/remove", async (req, res) => {
@@ -589,31 +604,33 @@ app.post("/api/admin/users", async (req, res) => {
 app.post("/api/admin/add-user", async (req, res) => {
     try {
         // 【修改】 取得 newNickname
-        const { newUsername, newPassword, newNickname } = req.body; 
+        const { newUsername, newPassword, newNickname } = req.body; //
         
         if (!newUsername || !newPassword) {
-            return res.status(400).json({ error: "新帳號和新密碼皆為必填。" });
+            return res.status(400).json({ error: "新帳號和新密碼皆為必填。" }); //
         }
         if (newUsername === 'superadmin') {
-            return res.status(400).json({ error: "不可使用保留帳號。" });
+            return res.status(400).json({ error: "不可使用保留帳號。" }); //
         }
 
-        const exists = await redis.hexists(KEY_USERS, newUsername);
+        const exists = await redis.hexists(KEY_USERS, newUsername); //
         if (exists) {
-            return res.status(400).json({ error: "此帳號已被使用。" });
+            return res.status(400).json({ error: "此帳號已被使用。" }); //
         }
 
-        const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-        await redis.hset(KEY_USERS, newUsername, hash);
+        const hash = await bcrypt.hash(newPassword, SALT_ROUNDS); //
+        await redis.hset(KEY_USERS, newUsername, hash); //
         
         // 【修改】 如果提供了綽號，則使用它；否則，使用帳號作為預設綽號
-        const nicknameToSet = (newNickname && newNickname.trim() !== '') ? newNickname.trim() : newUsername;
-        await redis.hset(KEY_NICKNAMES, newUsername, nicknameToSet); 
+        const nicknameToSet = (newNickname && newNickname.trim() !== '') 
+            ? sanitize(newNickname.trim()) // 過濾 newNickname
+            : newUsername;
+        await redis.hset(KEY_NICKNAMES, newUsername, nicknameToSet); // 
 
-        await addAdminLog(req.user.nickname, `新增管理員: ${newUsername} (綽號: ${nicknameToSet})`);
-        res.json({ success: true, message: "管理員已新增。" });
+        await addAdminLog(req.user.nickname, `新增管理員: ${newUsername} (綽號: ${nicknameToSet})`); //
+        res.json({ success: true, message: "管理員已新增。" }); //
 
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: e.message }); } //
 });
 
 // 刪除普通管理員
@@ -640,33 +657,35 @@ app.post("/api/admin/del-user", async (req, res) => {
 // 設定綽號 API
 app.post("/api/admin/set-nickname", async (req, res) => {
     try {
-        const { targetUsername, nickname } = req.body;
+        const { targetUsername, nickname } = req.body; //
         if (!targetUsername || !nickname) {
-            return res.status(400).json({ error: "目標帳號和綽號皆為必填。" });
+            return res.status(400).json({ error: "目標帳號和綽號皆為必填。" }); //
         }
         
         // 檢查用戶是否存在 (superadmin 總是存在，普通用戶檢查 HASH)
         if (targetUsername !== 'superadmin') {
-            const exists = await redis.hexists(KEY_USERS, targetUsername);
+            const exists = await redis.hexists(KEY_USERS, targetUsername); //
             if (!exists) {
-                 return res.status(404).json({ error: "找不到該用戶。" });
+                 return res.status(404).json({ error: "找不到該用戶。" }); //
             }
         }
         
         // 檢查 superadmin 是否存在於 nicknames (以防萬一)
         if (targetUsername === 'superadmin') {
-             const superExists = await redis.hget(KEY_NICKNAMES, 'superadmin');
+             const superExists = await redis.hget(KEY_NICKNAMES, 'superadmin'); //
              if (!superExists) {
-                 await redis.hset(KEY_NICKNAMES, 'superadmin', 'superadmin');
+                 await redis.hset(KEY_NICKNAMES, 'superadmin', 'superadmin'); //
              }
         }
 
-        await redis.hset(KEY_NICKNAMES, targetUsername, nickname);
+        // 【修改】 過濾綽號
+        const sanitizedNickname = sanitize(nickname);
+        await redis.hset(KEY_NICKNAMES, targetUsername, sanitizedNickname); //
         
-        await addAdminLog(req.user.nickname, `將 ${targetUsername} 的綽號設為: ${nickname}`);
-        res.json({ success: true, message: "綽號已更新。" });
+        await addAdminLog(req.user.nickname, `將 ${targetUsername} 的綽號設為: ${sanitizedNickname}`); //
+        res.json({ success: true, message: "綽號已更新。" }); //
 
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: e.message }); } //
 });
 
 
