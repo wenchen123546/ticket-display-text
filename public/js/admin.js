@@ -24,8 +24,8 @@ const onlineUsersList = document.getElementById("online-users-list");
 // --- 2. 全域變數 ---
 let token = ""; // 儲存 Session Token
 let userRole = "normal"; 
-let username = ""; // 【修改】 這將儲存「綽號」 (顯示名稱)
-let uniqueUsername = ""; // 【新】 這將儲存「帳號」 (唯一 ID)
+let username = ""; // 這將儲存「綽號」 (顯示名稱)
+let uniqueUsername = ""; // 這將儲存「帳號」 (唯一 ID)
 let toastTimer = null; 
 let publicToggleConfirmTimer = null; 
 
@@ -63,15 +63,12 @@ async function showPanel() {
 }
 
 // 登入邏輯
-// 【關鍵修正】 將函式參數改為 'loginName' 和 'loginPass'
-// 避免與全域的 'usernameInput' DOM 元素衝突。
 async function attemptLogin(loginName, loginPass) {
     loginError.textContent = "驗證中...";
     try {
         const res = await fetch("/login", { 
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            // 【關鍵修正】 使用 'loginName' 和 'loginPass' 參數
             body: JSON.stringify({ username: loginName, password: loginPass }), 
         });
         
@@ -100,13 +97,11 @@ async function attemptLogin(loginName, loginPass) {
 document.addEventListener("DOMContentLoaded", () => { showLogin(); });
 
 loginButton.addEventListener("click", () => { 
-    // 呼叫時傳遞 DOM 元素的 .value
     attemptLogin(usernameInput.value, passwordInput.value); 
 });
 usernameInput.addEventListener("keyup", (event) => { if (event.key === "Enter") { passwordInput.focus(); } });
 passwordInput.addEventListener("keyup", (event) => { 
     if (event.key === "Enter") { 
-        // 呼叫時傳遞 DOM 元素的 .value
         attemptLogin(usernameInput.value, passwordInput.value);
     } 
 });
@@ -178,7 +173,7 @@ socket.on("newAdminLog", (logMessage) => {
     adminLogUI.prepend(li); 
 });
 
-// --- 【新】 在線管理員監聽器 ---
+// --- 在線管理員監聽器 ---
 socket.on("updateOnlineAdmins", (admins) => {
     console.log("在線列表更新:", admins);
     renderOnlineAdmins(admins);
@@ -584,6 +579,8 @@ const userListUI = document.getElementById("user-list-ui");
 const newUserUsernameInput = document.getElementById("new-user-username");
 const newUserPasswordInput = document.getElementById("new-user-password");
 const addUserBtn = document.getElementById("add-user-btn");
+const newUserNicknameInput = document.getElementById("new-user-nickname"); // 【新】 取得綽號 DOM
+
 // 綽號表單 DOM
 const setNickUsernameInput = document.getElementById("set-nick-username");
 const setNickNicknameInput = document.getElementById("set-nick-nickname");
@@ -644,19 +641,26 @@ if (addUserBtn) {
     addUserBtn.onclick = async () => {
         const newUsername = newUserUsernameInput.value;
         const newPassword = newUserPasswordInput.value;
+        const newNickname = newUserNicknameInput.value.trim(); // 【新】 取得綽號
 
         if (!newUsername || !newPassword) {
-            alert("帳號和密碼皆為必填。");
+            alert("帳號和密碼皆為必填。"); // 綽號為選填，故不檢查
             return;
         }
 
         addUserBtn.disabled = true;
-        const success = await apiRequest("/api/admin/add-user", { newUsername, newPassword });
+        // 【修改】 傳送新綽號至 API
+        const success = await apiRequest("/api/admin/add-user", { 
+            newUsername, 
+            newPassword,
+            newNickname // 【新】
+        });
         
         if (success) {
             showToast(`✅ 已新增用戶: ${newUsername}`, "success");
             newUserUsernameInput.value = "";
             newUserPasswordInput.value = "";
+            newUserNicknameInput.value = ""; // 【新】 清空綽號欄位
             await loadAdminUsers(); 
         }
         addUserBtn.disabled = false;
