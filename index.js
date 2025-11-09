@@ -1,11 +1,13 @@
 /*
  * ==========================================
  * 伺服器 (index.js)
- * * 【修改 V3.1】 修正 express-rate-limit 在 'trust proxy' = true 時的崩潰錯誤
+ * * 【修改 V3.2 - 修正】 
+ * * 1. 增加 JWT 過期時間 (8h)，並在 middleware 中處理 TokenExpiredError
+ * * 2. 收緊 Helmet CSP，移除 'unsafe-inline' style-src
  * ==========================================
  */
 
-// --- 1. 模組載入 ---
+// --- 1. 模듈載入 ---
 const express = require("express");
 require('express-async-errors'); 
 const http = require("http");
@@ -29,7 +31,7 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN; 
 const REDIS_URL = process.env.UPSTASH_REDIS_URL;
 const JWT_SECRET = process.env.JWT_SECRET; 
-// const DEFAULT_JWT_EXPIRY_HOURS = 8; // 【移除】: 不再使用 JWT 期限
+const DEFAULT_JWT_EXPIRY_HOURS = 8; // 【V3.2 恢復】 預設 8 小時
 
 // --- 4. 關鍵檢查 ---
 if (!ADMIN_TOKEN) {
@@ -76,7 +78,6 @@ const KEY_SOUND_ENABLED = 'callsys:soundEnabled';
 const KEY_IS_PUBLIC = 'callsys:isPublic'; 
 const KEY_ADMIN_LOG = 'callsys:admin-log'; 
 const KEY_ADMINS = 'callsys:admins'; 
-// const KEY_JWT_EXPIRY = 'callsys:jwt-expiry-hours'; // 【移除】 JWT 期限 Key
 
 // --- 7. Express 中介軟體 (Middleware) ---
 app.use(helmet({
@@ -84,7 +85,8 @@ app.use(helmet({
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
         "script-src": ["'self'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
-        "style-src": ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
+        // 【V3.2 修正】 移除 'unsafe-inline'
+        "style-src": ["'self'", "https://cdn.jsdelivr.net"], 
         "connect-src": ["'self'", "https://cdn.jsdelivr.net"]
       },
     },
@@ -124,8 +126,12 @@ const authMiddleware = (req, res, next) => {
         
         next(); 
     } catch (err) {
-        // 由於移除了期限，這裡主要是處理 Token 格式錯誤或 JWT_SECRET 不匹配
-        return res.status(403).json({ error: "認證無效或Token錯誤" });
+        // 【V3.2 修正】 增加對 Token 過期的處理
+        if (err.name === 'TokenExpiredError') {
+            return res.status(401).json({ error: "認證已過期，請重新登入。" });
+        }
+        // 
+        return res.status(401).json({ error: "認證無效或Token錯誤" });
     }
 };
 
@@ -203,21 +209,18 @@ app.post("/login", loginLimiter, async (req, res) => {
         return res.status(403).json({ error: "使用者名稱或密碼錯誤。" });
     }
 
-    // 【修改】 移除讀取 JWT 期限的邏輯
     const payload = {
         username: user.username,
         role: user.role
     };
     
-    // 【修改】 移除 expiresIn 選項，Token 永不過期
-    const token = jwt.sign(payload, JWT_SECRET); 
+    // 【V3.2 修正】 恢復 expiresIn 選項，Token 設為 8 小時過期
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: `${DEFAULT_JWT_EXPIRY_HOURS}h` }); 
 
     res.json({ success: true, token: token, role: user.role });
 });
 
 // --- 【新增】 超級管理員 API ---
-
-// 移除 /api/admin/set-jwt-expiry 和 /api/admin/get-jwt-expiry 路由
 
 app.use("/api/admin", apiLimiter, authMiddleware, isSuperAdminMiddleware);
 
@@ -477,6 +480,10 @@ io.use((socket, next) => {
     } catch (err) {
         // 情況 3: Token 無效或過期
         console.warn(`Socket 認證失敗: ${err.message}`);
+        // 【V3.2 修正】 處理過期
+        if (err.name === 'TokenExpiredError') {
+             return next(new Error("Authentication failed: Token expired"));
+        }
         return next(new Error("Authentication failed: Invalid Token"));
     }
 });
@@ -577,8 +584,6 @@ async function startServer() {
         process.exit(1);
     }
     
-    // 【移除】 不再需要 JWT 期限的預設值檢查
-
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`✅ Server running on host 0.0.0.0, port ${PORT}`);
         console.log(`🎟 User page (local): http://localhost:${PORT}/index.html`);
