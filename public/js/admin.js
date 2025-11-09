@@ -22,7 +22,6 @@ const clearLogBtn = document.getElementById("clear-log-btn");
 const resetAllBtn = document.getElementById("resetAll");
 const resetAllConfirmBtn = document.getElementById("resetAllConfirm");
 const logoutBtn = document.getElementById("logout-btn"); // 登出按鈕
-// 【移除】 JWT 期限設定相關 DOM 已移除
 
 const superAdminCard = document.getElementById("card-superadmin");
 
@@ -87,7 +86,8 @@ async function showPanel() {
         socket.connect();
     }
     
-    showToast("ℹ️ 使用預設排版", "info"); 
+    // 【V3.2 修正】 移除開發者提示
+    // showToast("ℹ️ 使用預設排版", "info"); 
 }
 
 async function attemptLogin() {
@@ -150,8 +150,9 @@ socket.on("disconnect", () => {
 });
 socket.on("connect_error", (err) => {
     console.error("Socket 連線失敗:", err.message);
+    // 【V3.2 修正】 更新提示訊息以包含「過期」
     if (err.message.includes("Authentication failed")) { 
-        alert("認證無效，請重新登入。"); // 移除「已過期」的描述
+        alert("認證無效或已過期，請重新登入。");
         showLogin(); 
     }
 });
@@ -220,8 +221,9 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
         const responseData = await res.json(); 
 
         if (!res.ok) {
+            // 【V3.2 修正】 更新提示訊息以包含「過期」
             if (res.status === 401 || res.status === 403) {
-                alert("認證無效，請重新登入。"); // 移除「已過期」的描述
+                alert("認證無效或已過期，請重新登入。");
                 showLogin();
             } else {
                 const errorMsg = responseData.error || "未知錯誤";
@@ -525,10 +527,6 @@ async function deleteAdmin(username) {
     }
 }
 
-// 【移除】 loadJwtExpiry 函式
-// 【移除】 setJwtExpiry 函式
-
-
 // 【最終修正】 初始化 Super Admin 按鈕綁定
 function initSuperAdminBindings() {
     const refreshAdminListBtn = document.getElementById("refresh-admin-list");
@@ -538,9 +536,6 @@ function initSuperAdminBindings() {
     if (refreshAdminListBtn) refreshAdminListBtn.onclick = loadAdmins;
     if (addAdminBtn) addAdminBtn.onclick = addAdmin;
     if (setPwBtn) setPwBtn.onclick = setAdminPassword;
-    
-    // 【移除】 綁定 JWT 期限設定的程式碼已移除
-    // 【移除】 載入目前的 JWT 期限設定的程式碼已移除
 }
 
 
