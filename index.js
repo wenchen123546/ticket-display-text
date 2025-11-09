@@ -66,7 +66,7 @@ const KEY_FEATURED_CONTENTS = 'callsys:featured';
 const KEY_LAST_UPDATED = 'callsys:updated';
 const KEY_SOUND_ENABLED = 'callsys:soundEnabled';
 const KEY_IS_PUBLIC = 'callsys:isPublic'; 
-const KEY_ADMIN_LAYOUT = 'callsys:admin-layout'; 
+// KEY_ADMIN_LAYOUT 已移除
 const KEY_ADMIN_LOG = 'callsys:admin-log'; // 【新功能】 伺服器端日誌
 
 // --- 7. Express 中介軟體 (Middleware) ---
@@ -163,7 +163,7 @@ const protectedAPIs = [
     "/api/passed/add", "/api/passed/remove", "/api/passed/clear",
     "/api/featured/add", "/api/featured/remove", "/api/featured/clear",
     "/set-sound-enabled", "/set-public-status", "/reset",
-    "/api/layout/load", "/api/layout/save",
+    // layout API 已移除
     "/api/logs/clear" // 【新】 保護清空日誌 API
 ];
 app.use(protectedAPIs, apiLimiter, authMiddleware);
@@ -327,7 +327,7 @@ app.post("/reset", async (req, res) => {
         multi.del(KEY_FEATURED_CONTENTS);
         multi.set(KEY_SOUND_ENABLED, "1");
         multi.set(KEY_IS_PUBLIC, "1"); 
-        multi.del(KEY_ADMIN_LAYOUT); 
+        // multi.del(KEY_ADMIN_LAYOUT); (已移除)
         multi.del(KEY_ADMIN_LOG); // 【新】 重置時也清空日誌
         await multi.exec();
 
@@ -416,36 +416,7 @@ io.on("connection", async (socket) => {
     }
 });
 
-// --- 11. 儀表板排版 API ---
-app.post("/api/layout/load", async (req, res) => {
-    try {
-        const layoutJSON = await redis.get(KEY_ADMIN_LAYOUT);
-        if (layoutJSON) {
-            res.json({ success: true, layout: JSON.parse(layoutJSON) });
-        } else {
-            res.json({ success: true, layout: null });
-        }
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-app.post("/api/layout/save", async (req, res) => {
-    try {
-        const { layout } = req.body;
-        if (!layout || !Array.isArray(layout)) {
-            return res.status(400).json({ error: "排版資料格式不正確。" });
-        }
-        
-        const layoutJSON = JSON.stringify(layout);
-        await redis.set(KEY_ADMIN_LAYOUT, layoutJSON);
-        await addAdminLog(`💾 儀表板排版已儲存`); // 【日誌】
-        
-        res.json({ success: true, message: "排版已儲存。" });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
+// --- 11. 儀表板排版 API --- (已移除)
 
 // --- 【新功能】 清空日誌 API ---
 app.post("/api/logs/clear", async (req, res) => {
@@ -454,9 +425,7 @@ app.post("/api/logs/clear", async (req, res) => {
         await addAdminLog(`🧼 管理員清空了所有日誌`); // 【日誌】
         io.emit("initAdminLogs", []); // 廣播清空
         res.json({ success: true, message: "日誌已清空。" });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 
