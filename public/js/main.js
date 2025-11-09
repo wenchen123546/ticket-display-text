@@ -14,7 +14,7 @@ const soundPrompt = document.getElementById("sound-prompt");
 const copyLinkPrompt = document.getElementById("copy-link-prompt"); 
 
 // --- 3. 前台全域狀態 ---
-let isSoundEnabled = false; // 【修改】 預設改為 false (關閉)
+let isSoundEnabled = false; // 預設為 false (關閉)
 let isLocallyMuted = false;
 let lastUpdateTime = null;
 let isPublic = true;
@@ -79,30 +79,51 @@ socket.on("updateTimestamp", (timestamp) => {
     lastUpdatedEl.textContent = `最後更新於 ${timeString}`;
 });
 
+// 【修改】 重構 playNotificationSound 函式邏輯
 function playNotificationSound() {
-    if (!notifySound || !isSoundEnabled || isLocallyMuted) {
-        return;
+    if (!notifySound) return;
+
+    // 1. 檢查音效權限 (如果尚未取得)
+    // 這是關鍵：我們*必須*嘗試播放一次來觸發瀏覽器阻擋
+    if (!audioPermissionGranted) {
+        const playPromise = notifySound.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                // A. 權限已取得 (例如：電腦版 Chrome 允許自動播放)
+                console.log("音效權限已自動取得");
+                audioPermissionGranted = true;
+                updateMuteButtons(false); 
+                
+                // 雖然權限拿到了，但我們仍要尊重 isSoundEnabled 的設定
+                if (!isSoundEnabled || isLocallyMuted) {
+                    notifySound.pause(); // 立刻暫停
+                    notifySound.currentTime = 0;
+                }
+            }).catch(error => {
+                // B. 權限未取得 (例如：手機版瀏覽器需要互動)
+                console.warn("音效播放失敗，等待使用者互動:", error);
+                if (soundPrompt) {
+                    // 【修復】 顯示按鈕，讓使用者可以手動啟用
+                    soundPrompt.style.display = 'block'; 
+                    soundPrompt.innerHTML = '<span class="emoji">🔊</span> 點此啟用提示音效';
+                    soundPrompt.classList.remove("is-active");
+                }
+                audioPermissionGranted = false;
+            });
+        }
+        // 無論成功或失敗，第一次的權限檢查到此為止
+        return; 
     }
-    if (audioPermissionGranted) {
-        notifySound.play().catch(e => console.warn("音效播放失敗 (已有權限):", e));
-        return;
+
+    // 2. 如果程式跑到這裡，代表權限已取得 (audioPermissionGranted === true)
+    
+    // 檢查管理員設定和使用者本地設定
+    if (!isSoundEnabled || isLocallyMuted) {
+        return; // 管理員關閉了音效，或使用者本地靜音
     }
-    const playPromise = notifySound.play();
-    if (playPromise !== undefined) {
-        playPromise.then(() => {
-            audioPermissionGranted = true;
-            updateMuteButtons(false); 
-        }).catch(error => {
-            console.warn("音效播放失敗，等待使用者互動:", error);
-            if (soundPrompt) {
-                // 首次播放失敗，顯示提示，並用🔊圖案
-                soundPrompt.style.display = 'block';
-                soundPrompt.innerHTML = '<span class="emoji">🔊</span> 點此啟用提示音效';
-                soundPrompt.classList.remove("is-active");
-            }
-            audioPermissionGranted = false;
-        });
-    }
+    
+    // 3. 播放音效 (權限已取得、音效已啟用、本地未靜音)
+    notifySound.play().catch(e => console.warn("音效播放失敗 (已有權限):", e));
 }
 
 socket.on("update", (num) => {
@@ -215,7 +236,7 @@ function updateMuteButtons(mutedState) {
             soundPrompt.innerHTML = '<span class="emoji">🔊</span> 點此啟用提示音效';
             soundPrompt.classList.remove("is-active");
         } else {
-            soundPrompt.innerHTML = '<span class="emoji">🔇</span> 點此關閉提示音效'; // 静音時用🔇
+            soundPrompt.innerHTML = '<span class="emoji">🔇</span> 點此關閉提示音效'; // 靜音時用🔇
             soundPrompt.classList.add("is-active");
         }
     }
