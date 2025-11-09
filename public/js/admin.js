@@ -31,6 +31,7 @@ let token = sessionStorage.getItem('admin_jwt') || "";
 let userRole = sessionStorage.getItem('admin_role') || ""; 
 let resetAllTimer = null;
 let toastTimer = null; 
+let timedConfirmTimers = {}; // <-- 【UX 修正】 儲存多個計時器
 
 // --- 3. Socket.io ---
 const socket = io({ 
@@ -66,6 +67,7 @@ function showLogin() {
     userRole = ""; 
     sessionStorage.removeItem('admin_jwt'); 
     sessionStorage.removeItem('admin_role');
+    sessionStorage.removeItem('admin_username'); // <-- 【安全修正】 登出時清除
     socket.disconnect();
 }
 
@@ -110,6 +112,7 @@ async function attemptLogin() {
             userRole = data.role; 
             sessionStorage.setItem('admin_jwt', token); 
             sessionStorage.setItem('admin_role', userRole);
+            sessionStorage.setItem('admin_username', data.username); // <-- 【安全修正】 儲存使用者名稱
             await showPanel(); 
         } else {
             loginError.textContent = data.error || "登入失敗";
@@ -235,9 +238,14 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
 
         if (!res.ok) {
             // 【V3.2 修正】 更新提示訊息以包含「過期」
+            
+            // 【UX 修正】 改用 showToast
             if (res.status === 401 || res.status === 403) {
-                alert("認證無效或已過期，請重新登入。 (API 請求失敗)");
-                showLogin();
+                // alert("認證無效或已過期，請重新登入。 (API 請求失敗)"); // <-- 移除
+                showToast("❌ 認證無效或已過期，請重新登入", "error"); // <-- 替換
+                
+                // 增加一個短延遲，讓使用者能看到 toast，然後再登出
+                setTimeout(showLogin, 2000); 
             } else {
                 const errorMsg = responseData.error || "未知錯誤";
                 showToast(`❌ API 錯誤: ${errorMsg}`, "error");
@@ -319,6 +327,41 @@ function renderFeaturedListUI(contents) {
 }
 
 // --- 9. 控制台按鈕功能 ---
+
+// 【UX 修正】 通用危險操作確認函式
+function requestTimedConfirmation(btnId, confirmBtnId, actionFunction, timeout = 5000) {
+    const btn = document.getElementById(btnId);
+    const confirmBtn = document.getElementById(confirmBtnId);
+    
+    if (!btn || !confirmBtn) return;
+    
+    // 清除同一個按鈕的上一個計時器 (如果有的話)
+    if (timedConfirmTimers[btnId]) {
+        clearTimeout(timedConfirmTimers[btnId]);
+    }
+    
+    btn.style.display = "none";
+    confirmBtn.style.display = "block";
+    
+    // 綁定一次性的點擊事件
+    confirmBtn.onclick = () => {
+        clearTimeout(timedConfirmTimers[btnId]);
+        timedConfirmTimers[btnId] = null;
+        confirmBtn.style.display = "none";
+        btn.style.display = "block";
+        actionFunction(); // 執行真正的危險操作
+    };
+    
+    // 設定 5 秒後自動取消
+    timedConfirmTimers[btnId] = setTimeout(() => {
+        confirmBtn.style.display = "none";
+        btn.style.display = "block";
+        timedConfirmTimers[btnId] = null;
+        confirmBtn.onclick = null; // 移除點擊事件
+    }, timeout);
+}
+
+
 async function changeNumber(direction) {
     await apiRequest("/change-number", { direction });
 }
@@ -339,6 +382,9 @@ async function resetNumber() {
         showToast("✅ 號碼已重置為 0", "success");
     }
 }
+
+// 【UX 修正】 移除以下三個舊的函式
+/*
 async function resetPassed_fixed() {
     if (!confirm("確定要清空「已叫號碼(過號)」列表嗎？")) return;
     const success = await apiRequest("/api/passed/clear", {});
@@ -353,6 +399,14 @@ async function resetFeaturedContents_fixed() {
         showToast("✅ 精選連結已清空", "success");
     }
 }
+async function clearAdminLog() {
+    if (confirm("確定要永久清除「所有」管理員的操作日誌嗎？\n此動作無法復原。")) {
+        showToast("🧼 正在清除日誌...", "info");
+        await apiRequest("/api/logs/clear", {});
+    }
+}
+*/
+
 function cancelResetAll() {
     resetAllConfirmBtn.style.display = "none";
     resetAllBtn.style.display = "block";
@@ -377,23 +431,39 @@ function requestResetAll() {
     }, 5000);
 }
 
-async function clearAdminLog() {
-    if (confirm("確定要永久清除「所有」管理員的操作日誌嗎？\n此動作無法復原。")) {
-        showToast("🧼 正在清除日誌...", "info");
-        await apiRequest("/api/logs/clear", {});
-    }
-}
 
 // --- 10. 綁定按鈕事件 ---
 document.getElementById("next").onclick = () => changeNumber("next");
 document.getElementById("prev").onclick = () => changeNumber("prev");
 document.getElementById("setNumber").onclick = setNumber;
 document.getElementById("resetNumber").onclick = resetNumber;
-document.getElementById("resetFeaturedContents").onclick = resetFeaturedContents_fixed;
-document.getElementById("resetPassed").onclick = resetPassed_fixed;
+
+// 【UX 修正】 改用新的防呆機制
+document.getElementById("resetPassed").onclick = () => {
+    requestTimedConfirmation("resetPassed", "resetPassedConfirm", async () => {
+        const success = await apiRequest("/api/passed/clear", {});
+        if (success) showToast("✅ 過號列表已清空", "success");
+    });
+};
+
+document.getElementById("resetFeaturedContents").onclick = () => {
+    requestTimedConfirmation("resetFeaturedContents", "resetFeaturedContentsConfirm", async () => {
+        const success = await apiRequest("/api/featured/clear", {});
+        if (success) showToast("✅ 精選連結已清空", "success");
+    });
+};
+
+document.getElementById("clear-log-btn").onclick = () => {
+    requestTimedConfirmation("clear-log-btn", "clear-log-btn-confirm", async () => {
+        showToast("🧼 正在清除日誌...", "info");
+        await apiRequest("/api/logs/clear", {});
+        // 清除成功後，後端會觸發 initAdminLogs，自動更新 UI
+    });
+};
+
 resetAllBtn.onclick = requestResetAll;
 resetAllConfirmBtn.onclick = confirmResetAll;
-clearLogBtn.onclick = clearLogBtn; 
+// clearLogBtn.onclick = clearLogBtn; // <-- 已被上面的新邏輯取代
 if (logoutBtn) logoutBtn.onclick = showLogin;
 
 addPassedBtn.onclick = async () => {
@@ -464,11 +534,16 @@ async function loadAdmins() {
     
     if (data && data.admins) {
         adminListUI.innerHTML = "";
+        
+        // 【安全修正】 從 sessionStorage 讀取
+        const myUsername = sessionStorage.getItem('admin_username');
+
         data.admins.forEach(admin => {
             const li = document.createElement("li");
             li.innerHTML = `<span>${admin.username} (<strong>${admin.role}</strong>)</span>`;
             
-            const myUsername = jwt_decode(token) ? jwt_decode(token).username : null;
+            // 【安全修正】 移除不安全的 jwt_decode
+            // const myUsername = jwt_decode(token) ? jwt_decode(token).username : null; // <-- 移除
 
             if (admin.username !== myUsername) { 
                 const deleteBtn = document.createElement("button");
@@ -552,6 +627,8 @@ function initSuperAdminBindings() {
 }
 
 
+// 【安全修正】 移除整個不安全的 jwt_decode 函式
+/*
 // (簡易的 JWT 解碼函式)
 function jwt_decode(token) {
     try {
@@ -565,3 +642,4 @@ function jwt_decode(token) {
         return null;
     }
 }
+*/
