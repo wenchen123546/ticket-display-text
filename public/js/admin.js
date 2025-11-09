@@ -1,13 +1,26 @@
 // --- 1. 元素節點 (DOM) ---
 const loginContainer = document.getElementById("login-container");
 const adminPanel = document.getElementById("admin-panel");
-const usernameInput = document.getElementById("username-input"); // 【修改】
+const usernameInput = document.getElementById("username-input"); 
 const passwordInput = document.getElementById("password-input");
 const loginButton = document.getElementById("login-button");
 const loginError = document.getElementById("login-error");
 const numberEl = document.getElementById("number");
 const statusBar = document.getElementById("status-bar");
-// ... (其他卡片元素不變) ...
+// (其他卡片元素)
+const passedListUI = document.getElementById("passed-list-ui");
+const newPassedNumberInput = document.getElementById("new-passed-number");
+const addPassedBtn = document.getElementById("add-passed-btn");
+const featuredListUI = document.getElementById("featured-list-ui");
+const newLinkTextInput = document.getElementById("new-link-text");
+const newLinkUrlInput = document.getElementById("new-link-url");
+const addFeaturedBtn = document.getElementById("add-featured-btn");
+const soundToggle = document.getElementById("sound-toggle");
+const publicToggle = document.getElementById("public-toggle"); 
+const adminLogUI = document.getElementById("admin-log-ui");
+const clearLogBtn = document.getElementById("clear-log-btn");
+const resetAllBtn = document.getElementById("resetAll");
+const resetAllConfirmBtn = document.getElementById("resetAllConfirm");
 
 // 【新增】 Super Admin 卡片元素
 const superAdminCard = document.getElementById("card-superadmin");
@@ -23,29 +36,44 @@ const setPwBtn = document.getElementById("set-pw-btn");
 
 
 // --- 2. 全域變數 ---
-let token = sessionStorage.getItem('admin_jwt') || ""; // 【重構】 儲存 JWT
-let userRole = sessionStorage.getItem('admin_role') || ""; // 【新增】 儲存角色
+let token = sessionStorage.getItem('admin_jwt') || ""; 
+let userRole = sessionStorage.getItem('admin_role') || ""; 
 let resetAllTimer = null;
-let toastTimer = null; 
+let toastTimer = null; // 【修正】 Toast 計時器
 
 // --- 3. Socket.io ---
-// 【重構】 Socket.io 認證改為動態函式
 const socket = io({ 
     autoConnect: false,
     auth: () => {
-        // 每一次連線（或重連）時，都使用最新的 JWT
         return { token: token }; 
     }
 });
 
-// --- 4. 登入/顯示邏輯 ---
+// --- 4. 【修正】 Toast 通知函式 (補上) ---
+function showToast(message, type = 'info') {
+    const toast = document.getElementById("toast-notification");
+    if (!toast) return;
+    
+    toast.textContent = message;
+    toast.className = type; 
+    
+    toast.classList.add("show");
+    
+    if (toastTimer) clearTimeout(toastTimer);
+    
+    toastTimer = setTimeout(() => {
+        toast.classList.remove("show");
+    }, 3000);
+}
+
+// --- 5. 登入/顯示邏輯 ---
 function showLogin() {
     loginContainer.style.display = "block";
     adminPanel.style.display = "none";
     document.title = "後台管理 - 登入";
-    token = ""; // 清除 token
-    userRole = ""; // 清除角色
-    sessionStorage.removeItem('admin_jwt'); // 清除 session
+    token = ""; 
+    userRole = ""; 
+    sessionStorage.removeItem('admin_jwt'); 
     sessionStorage.removeItem('admin_role');
     socket.disconnect();
 }
@@ -55,26 +83,20 @@ async function showPanel() {
     adminPanel.style.display = "block";
     document.title = "後台管理 - 控制台";
 
-    // 【新增】 根據角色顯示超級管理員卡片
     if (userRole === 'superadmin') {
         superAdminCard.style.display = "block";
-        loadAdmins(); // 載入管理員列表
+        loadAdmins(); 
     } else {
         superAdminCard.style.display = "none";
     }
     
-    // 【重構】 先連線，讓 auth 函式帶入 token
     if (!socket.connected) {
         socket.connect();
     }
     
-    showToast("ℹ️ 使用預設排版", "info");
-    // (移除 GridStack.init)
+    showToast("ℹ️ 使用預設排版", "info"); // 【修正】 現在這個呼叫是有效的
 }
 
-// 【重構】 刪除 checkToken 函式
-
-// 【重構】 修改登入邏輯以使用 JWT
 async function attemptLogin() {
     const username = usernameInput.value;
     const password = passwordInput.value;
@@ -94,9 +116,9 @@ async function attemptLogin() {
         const data = await res.json();
 
         if (res.ok && data.token) {
-            token = data.token; // 儲存拿到的 JWT
-            userRole = data.role; // 儲存角色
-            sessionStorage.setItem('admin_jwt', token); // 存入 sessionStorage
+            token = data.token; 
+            userRole = data.role; 
+            sessionStorage.setItem('admin_jwt', token); 
             sessionStorage.setItem('admin_role', userRole);
             await showPanel(); 
         } else {
@@ -110,10 +132,9 @@ async function attemptLogin() {
 }
 
 document.addEventListener("DOMContentLoaded", () => { 
-    // 【重構】 檢查 sessionStorage 中是否已有 token
     if (token && userRole) {
         console.log("偵測到 sessionStorage 中的 JWT，嘗試直接登入...");
-        showPanel(); // 直接顯示面板 (如果 token 過期，API 請求會失敗並退回登入)
+        showPanel(); 
     } else {
         showLogin();
     }
@@ -123,9 +144,6 @@ loginButton.addEventListener("click", attemptLogin);
 passwordInput.addEventListener("keyup", (event) => { if (event.key === "Enter") { attemptLogin(); } });
 usernameInput.addEventListener("keyup", (event) => { if (event.key === "Enter") { passwordInput.focus(); } });
 
-// --- 5. Toast 通知函式 ---
-// (Toast 函式 showToast 不變)
-
 // --- 6. 控制台 Socket 監聽器 ---
 socket.on("connect", () => {
     console.log("Socket.io 已連接 (Admin)");
@@ -133,43 +151,89 @@ socket.on("connect", () => {
     showToast("✅ 已連線到伺服器", "success");
 });
 socket.on("disconnect", () => {
-    // ... (不變)
+    console.warn("Socket.io 已斷線");
+    statusBar.classList.add("visible");
+    showToast("❌ 已從伺服器斷線", "error");
 });
 socket.on("connect_error", (err) => {
     console.error("Socket 連線失敗:", err.message);
     if (err.message === "Authentication failed") {
         alert("認證已過期或無效，請重新登入。");
-        showLogin(); // 【重構】 連線失敗（JWT 過期）時退回登入
+        showLogin(); 
     }
 });
 
-// ... (其他 socket.on 監聽器不變) ...
+// (其他 socket.on 監聽器...)
+socket.on("initAdminLogs", (logs) => {
+    adminLogUI.innerHTML = "";
+    if (!logs || logs.length === 0) {
+        adminLogUI.innerHTML = "<li>[目前尚無日誌]</li>";
+        return;
+    }
+    const fragment = document.createDocumentFragment();
+    logs.forEach(logMsg => {
+        const li = document.createElement("li");
+        li.textContent = logMsg;
+        fragment.appendChild(li);
+    });
+    adminLogUI.appendChild(fragment);
+    adminLogUI.scrollTop = adminLogUI.scrollHeight; 
+});
+
+socket.on("newAdminLog", (logMessage) => {
+    const firstLi = adminLogUI.querySelector("li");
+    if (firstLi && firstLi.textContent.includes("[目前尚無日誌]")) {
+        adminLogUI.innerHTML = "";
+    }
+    
+    const li = document.createElement("li");
+    li.textContent = logMessage;
+    adminLogUI.prepend(li); 
+});
+
+socket.on("update", (num) => {
+    numberEl.textContent = num;
+});
+socket.on("updatePassed", (numbers) => {
+    renderPassedListUI(numbers);
+});
+socket.on("updateFeaturedContents", (contents) => {
+    renderFeaturedListUI(contents);
+});
+socket.on("updateSoundSetting", (isEnabled) => {
+    console.log("收到音效設定:", isEnabled);
+    soundToggle.checked = isEnabled;
+});
+socket.on("updatePublicStatus", (isPublic) => {
+    console.log("收到公開狀態:", isPublic);
+    publicToggle.checked = isPublic;
+});
+socket.on("updateTimestamp", (timestamp) => {
+    console.log("Timestamp updated:", timestamp);
+});
+
 
 // --- 7. API 請求函式 ---
-// 【重構】 修改 API 請求以使用 JWT Header
 async function apiRequest(endpoint, body, a_returnResponse = false) {
     try {
         const res = await fetch(endpoint, {
             method: "POST",
             headers: { 
                 "Content-Type": "application/json",
-                // 使用 Bearer Token 傳送 JWT
                 "Authorization": `Bearer ${token}` 
             },
-            body: JSON.stringify(body), // body 中不再需要傳送 token
+            body: JSON.stringify(body), 
         });
         
         const responseData = await res.json(); 
 
         if (!res.ok) {
-            // 401 (未授權) 或 403 (禁止) 通常表示 JWT 過期或無效
             if (res.status === 401 || res.status === 403) {
                 alert("認證已過期，請重新登入。");
                 showLogin();
             } else {
                 const errorMsg = responseData.error || "未知錯誤";
                 showToast(`❌ API 錯誤: ${errorMsg}`, "error");
-                // alert("發生錯誤：" + errorMsg); // Toast 已顯示
             }
             return false;
         }
@@ -181,26 +245,205 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
         return true; 
     } catch (err) {
         showToast(`❌ 網路連線失敗: ${err.message}`, "error");
-        // alert("網路連線失敗或伺服器無回應：" + err.message);
         return false;
     }
 }
 
 // --- 8. GUI 渲染函式 ---
-// (renderPassedListUI 和 renderFeaturedListUI 不變)
+function renderPassedListUI(numbers) {
+    passedListUI.innerHTML = ""; 
+    if (!Array.isArray(numbers)) return;
+    const fragment = document.createDocumentFragment();
+    numbers.forEach((number) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<span>${number}</span>`;
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "delete-item-btn";
+        deleteBtn.textContent = "×";
+        deleteBtn.onclick = async () => {
+            if (confirm(`確定要刪除過號 ${number} 嗎？`)) {
+                deleteBtn.disabled = true;
+                await apiRequest("/api/passed/remove", { number: number });
+            }
+        };
+        li.appendChild(deleteBtn);
+        fragment.appendChild(li);
+    });
+    passedListUI.appendChild(fragment);
+}
+
+function renderFeaturedListUI(contents) {
+    featuredListUI.innerHTML = "";
+    if (!Array.isArray(contents)) return;
+    
+    const fragment = document.createDocumentFragment();
+    
+    contents.forEach((item) => {
+        const li = document.createElement("li");
+        const span = document.createElement("span");
+        const textNode = document.createTextNode(item.linkText);
+        span.appendChild(textNode);
+        span.appendChild(document.createElement("br"));
+        const small = document.createElement("small");
+        small.style.color = "#666";
+        small.textContent = item.linkUrl; 
+        span.appendChild(small);
+        li.appendChild(span);
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "delete-item-btn";
+        deleteBtn.textContent = "×";
+        
+        deleteBtn.onclick = async () => {
+            if (confirm(`確定要刪除連結 ${item.linkText} 嗎？`)) { 
+                deleteBtn.disabled = true;
+                await apiRequest("/api/featured/remove", {
+                    linkText: item.linkText,
+                    linkUrl: item.linkUrl
+                });
+            }
+        };
+        li.appendChild(deleteBtn);
+        fragment.appendChild(li);
+    });
+    featuredListUI.appendChild(fragment);
+}
 
 // --- 9. 控制台按鈕功能 ---
-// (changeNumber, setNumber, reset... 等函式不變,
-//  它們會自動使用新的 apiRequest 函式)
+async function changeNumber(direction) {
+    await apiRequest("/change-number", { direction });
+}
+async function setNumber() {
+    const num = document.getElementById("manualNumber").value;
+    if (num === "") return;
+    const success = await apiRequest("/set-number", { number: num });
+    if (success) {
+        document.getElementById("manualNumber").value = "";
+        showToast("✅ 號碼已設定", "success");
+    }
+}
+async function resetNumber() {
+    if (!confirm("確定要將「目前號碼」重置為 0 嗎？")) return;
+    const success = await apiRequest("/set-number", { number: 0 });
+    if (success) {
+        document.getElementById("manualNumber").value = "";
+        showToast("✅ 號碼已重置為 0", "success");
+    }
+}
+async function resetPassed_fixed() {
+    if (!confirm("確定要清空「已叫號碼(過號)」列表嗎？")) return;
+    const success = await apiRequest("/api/passed/clear", {});
+    if (success) {
+        showToast("✅ 過號列表已清空", "success");
+    }
+}
+async function resetFeaturedContents_fixed() {
+    if (!confirm("確定要清空「精選連結」嗎？")) return;
+    const success = await apiRequest("/api/featured/clear", {});
+    if (success) {
+        showToast("✅ 精選連結已清空", "success");
+    }
+}
+function cancelResetAll() {
+    resetAllConfirmBtn.style.display = "none";
+    resetAllBtn.style.display = "block";
+    if (resetAllTimer) {
+        clearTimeout(resetAllTimer);
+        resetAllTimer = null;
+    }
+}
+async function confirmResetAll() {
+    const success = await apiRequest("/reset", {});
+    if (success) {
+        document.getElementById("manualNumber").value = "";
+        showToast("💥 所有資料已重置", "success");
+    }
+    cancelResetAll();
+}
+function requestResetAll() {
+    resetAllBtn.style.display = "none";
+    resetAllConfirmBtn.style.display = "block";
+    resetAllTimer = setTimeout(() => {
+        cancelResetAll();
+    }, 5000);
+}
+
+async function clearAdminLog() {
+    if (confirm("確定要永久清除「所有」管理員的操作日誌嗎？\n此動作無法復原。")) {
+        showToast("🧼 正在清除日誌...", "info");
+        await apiRequest("/api/logs/clear", {});
+    }
+}
 
 // --- 10. 綁定按鈕事件 ---
-// (舊的按鈕綁定不變)
+document.getElementById("next").onclick = () => changeNumber("next");
+document.getElementById("prev").onclick = () => changeNumber("prev");
+document.getElementById("setNumber").onclick = setNumber;
+document.getElementById("resetNumber").onclick = resetNumber;
+document.getElementById("resetFeaturedContents").onclick = resetFeaturedContents_fixed;
+document.getElementById("resetPassed").onclick = resetPassed_fixed;
+resetAllBtn.onclick = requestResetAll;
+resetAllConfirmBtn.onclick = confirmResetAll;
+clearLogBtn.onclick = clearAdminLog; 
+
+addPassedBtn.onclick = async () => {
+    const num = Number(newPassedNumberInput.value);
+    if (num <= 0 || !Number.isInteger(num)) {
+        alert("請輸入有效的正整數。");
+        return;
+    }
+    addPassedBtn.disabled = true;
+    const success = await apiRequest("/api/passed/add", { number: num });
+    if (success) {
+        newPassedNumberInput.value = "";
+    }
+    addPassedBtn.disabled = false;
+};
+addFeaturedBtn.onclick = async () => {
+    const text = newLinkTextInput.value.trim();
+    const url = newLinkUrlInput.value.trim();
+    if (!text || !url) {
+        alert("「連結文字」和「網址」都必須填寫。");
+        return;
+    }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        alert("網址請務必以 http:// 或 https:// 開頭。");
+        return;
+    }
+    addFeaturedBtn.disabled = true;
+    const success = await apiRequest("/api/featured/add", {
+        linkText: text,
+        linkUrl: url
+    });
+    if (success) {
+        newLinkTextInput.value = "";
+        newLinkUrlInput.value = "";
+    }
+    addFeaturedBtn.disabled = false;
+};
 
 // --- 11. 綁定 Enter 鍵 ---
-// (舊的 Enter 鍵綁定不變)
+newPassedNumberInput.addEventListener("keyup", (event) => { if (event.key === "Enter") { addPassedBtn.click(); } });
+newLinkTextInput.addEventListener("keyup", (event) => { if (event.key === "Enter") { newLinkUrlInput.focus(); } });
+newLinkUrlInput.addEventListener("keyup", (event) => { if (event.key === "Enter") { addFeaturedBtn.click(); } });
 
 // --- 12. 綁定開關 ---
-// (舊的開關綁定不變)
+soundToggle.addEventListener("change", () => {
+    const isEnabled = soundToggle.checked;
+    apiRequest("/set-sound-enabled", { enabled: isEnabled });
+});
+publicToggle.addEventListener("change", () => {
+    const isPublic = publicToggle.checked;
+    if (!isPublic) {
+        if (!confirm("確定要關閉前台嗎？\n所有使用者將會看到「維護中」畫面。")) {
+            publicToggle.checked = true; 
+            return;
+        }
+    }
+    apiRequest("/set-public-status", { isPublic: isPublic });
+});
 
 // --- 13. 【新增】 Super Admin 功能函式和綁定 ---
 
@@ -214,8 +457,11 @@ async function loadAdmins() {
             const li = document.createElement("li");
             li.innerHTML = `<span>${admin.username} (<strong>${admin.role}</strong>)</span>`;
             
+            // 簡易解碼來檢查 "我" 是誰
+            const myUsername = jwt_decode(token) ? jwt_decode(token).username : null;
+
             // 不能刪除自己
-            if (admin.username !== (sessionStorage.getItem('admin_jwt') ? jwt_decode(sessionStorage.getItem('admin_jwt')).username : '')) { 
+            if (admin.username !== myUsername) { 
                 const deleteBtn = document.createElement("button");
                 deleteBtn.type = "button";
                 deleteBtn.className = "delete-item-btn";
@@ -248,7 +494,6 @@ async function addAdmin() {
         newAdminPasswordInput.value = "";
         loadAdmins(); // 重新載入列表
     }
-    // 失敗的 Toast 會由 apiRequest 自動處理
 }
 
 // 刪除管理員
@@ -287,8 +532,7 @@ refreshAdminListBtn.onclick = loadAdmins;
 addAdminBtn.onclick = addAdmin;
 setPwBtn.onclick = setAdminPassword;
 
-// (簡易的 JWT 解碼函式，用於 UI 顯示，避免引入
-// 完整函式庫。注意：這不會驗證簽章！)
+// (簡易的 JWT 解碼函式)
 function jwt_decode(token) {
     try {
         const base64Url = token.split('.')[1];
