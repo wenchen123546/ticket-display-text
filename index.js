@@ -63,7 +63,14 @@ if (!JWT_SECRET) {
 const pubClient = new Redis(REDIS_URL, { 
     tls: { rejectUnauthorized: false } 
 });
-const subClient = pubClient.duplicate(); // 複製連線
+
+// 【!!! 關鍵修正 !!!】
+// 必須建立一個「全新」的連線，而不是使用 .duplicate()
+const subClient = new Redis(REDIS_URL, { 
+    tls: { rejectUnauthorized: false } 
+});
+// 【!!! 修正結束 !!!】
+
 
 // 我們仍然需要一個「一般」連線來執行 GET/SET/LRANGE
 const redis = new Redis(REDIS_URL, { 
@@ -74,14 +81,20 @@ const redis = new Redis(REDIS_URL, {
 io.adapter(createAdapter(pubClient, subClient));
 
 // 監聽「一般」連線
-redis.on('connect', () => { console.log("✅ 成功連線到 Upstash Redis (主要客戶端)。"); });
+redis.on('connect', () => { console.log("✅ 成功連線到 Upstash Redis (主要客戶端 GET/SET)。"); });
 redis.on('error', (err) => { 
     console.error("❌ Redis (主要客戶端) 連線錯誤 (非致命):", err); 
 });
 // 監聽 Adapter 連線
-pubClient.on('connect', () => { console.log("✅ 成功連線到 Redis Adapter (Pub/Sub)。"); });
+pubClient.on('connect', () => { console.log("✅ 成功連線到 Redis Adapter (PUBLISH)。"); });
 pubClient.on('error', (err) => { 
-    console.error("❌ Redis Adapter (Pub/Sub) 連線錯誤 (非致命):", err); 
+    console.error("❌ Redis Adapter (PUBLISH) 連線錯誤 (非致命):", err); 
+});
+
+// 【新增】 監聽 SubClient 連線
+subClient.on('connect', () => { console.log("✅ 成功連線到 Redis Adapter (SUBSCRIBE)。"); });
+subClient.on('error', (err) => { 
+    console.error("❌ Redis Adapter (SUBSCRIBE) 連線錯誤 (非致命):", err); 
 });
 // --- 【Adapter 修正結束】 ---
 
