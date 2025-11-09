@@ -22,8 +22,9 @@ const resetAllBtn = document.getElementById("resetAll");
 
 // --- 2. 全域變數 ---
 let token = "";
-// resetAllTimer 已移除
 let toastTimer = null; // 【新】 Toast 計時器
+let publicToggleConfirmTimer = null; // 【新】 公開狀態的確認計時器
+
 
 // --- 3. Socket.io ---
 const socket = io({ 
@@ -204,6 +205,61 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
     }
 }
 
+// --- 【新】 按鈕確認邏輯 (重構) ---
+// (此函式現在會被 GUI 渲染函式呼叫)
+function setupConfirmationButton(buttonEl, originalText, confirmText, actionCallback) {
+    if (!buttonEl) return;
+    
+    let timer = null;
+    let interval = null;
+    let isConfirming = false;
+    let countdown = 5;
+
+    // 檢查是否需要顯示倒數計時 (小按鈕 "⚠️" 不需要)
+    const showCountdown = confirmText.includes("點此") || confirmText.includes("重置");
+
+    const resetBtn = () => {
+        clearInterval(interval);
+        clearTimeout(timer);
+        isConfirming = false;
+        countdown = 5;
+        buttonEl.textContent = originalText;
+        buttonEl.classList.remove("is-confirming");
+        interval = null;
+        timer = null;
+    };
+
+    buttonEl.addEventListener("click", () => {
+        if (isConfirming) {
+            // --- 執行動作 ---
+            actionCallback();
+            resetBtn();
+        } else {
+            // --- 進入確認 ---
+            isConfirming = true;
+            countdown = 5;
+            buttonEl.textContent = showCountdown ? `${confirmText} (${countdown}s)` : confirmText;
+            buttonEl.classList.add("is-confirming");
+
+            if (showCountdown) {
+                interval = setInterval(() => {
+                    countdown--;
+                    if (countdown > 0) {
+                        buttonEl.textContent = `${confirmText} (${countdown}s)`;
+                    } else {
+                        clearInterval(interval); // Stop countdown
+                    }
+                }, 1000);
+            }
+
+            timer = setTimeout(() => {
+                resetBtn();
+            }, 5000);
+        }
+    });
+}
+
+
 // --- 8. GUI 渲染函式 ---
 function renderPassedListUI(numbers) {
     passedListUI.innerHTML = ""; 
@@ -216,13 +272,16 @@ function renderPassedListUI(numbers) {
         deleteBtn.type = "button";
         deleteBtn.className = "delete-item-btn";
         deleteBtn.textContent = "×";
-        deleteBtn.onclick = async () => {
-            if (confirm(`確定要刪除過號 ${number} 嗎？`)) {
-                deleteBtn.disabled = true;
-                await apiRequest("/api/passed/remove", { number: number });
-                // (日誌由伺服器自動發送)
-            }
+        
+        // 【修改】 移除 confirm()，改用 setupConfirmationButton
+        const actionCallback = async () => {
+            deleteBtn.disabled = true;
+            await apiRequest("/api/passed/remove", { number: number });
+            // (日誌由伺服器自動發送)
         };
+        
+        setupConfirmationButton(deleteBtn, "×", "⚠️", actionCallback);
+        
         li.appendChild(deleteBtn);
         fragment.appendChild(li);
     });
@@ -238,6 +297,7 @@ function renderFeaturedListUI(contents) {
     
     contents.forEach((item) => {
         const li = document.createElement("li");
+        // ... (span, textNode, small... 程式碼不變)
         const span = document.createElement("span");
         const textNode = document.createTextNode(item.linkText);
         span.appendChild(textNode);
@@ -253,15 +313,17 @@ function renderFeaturedListUI(contents) {
         deleteBtn.className = "delete-item-btn";
         deleteBtn.textContent = "×";
         
-        deleteBtn.onclick = async () => {
-            if (confirm(`確定要刪除連結 ${item.linkText} 嗎？`)) { 
-                deleteBtn.disabled = true;
-                await apiRequest("/api/featured/remove", {
-                    linkText: item.linkText,
-                    linkUrl: item.linkUrl
-                });
-            }
+        // 【修改】 移除 confirm()，改用 setupConfirmationButton
+        const actionCallback = async () => {
+            deleteBtn.disabled = true;
+            await apiRequest("/api/featured/remove", {
+                linkText: item.linkText,
+                linkUrl: item.linkUrl
+            });
         };
+        
+        setupConfirmationButton(deleteBtn, "×", "⚠️", actionCallback);
+        
         li.appendChild(deleteBtn);
         fragment.appendChild(li);
     });
@@ -270,39 +332,7 @@ function renderFeaturedListUI(contents) {
 
 // --- 9. 控制台按鈕功能 ---
 
-// 【新】 按鈕確認邏輯
-function setupConfirmationButton(buttonEl, originalText, confirmText, actionCallback) {
-    if (!buttonEl) return;
-    
-    let timer = null;
-    let isConfirming = false;
-
-    buttonEl.textContent = originalText; // 確保初始文字正確
-
-    buttonEl.addEventListener("click", () => {
-        if (isConfirming) {
-            // --- 執行動作 ---
-            if (timer) clearTimeout(timer);
-            actionCallback();
-            buttonEl.textContent = originalText;
-            buttonEl.classList.remove("is-confirming");
-            isConfirming = false;
-        } else {
-            // --- 進入確認 ---
-            isConfirming = true;
-            buttonEl.textContent = confirmText;
-            buttonEl.classList.add("is-confirming");
-
-            timer = setTimeout(() => {
-                // --- 5秒後自動恢復 ---
-                buttonEl.textContent = originalText;
-                buttonEl.classList.remove("is-confirming");
-                isConfirming = false;
-                timer = null;
-            }, 5000);
-        }
-    });
-}
+// (setupConfirmationButton 函式已移至上方)
 
 // 【新】 重置按鈕的實際執行動作
 const actionResetNumber = async () => {
@@ -334,15 +364,6 @@ const actionResetAll = async () => {
 };
 
 
-// 【舊】 移除 confirm() 相關的舊函式
-// resetNumber()
-// resetPassed_fixed()
-// resetFeaturedContents_fixed()
-// cancelResetAll()
-// confirmResetAll()
-// requestResetAll()
-
-
 // --- 其他按鈕功能 ---
 async function changeNumber(direction) {
     await apiRequest("/change-number", { direction });
@@ -357,23 +378,25 @@ async function setNumber() {
     }
 }
 
-// 【修改】 清除日誌功能
-async function clearAdminLog() {
-    // (此按鈕保留 confirm，因為它不是重置按鈕)
-    if (confirm("確定要永久清除「所有」管理員的操作日誌嗎？\n此動作無法復原。")) {
-        showToast("🧼 正在清除日誌...", "info");
-        await apiRequest("/api/logs/clear", {});
-        // UI 會由 "initAdminLogs" socket 事件自動更新
-    }
+// 【修改】 清除日誌功能 (移除 confirm)
+const actionClearAdminLog = async () => {
+    showToast("🧼 正在清除日誌...", "info");
+    await apiRequest("/api/logs/clear", {});
+    // UI 會由 "initAdminLogs" socket 事件自動更新
 }
 
 // --- 10. 綁定按鈕事件 ---
 document.getElementById("next").onclick = () => changeNumber("next");
 document.getElementById("prev").onclick = () => changeNumber("prev");
 document.getElementById("setNumber").onclick = setNumber;
-clearLogBtn.onclick = clearAdminLog; // (保留)
 
-// 【新】 綁定重置按鈕的新邏輯
+// 【新】 綁定清除日誌和重置按鈕的新邏輯
+setupConfirmationButton(
+    document.getElementById("clear-log-btn"),
+    "清除日誌",
+    "⚠️ 點此確認清除",
+    actionClearAdminLog
+);
 setupConfirmationButton(
     document.getElementById("resetNumber"),
     "重置號碼",
@@ -448,13 +471,65 @@ soundToggle.addEventListener("change", () => {
     const isEnabled = soundToggle.checked;
     apiRequest("/set-sound-enabled", { enabled: isEnabled });
 });
+
+// 【重大修改】 移除 publicToggle 的 confirm()，改用倒數計時
+const publicToggleLabel = document.getElementById("public-toggle-label");
+const originalToggleText = "對外開放前台";
+
 publicToggle.addEventListener("change", () => {
     const isPublic = publicToggle.checked;
-    if (!isPublic) {
-        if (!confirm("確定要關閉前台嗎？\n所有使用者將會看到「維護中」畫面。")) {
+
+    if (isPublic) {
+        // --- 1. 正在從「關閉」切換回「開啟」 ---
+        // 總是允許
+        if (publicToggleConfirmTimer) {
+            // 如果正在倒數，取消倒數
+            clearTimeout(publicToggleConfirmTimer.timer);
+            clearInterval(publicToggleConfirmTimer.interval);
+            publicToggleConfirmTimer = null;
+            publicToggleLabel.textContent = originalToggleText;
+            publicToggleLabel.classList.remove("is-confirming-label");
+        }
+        apiRequest("/set-public-status", { isPublic: true });
+    } else {
+        // --- 2. 正在從「開啟」切換到「關閉」 ---
+        if (publicToggleConfirmTimer) {
+            // --- 2a. 正在確認中，執行動作 ---
+            clearTimeout(publicToggleConfirmTimer.timer);
+            clearInterval(publicToggleConfirmTimer.interval);
+            publicToggleConfirmTimer = null;
+            publicToggleLabel.textContent = originalToggleText;
+            publicToggleLabel.classList.remove("is-confirming-label");
+            
+            apiRequest("/set-public-status", { isPublic: false });
+            
+        } else {
+            // --- 2b. 首次點擊，開始確認 ---
+            // 立即取消
             publicToggle.checked = true; 
-            return;
+            
+            let countdown = 5;
+            publicToggleLabel.textContent = `⚠️ 點此確認關閉 (${countdown}s)`;
+            publicToggleLabel.classList.add("is-confirming-label");
+
+            const interval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    publicToggleLabel.textContent = `⚠️ 點此確認關閉 (${countdown}s)`;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 1000);
+
+            const timer = setTimeout(() => {
+                clearInterval(interval);
+                publicToggleLabel.textContent = originalToggleText;
+                publicToggleLabel.classList.remove("is-confirming-label");
+                publicToggleConfirmTimer = null;
+            }, 5000);
+            
+            // 儲存計時器ID
+            publicToggleConfirmTimer = { timer, interval };
         }
     }
-    apiRequest("/set-public-status", { isPublic: isPublic });
 });
