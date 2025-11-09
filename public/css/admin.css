@@ -377,8 +377,8 @@ textarea { height: 80px; text-align: left; padding: 10px; }
     padding: 10px; 
     margin: 0; 
     width: 100%; 
-    height: 150px; 
-    flex-grow: 1; 
+    height: 250px; /* 【修正】 提高預設高度*/
+    flex-grow: 1; /* 【優化】 允許日誌區域盡量填滿卡片剩餘空間*/
     overflow-y: auto; 
     background: var(--color-log-bg); 
     color: var(--color-log-text); 
@@ -453,13 +453,13 @@ textarea { height: 80px; text-align: left; padding: 10px; }
 
 #card-superadmin .list-editor {
     /* 讓日誌和列表編輯器高度一致 */
-    max-height: 250px; 
+    max-height: 350px; /* 【修正】 提高最大高度*/
     display: flex;
     flex-direction: column;
 }
 #card-superadmin .list-editor ul {
     flex-grow: 1; /* 讓列表填滿空間 */
-    max-height: 150px;
+    max-height: 200px; /* 【修正】 提高列表的最大高度*/
 }
 #card-superadmin .list-editor button {
     margin-top: 10px;
