@@ -1,11 +1,7 @@
 /*
  * ==========================================
  * 伺服器 (index.js)
- * ... (舊註解) ...
- * * 14.【新增/優化】
- * * - JWT 期限可由超級管理員在後台設定 (預設 8 小時)
- * * 15.【修正】
- * * - 新增 'trust proxy' 設定，解決 X-Forwarded-For 錯誤
+ * * 【修改 V3.0】 移除 JWT 期限設定功能，Token 永不過期
  * ==========================================
  */
 
@@ -33,7 +29,7 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN; 
 const REDIS_URL = process.env.UPSTASH_REDIS_URL;
 const JWT_SECRET = process.env.JWT_SECRET; 
-const DEFAULT_JWT_EXPIRY_HOURS = 8; // 定義預設值為 8 小時
+// const DEFAULT_JWT_EXPIRY_HOURS = 8; // 【移除】: 不再使用 JWT 期限
 
 // --- 4. 關鍵檢查 ---
 if (!ADMIN_TOKEN) {
@@ -80,7 +76,7 @@ const KEY_SOUND_ENABLED = 'callsys:soundEnabled';
 const KEY_IS_PUBLIC = 'callsys:isPublic'; 
 const KEY_ADMIN_LOG = 'callsys:admin-log'; 
 const KEY_ADMINS = 'callsys:admins'; 
-const KEY_JWT_EXPIRY = 'callsys:jwt-expiry-hours'; // JWT 期限 Key
+// const KEY_JWT_EXPIRY = 'callsys:jwt-expiry-hours'; // 【移除】 JWT 期限 Key
 
 // --- 7. Express 中介軟體 (Middleware) ---
 app.use(helmet({
@@ -126,7 +122,8 @@ const authMiddleware = (req, res, next) => {
         
         next(); 
     } catch (err) {
-        return res.status(403).json({ error: "認證無效或已過期" });
+        // 由於移除了期限，這裡主要是處理 Token 格式錯誤或 JWT_SECRET 不匹配
+        return res.status(403).json({ error: "認證無效或Token錯誤" });
     }
 };
 
@@ -204,23 +201,21 @@ app.post("/login", loginLimiter, async (req, res) => {
         return res.status(403).json({ error: "使用者名稱或密碼錯誤。" });
     }
 
-    // 【修改】 從 Redis 讀取 JWT 期限設定
-    const expiryHoursRaw = await redis.get(KEY_JWT_EXPIRY);
-    const expiryHours = Number(expiryHoursRaw) || DEFAULT_JWT_EXPIRY_HOURS;
-    const expiresIn = `${expiryHours}h`;
-
+    // 【修改】 移除讀取 JWT 期限的邏輯
     const payload = {
         username: user.username,
         role: user.role
     };
-    const token = jwt.sign(payload, JWT_SECRET, {
-        expiresIn: expiresIn // 使用動態期限
-    });
+    
+    // 【修改】 移除 expiresIn 選項，Token 永不過期
+    const token = jwt.sign(payload, JWT_SECRET); 
 
     res.json({ success: true, token: token, role: user.role });
 });
 
 // --- 【新增】 超級管理員 API ---
+
+// 移除 /api/admin/set-jwt-expiry 和 /api/admin/get-jwt-expiry 路由
 
 app.use("/api/admin", apiLimiter, authMiddleware, isSuperAdminMiddleware);
 
@@ -296,26 +291,6 @@ app.post("/api/admin/set-password", async (req, res) => {
     res.json({ success: true });
 });
 
-// 【新增】 設定 JWT 期限 API
-app.post("/api/admin/set-jwt-expiry", async (req, res) => {
-    const { hours } = req.body;
-    const numHours = Number(hours);
-    
-    if (isNaN(numHours) || numHours < 1 || numHours > 720 || !Number.isInteger(numHours)) {
-        return res.status(400).json({ error: "請提供一個有效的整數小時數 (1~720)。" });
-    }
-
-    await redis.set(KEY_JWT_EXPIRY, numHours);
-    await addAdminLog(`JWT 期限已設為 ${numHours} 小時 (新 Token 生效)`, req.user.username);
-    res.json({ success: true, hours: numHours });
-});
-
-// 【新增】 取得 JWT 期限 API
-app.post("/api/admin/get-jwt-expiry", async (req, res) => {
-    const hoursRaw = await redis.get(KEY_JWT_EXPIRY);
-    const hours = Number(hoursRaw) || DEFAULT_JWT_EXPIRY_HOURS;
-    res.json({ success: true, hours: hours });
-});
 
 // --- 11. 核心功能 API (受 JWT 保護) ---
 
@@ -599,13 +574,8 @@ async function startServer() {
         console.error("❌ 建立初始超級管理員失敗:", e);
         process.exit(1);
     }
-
-    // 【新增】 確保 JWT 期限的預設值存在
-    const currentExpiry = await redis.get(KEY_JWT_EXPIRY);
-    if (currentExpiry === null) {
-        await redis.set(KEY_JWT_EXPIRY, DEFAULT_JWT_EXPIRY_HOURS);
-        console.log(`⏱ JWT 期限預設值 (${DEFAULT_JWT_EXPIRY_HOURS} 小時) 已設定。`);
-    }
+    
+    // 【移除】 不再需要 JWT 期限的預設值檢查
 
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`✅ Server running on host 0.0.0.0, port ${PORT}`);
