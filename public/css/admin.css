@@ -100,11 +100,11 @@ body {
 }
 
 /* 【新】 卡片包裝器 (取代 .grid-stack-item) */
-/* 【新】 8/4 欄位佈局 */
-#card-control { grid-column: span 8; }
-#card-editor { grid-column: span 4; }
-#card-logs { grid-column: span 8; }
-#card-settings { grid-column: span 4; }
+/* 【修改】 6/6 欄位佈局 (2x2 網格) */
+#card-control { grid-column: span 6; }
+#card-editor { grid-column: span 6; }
+#card-logs { grid-column: span 6; }
+#card-settings { grid-column: span 6; }
 
 /* 【修改】 .admin-card (取代 .grid-stack-item-content) */
 .admin-card {
@@ -335,8 +335,8 @@ input[type="url"] {
 
 /* --- 7. RWD --- */
 
-/* 【修改】 斷點：當寬度小於 1100px 時，卡片變為單欄 */
-@media (max-width: 1100px) {
+/* 【修改】 斷點：當寬度小於 900px 時，卡片變為單欄 */
+@media (max-width: 900px) {
     .card-container {
         grid-template-columns: 1fr; /* 單欄 */
     }
