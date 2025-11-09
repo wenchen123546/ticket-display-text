@@ -27,20 +27,13 @@ const superAdminCard = document.getElementById("card-superadmin");
 
 
 // --- 2. 全域變數 ---
-// 【錯誤修正】 移除全域 token 變數，因為它會造成狀態不同步
-// let token = sessionStorage.getItem('admin_jwt') || ""; // <-- 移除
 let userRole = sessionStorage.getItem('admin_role') || ""; 
 let resetAllTimer = null;
 let toastTimer = null; 
-let timedConfirmTimers = {}; // <-- 【UX 修正】 儲存多個計時器
+let timedConfirmTimers = {}; 
 
 // --- 3. Socket.io ---
-// 【錯誤修正】
-// 1. 移除 autoConnect: false (讓 socket.io 自動管理連線)
-// 2. 修改 auth 函式，使其 *每次重連時* 都從 sessionStorage 讀取最新的 Token
-//    而不是依賴那個會被清除的全域變數。
 const socket = io({ 
-    // autoConnect: false, // <-- 移除
     auth: () => {
         return { token: sessionStorage.getItem('admin_jwt') }; 
     }
@@ -68,12 +61,18 @@ function showLogin() {
     loginContainer.style.display = "block";
     adminPanel.style.display = "none";
     document.title = "後台管理 - 登入";
-    // token = ""; // <-- 移除 (全域變數已刪除)
     userRole = ""; 
     sessionStorage.removeItem('admin_jwt'); 
     sessionStorage.removeItem('admin_role');
-    sessionStorage.removeItem('admin_username'); // <-- 【安全修正】 登出時清除
-    socket.disconnect(); // 主動斷開連線
+    sessionStorage.removeItem('admin_username'); 
+
+    // --- 【!!! 關鍵錯誤修正 !!!】 ---
+    // *不要* 呼叫 socket.disconnect()。
+    // `disconnect()` 會永久銷毀監聽器。
+    // 我們只想清除 Token。Socket 會在下次重連時
+    // 自動因為「缺少 Token」而被伺服器拒絕。
+    // socket.disconnect(); // <-- 刪除此行
+    // --- 【修正結束】 ---
 }
 
 async function showPanel() {
@@ -81,14 +80,11 @@ async function showPanel() {
     adminPanel.style.display = "block";
     document.title = "後台管理 - 控制台";
 
-    // 【錯誤修正】
-    // userRole 必須從 sessionStorage 重新讀取，才是最準確的
     userRole = sessionStorage.getItem('admin_role');
 
     if (userRole === 'superadmin') {
         superAdminCard.style.display = "block";
         initSuperAdminBindings(); 
-        // loadAdmins(); // <-- 移除 (將由 loadInitialDataViaAPI 觸發)
     } else {
         superAdminCard.style.display = "none";
     }
@@ -122,19 +118,13 @@ async function attemptLogin() {
         const data = await res.json();
 
         if (res.ok && data.token) {
-            // 【錯誤修正】
-            // 登入成功時，*只* 更新 sessionStorage
-            // token = data.token; // <-- 移除 (全域變數已刪除)
-            // userRole = data.role; // <-- 移除 (全域變數已刪除)
-            
             sessionStorage.setItem('admin_jwt', data.token); 
             sessionStorage.setItem('admin_role', data.role);
             sessionStorage.setItem('admin_username', data.username);
             
-            await showPanel(); // showPanel 會處理 socket.connect() 和 API 載入
+            await showPanel(); 
         } else {
             loginError.textContent = data.error || "登入失敗";
-            // showLogin(); // <-- 移除，讓使用者可以重試
         }
     } catch (err) {
         console.error("Login 失敗:", err);
@@ -143,14 +133,12 @@ async function attemptLogin() {
 }
 
 document.addEventListener("DOMContentLoaded", () => { 
-    // 【錯誤修正】
-    // 檢查 sessionStorage 中是否有 token，而不是檢查全域變數
     const tokenFromStorage = sessionStorage.getItem('admin_jwt');
     const roleFromStorage = sessionStorage.getItem('admin_role');
 
     if (tokenFromStorage && roleFromStorage) {
         console.log("偵測到 sessionStorage 中的 JWT，嘗試直接登入...");
-        showPanel(); // 這將觸發 API 載入和 socket.connect()
+        showPanel(); 
     } else {
         showLogin();
     }
@@ -177,31 +165,25 @@ socket.on("disconnect", () => {
 socket.on("connect_error", (err) => {
     console.error("Socket 連線失敗:", err.message);
     
-    // 檢查錯誤是否為「認證失敗」(由我們伺服器 index.js:453 回傳的)
+    // 檢查錯誤是否為「認證失敗」
     if (err.message.includes("Authentication failed")) {
         // --- 這是「永久」的認證錯誤 (例如 Token 過期) ---
-        // 1. 停止重試
-        socket.disconnect(); 
         
-        // 2. 準備錯誤訊息
+        // 【!!! 關鍵錯誤修正 !!!】
+        // *不要* 呼叫 socket.disconnect()。
+        // 只需要呼叫 showLogin() 來清除 Token 即可。
+        // socket.disconnect(); // <-- 刪除此行
+        
         let alertMessage = `後台即時連線(Socket.io)失敗。\n\n錯誤: ${err.message}\n\n`;
         alertMessage += "原因：您的認證無效或已過期，請您重新登入。";
         
-        // 3. 提示使用者並強制登出
         alert(alertMessage);
-        showLogin(); 
+        showLogin(); // <-- showLogin() 會清除 Token
         
     } else {
         // --- 這是「暫時」的網路錯誤 ---
         // (例如 "xhr poll error", "websocket error", 502 Bad Gateway)
-        //
-        // 4. 【!!!】 *不要* 呼叫 showLogin()！
-        //
-        // 我們什麼都不做，只在控制台顯示警告。
-        // `socket.io` 會在背景自動重試連線。
-        // 當 Render 伺服器喚醒後，重試就會成功。
         console.warn("偵測到暫時性網路錯誤，Socket.io 將在背景自動重試...");
-        // (此時 'disconnect' 事件會自動觸發，顯示紅色狀態列)
     }
 });
 // --- 【錯誤修正結束】 ---
@@ -223,8 +205,6 @@ function renderAdminLogs(logs) {
     adminLogUI.appendChild(fragment);
     adminLogUI.scrollTop = adminLogUI.scrollHeight; 
 }
-// 【架構修正】 移除舊的 Socket.io 監聽器
-// socket.on("initAdminLogs", renderAdminLogs);
 
 
 socket.on("newAdminLog", (logMessage) => {
@@ -288,17 +268,13 @@ async function loadInitialDataViaAPI() {
     } else {
         console.error("API 資料載入失敗", data);
         showToast("❌ 初始資料載入失敗", "error");
-        // (即使 API 失敗，我們也不登出，因為 Socket.io 可能會連上)
     }
 }
 
 
 async function apiRequest(endpoint, body, a_returnResponse = false) {
-    // 【錯誤修正】 
-    // API 請求的 Token 應 *永遠* 從 sessionStorage 讀取
     const tokenFromStorage = sessionStorage.getItem('admin_jwt');
     
-    // 【錯誤修正】 如果連 Token 都沒有，就不要嘗試發送 API
     if (endpoint !== "/login" && !tokenFromStorage) {
         console.warn("apiRequest 已中止，因為 sessionStorage 中沒有 Token。");
         return false;
@@ -309,7 +285,7 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
             method: "POST",
             headers: { 
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${tokenFromStorage}` // <-- 使用最新的 Token
+                "Authorization": `Bearer ${tokenFromStorage}` 
             },
             body: JSON.stringify(body), 
         });
@@ -318,13 +294,9 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
 
         if (!res.ok) {
             
-            // 【UX 修正】 改用 showToast
             if (res.status === 401 || res.status === 403) {
                 showToast("❌ 認證無效或已過期，請重新登入", "error"); 
                 
-                // 【錯誤修正】
-                // 如果 API 請求失敗 (例如 Token 過期)，我們應呼叫 showLogin()
-                // 但要延遲一下，讓使用者看到 toast
                 setTimeout(showLogin, 2000); 
 
             } else {
@@ -335,10 +307,10 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
         }
 
         if (a_returnResponse) {
-            return responseData; // <-- 回傳 data (例如 { success: true, currentNumber: ... })
+            return responseData; 
         }
         
-        return true; // (對於 "設定" 類型的 API，回傳 true)
+        return true; 
     } catch (err) {
         showToast(`❌ 網路連線失敗: ${err.message}`, "error");
         return false;
@@ -463,13 +435,6 @@ async function resetNumber() {
         showToast("✅ 號碼已重置為 0", "success");
     }
 }
-
-// 【UX 修正】 移除以下三個舊的函式
-/*
-async function resetPassed_fixed() { ... }
-async function resetFeaturedContents_fixed() { ... }
-async function clearAdminLog() { ... }
-*/
 
 function cancelResetAll() {
     resetAllConfirmBtn.style.display = "none";
