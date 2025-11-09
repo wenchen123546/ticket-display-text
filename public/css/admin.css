@@ -472,9 +472,28 @@ textarea { height: 80px; text-align: left; padding: 10px; }
 }
 
 /* --- 15. 修正 V3.2 CSP 造成的行內樣式錯誤 --- */
+/* (原始規則) */
 #resetAllConfirm {
     display: none;
 }
 #card-superadmin {
     display: none;
+}
+
+/* --- 【CSP 修正】 將 JS 控制的按鈕樣式移到 CSS --- */
+#resetPassedConfirm,
+#clear-log-btn-confirm,
+#resetFeaturedContentsConfirm {
+    display: none; /* 預設隱藏 */
+}
+
+/* 【UX 修正】 確保新按鈕的排版正確 */
+#resetPassedConfirm,
+#resetFeaturedContentsConfirm {
+    width: 100%;
+    margin-top: 5px;
+}
+#clear-log-btn-confirm {
+    width: 100%;
+    margin-top: 10px;
 }
