@@ -19,21 +19,19 @@ const adminLogUI = document.getElementById("admin-log-ui");
 const clearLogBtn = document.getElementById("clear-log-btn");
 const resetAllBtn = document.getElementById("resetAll");
 const resetAllConfirmBtn = document.getElementById("resetAllConfirm");
-const saveLayoutBtn = document.getElementById("save-layout-btn"); 
+// const saveLayoutBtn = document.getElementById("save-layout-btn"); // 【修改】 移除
 
 // --- 2. 全域變數 ---
-let token = sessionStorage.getItem('admin_jwt') || ""; // 【重構】 改為儲存 JWT
+let token = "";
 let resetAllTimer = null;
-let grid = null; 
-let toastTimer = null; 
+let grid = null; // GridStack 物件
+let toastTimer = null; // 【新】 Toast 計時器
 
 // --- 3. Socket.io ---
-// 【重構】 Socket.io 認證改為動態函式
 const socket = io({ 
     autoConnect: false,
-    auth: () => {
-        // 每一次連線（或重連）時，都使用最新的 JWT
-        return { token: token }; 
+    auth: {
+        token: "" 
     }
 });
 
@@ -42,8 +40,6 @@ function showLogin() {
     loginContainer.style.display = "block";
     adminPanel.style.display = "none";
     document.title = "後台管理 - 登入";
-    token = ""; // 清除 token
-    sessionStorage.removeItem('admin_jwt'); // 清除 session
     socket.disconnect();
 }
 
@@ -51,24 +47,13 @@ async function showPanel() {
     loginContainer.style.display = "none";
     adminPanel.style.display = "block";
     document.title = "後台管理 - 控制台";
-    
-    // 【重構】 先連線，讓 auth 函式帶入 token
-    if (!socket.connected) {
-        socket.connect();
-    }
+    socket.connect();
 
-    let savedLayout = null;
-    try {
-        const response = await apiRequest("/api/layout/load", {}, true); 
-        if (response && response.layout) {
-            savedLayout = response.layout;
-            showToast("✅ 已載入儲存的排版", "success");
-        } else {
-            showToast("ℹ️ 使用預設排版", "info");
-        }
-    } catch (e) {
-        showToast(`❌ 讀取排版失敗: ${e.message}`, "error");
-    }
+    // 【修改】 移除讀取已儲存排版的 try...catch 區塊
+    // let savedLayout = null;
+    // try { ... }
+    showToast("ℹ️ 使用預設排版", "info");
+
 
     setTimeout(() => {
         grid = GridStack.init({
@@ -78,66 +63,52 @@ async function showPanel() {
             minRow: 1,          
             float: true,      
             removable: false,   
-            alwaysShowResizeHandle: 'mobile' 
+            // alwaysShowResizeHandle: 'mobile' 
+            static: true // 【修改】 鎖定儀表板，使其不可拖曳或調整大小
         });
         
-        if (savedLayout) {
-            grid.load(savedLayout);
-        }
+        // 【修改】 移除 if (savedLayout) { ... } 區塊
     }, 100); 
 }
 
-// 【重構】 刪除 checkToken 函式
-
-// 【重構】 修改登入邏輯以使用 JWT
-async function attemptLogin(passwordToCheck) {
-    loginError.textContent = "驗證中...";
+async function checkToken(tokenToCheck) {
+    if (!tokenToCheck) return false;
     try {
-        const res = await fetch("/login", {
+        const res = await fetch("/check-token", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ password: passwordToCheck }), // 傳送密碼
+            body: JSON.stringify({ token: tokenToCheck }),
         });
-
-        const data = await res.json();
-
-        if (res.ok && data.token) {
-            token = data.token; // 儲存拿到的 JWT
-            sessionStorage.setItem('admin_jwt', token); // 存入 sessionStorage 以便重整
-            await showPanel(); 
-        } else {
-            loginError.textContent = data.error || "登入失敗";
-            showLogin();
-        }
+        return res.ok;
     } catch (err) {
-        console.error("Login 失敗:", err);
-        loginError.textContent = "網路錯誤或伺服器無回應。";
+        console.error("checkToken 失敗:", err);
+        return false;
     }
 }
-
-document.addEventListener("DOMContentLoaded", () => { 
-    // 【重構】 檢查 sessionStorage 中是否已有 token
-    if (token) {
-        console.log("偵測到 sessionStorage 中的 JWT，嘗試直接登入...");
-        // 為了驗證 token 是否過期，最好的方法是直接顯示面板
-        // 如果 token 過期，後續的 API 請求或 socket 連線會失敗
-        // 屆時會自動觸發 showLogin()
-        showPanel(); 
+async function attemptLogin(tokenToCheck) {
+    loginError.textContent = "驗證中...";
+    const isValid = await checkToken(tokenToCheck);
+    if (isValid) {
+        token = tokenToCheck;
+        socket.auth.token = tokenToCheck;
+        await showPanel(); 
     } else {
+        loginError.textContent = "密碼錯誤";
         showLogin();
     }
-});
-
+}
+document.addEventListener("DOMContentLoaded", () => { showLogin(); });
 loginButton.addEventListener("click", () => { attemptLogin(passwordInput.value); });
 passwordInput.addEventListener("keyup", (event) => { if (event.key === "Enter") { attemptLogin(passwordInput.value); } });
 
-// --- 5. Toast 通知函式 ---
+// --- 5. 【新】 Toast 通知函式 ---
 function showToast(message, type = 'info') {
     const toast = document.getElementById("toast-notification");
     if (!toast) return;
     
     toast.textContent = message;
-    toast.className = type;
+    toast.className = type; // 'success' or 'error' or 'info'
+    
     toast.classList.add("show");
     
     if (toastTimer) clearTimeout(toastTimer);
@@ -150,7 +121,7 @@ function showToast(message, type = 'info') {
 
 // --- 6. 控制台 Socket 監聽器 ---
 socket.on("connect", () => {
-    console.log("Socket.io 已連接 (Admin)");
+    console.log("Socket.io 已連接");
     statusBar.classList.remove("visible");
     showToast("✅ 已連線到伺服器", "success");
 });
@@ -163,10 +134,11 @@ socket.on("connect_error", (err) => {
     console.error("Socket 連線失敗:", err.message);
     if (err.message === "Authentication failed") {
         alert("密碼驗證失敗或 Token 已過期，請重新登入。");
-        showLogin(); // 【重構】 連線失敗（JWT 過期）時退回登入
+        showLogin();
     }
 });
 
+// --- 【新】 伺服器日誌監聽器 ---
 socket.on("initAdminLogs", (logs) => {
     adminLogUI.innerHTML = "";
     if (!logs || logs.length === 0) {
@@ -180,10 +152,11 @@ socket.on("initAdminLogs", (logs) => {
         fragment.appendChild(li);
     });
     adminLogUI.appendChild(fragment);
-    adminLogUI.scrollTop = adminLogUI.scrollHeight; 
+    adminLogUI.scrollTop = adminLogUI.scrollHeight; // 自動滾動到底部
 });
 
 socket.on("newAdminLog", (logMessage) => {
+    // 移除 "尚無日誌" 的提示
     const firstLi = adminLogUI.querySelector("li");
     if (firstLi && firstLi.textContent.includes("[目前尚無日誌]")) {
         adminLogUI.innerHTML = "";
@@ -191,9 +164,11 @@ socket.on("newAdminLog", (logMessage) => {
     
     const li = document.createElement("li");
     li.textContent = logMessage;
-    adminLogUI.prepend(li); 
+    adminLogUI.prepend(li); // 將最新的日誌加到最上方
 });
+// ---
 
+// (移除舊的 update, updatePassed 等事件中的 adminLog 呼叫)
 socket.on("update", (num) => {
     numberEl.textContent = num;
 });
@@ -216,25 +191,19 @@ socket.on("updateTimestamp", (timestamp) => {
 });
 
 // --- 7. API 請求函式 ---
-// 【重構】 修改 API 請求以使用 JWT Header
 async function apiRequest(endpoint, body, a_returnResponse = false) {
     try {
         const res = await fetch(endpoint, {
             method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                // 使用 Bearer Token 傳送 JWT
-                "Authorization": `Bearer ${token}` 
-            },
-            body: JSON.stringify(body), // body 中不再需要傳送 token
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...body, token }),
         });
         
         const responseData = await res.json(); 
 
         if (!res.ok) {
-            // 401 (未授權) 或 403 (禁止) 通常表示 JWT 過期或無效
-            if (res.status === 401 || res.status === 403) {
-                alert("認證已過期，請重新登入。");
+            if (res.status === 403) {
+                alert("密碼驗證失敗或 Token 已過期，請重新登入。");
                 showLogin();
             } else {
                 const errorMsg = responseData.error || "未知錯誤";
@@ -257,46 +226,31 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
 }
 
 // --- 8. GUI 渲染函式 ---
-
-// 【重構】 新增：建立單個 "過號" li 的輔助函式
-function createPassedListItem(number) {
-    const li = document.createElement("li");
-    li.dataset.number = number; // 方便識別
-    li.innerHTML = `<span>${number}</span>`;
-    
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "delete-item-btn";
-    deleteBtn.textContent = "×";
-    deleteBtn.onclick = async () => {
-        if (confirm(`確定要刪除過號 ${number} 嗎？`)) {
-            deleteBtn.disabled = true;
-            // 【重構】 成功後直接從 DOM 移除，不等 socket
-            const success = await apiRequest("/api/passed/remove", { number: number });
-            if (success) {
-                li.remove();
-                showToast(`✅ 已移除 ${number}`, "success");
-            } else {
-                deleteBtn.disabled = false; // 失敗時解鎖
-            }
-        }
-    };
-    li.appendChild(deleteBtn);
-    return li;
-}
-
-// 【重構】 修改：此函式現在主要由 socket.io 呼叫，用於 "同步"
 function renderPassedListUI(numbers) {
     passedListUI.innerHTML = ""; 
     if (!Array.isArray(numbers)) return;
     const fragment = document.createDocumentFragment();
     numbers.forEach((number) => {
-        fragment.appendChild(createPassedListItem(number));
+        const li = document.createElement("li");
+        li.innerHTML = `<span>${number}</span>`;
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "delete-item-btn";
+        deleteBtn.textContent = "×";
+        deleteBtn.onclick = async () => {
+            if (confirm(`確定要刪除過號 ${number} 嗎？`)) {
+                deleteBtn.disabled = true;
+                await apiRequest("/api/passed/remove", { number: number });
+                // (日誌由伺服器自動發送)
+            }
+        };
+        li.appendChild(deleteBtn);
+        fragment.appendChild(li);
     });
     passedListUI.appendChild(fragment);
 }
 
-// (精選連結的渲染函式保持不變，因為其結構較複雜)
+// 【XSS 安全修正】
 function renderFeaturedListUI(contents) {
     featuredListUI.innerHTML = "";
     if (!Array.isArray(contents)) return;
@@ -323,7 +277,6 @@ function renderFeaturedListUI(contents) {
         deleteBtn.onclick = async () => {
             if (confirm(`確定要刪除連結 ${item.linkText} 嗎？`)) { 
                 deleteBtn.disabled = true;
-                // 成功後，socket 會自動更新 (也可改成手動移除)
                 await apiRequest("/api/featured/remove", {
                     linkText: item.linkText,
                     linkUrl: item.linkUrl
@@ -384,7 +337,7 @@ async function confirmResetAll() {
     if (success) {
         document.getElementById("manualNumber").value = "";
         showToast("💥 所有資料已重置", "success");
-        // location.reload(); // 重載不是必須的，socket 會同步
+        location.reload(); // 重載以獲取新排版和日誌
     }
     cancelResetAll();
 }
@@ -396,10 +349,12 @@ function requestResetAll() {
     }, 5000);
 }
 
+// 【修改】 清除日誌功能
 async function clearAdminLog() {
     if (confirm("確定要永久清除「所有」管理員的操作日誌嗎？\n此動作無法復原。")) {
         showToast("🧼 正在清除日誌...", "info");
         await apiRequest("/api/logs/clear", {});
+        // UI 會由 "initAdminLogs" socket 事件自動更新
     }
 }
 
@@ -412,9 +367,8 @@ document.getElementById("resetFeaturedContents").onclick = resetFeaturedContents
 document.getElementById("resetPassed").onclick = resetPassed_fixed;
 resetAllBtn.onclick = requestResetAll;
 resetAllConfirmBtn.onclick = confirmResetAll;
-clearLogBtn.onclick = clearAdminLog; 
+clearLogBtn.onclick = clearAdminLog; // 已更新
 
-// 【重構】 改善 "新增過號" 的 DOM 效能
 addPassedBtn.onclick = async () => {
     const num = Number(newPassedNumberInput.value);
     if (num <= 0 || !Number.isInteger(num)) {
@@ -424,15 +378,10 @@ addPassedBtn.onclick = async () => {
     addPassedBtn.disabled = true;
     const success = await apiRequest("/api/passed/add", { number: num });
     if (success) {
-        // 成功時，不等 socket.io，直接手動新增到 DOM
-        passedListUI.appendChild(createPassedListItem(num));
         newPassedNumberInput.value = "";
-        showToast(`✅ 已新增 ${num}`, "success");
     }
     addPassedBtn.disabled = false;
 };
-
-// (精選連結的新增保持不變，因其依賴 socket.io 更新)
 addFeaturedBtn.onclick = async () => {
     const text = newLinkTextInput.value.trim();
     const url = newLinkUrlInput.value.trim();
@@ -452,7 +401,6 @@ addFeaturedBtn.onclick = async () => {
     if (success) {
         newLinkTextInput.value = "";
         newLinkUrlInput.value = "";
-        // 依賴 socket.io 廣播更新
     }
     addFeaturedBtn.disabled = false;
 };
@@ -478,26 +426,5 @@ publicToggle.addEventListener("change", () => {
     apiRequest("/set-public-status", { isPublic: isPublic });
 });
 
-// --- 13. 綁定 GridStack 儲存按鈕 ---
-if (saveLayoutBtn) {
-    saveLayoutBtn.addEventListener("click", async () => {
-        if (!grid) return;
-        
-        const layoutData = grid.save(false).map(item => ({
-            id: item.id,
-            x: item.x, 
-            y: item.y, 
-            w: item.w, 
-            h: item.h 
-        }));
-
-        showToast("💾 正在儲存排版...", "info");
-        console.log("正在儲存:", JSON.stringify(layoutData, null, 2));
-
-        const success = await apiRequest("/api/layout/save", { layout: layoutData });
-        
-        if (success) {
-            showToast("✅ 排版已成功儲存！", "success");
-        } 
-    });
-}
+// --- 13. 【修改】 移除 GridStack 儲存按鈕的綁定 ---
+// (if (saveLayoutBtn) { ... } 整個區塊已被刪除)
