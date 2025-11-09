@@ -5,6 +5,12 @@
  * 升級 v2：追蹤在線管理員列表
  * 升級 v3：管理員綽號系統
  * 升級 v4：新增用戶時可選填綽號
+ *
+ * 【v_optimized】
+ * - 優化 1: 'add-user' 使用 hsetnx 避免競爭條件
+ * - 優化 2: 'del-user' 強制踢除在線 session
+ * - 優化 3: 'set-nickname' 即時更新 'onlineAdmins' Map
+ * - 優化 4: 'clear' API 統一呼叫廣播函式
  * ==========================================
  */
 
@@ -392,8 +398,7 @@ app.post("/api/passed/clear", async (req, res) => {
         const nickname = req.user.nickname; 
         await redis.del(KEY_PASSED_NUMBERS);
         await addAdminLog(nickname, `過號列表已清空`); 
-        io.emit("updatePassed", []);
-        await updateTimestamp();
+        await broadcastPassedNumbers(); // 【優化】 統一呼叫廣播函式
         res.json({ success: true, message: "過號列表已清空" });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -403,8 +408,7 @@ app.post("/api/featured/clear", async (req, res) => {
         const nickname = req.user.nickname; 
         await redis.del(KEY_FEATURED_CONTENTS);
         await addAdminLog(nickname, `精選連結已清空`); 
-        io.emit("updateFeaturedContents", []);
-        await updateTimestamp();
+        await broadcastFeaturedContents(); // 【優化】 統一呼叫廣播函式
         res.json({ success: true, message: "精選連結已清空" });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -613,13 +617,14 @@ app.post("/api/admin/add-user", async (req, res) => {
             return res.status(400).json({ error: "不可使用保留帳號。" });
         }
 
-        const exists = await redis.hexists(KEY_USERS, newUsername);
-        if (exists) {
+        // 【優化 1】 使用 HSETNX 避免競爭條件
+        const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+        const result = await redis.hsetnx(KEY_USERS, newUsername, hash);
+
+        // 如果 result = 0，代表 key 已經存在
+        if (result === 0) {
             return res.status(400).json({ error: "此帳號已被使用。" });
         }
-
-        const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-        await redis.hset(KEY_USERS, newUsername, hash);
         
         // 【修改】 如果提供了綽號，則使用它；否則，使用帳號作為預設綽號
         const nicknameToSet = (newNickname && newNickname.trim() !== '') 
@@ -647,6 +652,29 @@ app.post("/api/admin/del-user", async (req, res) => {
         }
         
         await redis.hdel(KEY_NICKNAMES, delUsername); // 刪除綽號
+
+        // 【優化 2】 踢除所有該用戶的在線連線
+        let kickedUsers = false;
+        const socketsToDisconnect = [];
+
+        onlineAdmins.forEach((admin, socketId) => {
+            if (admin.username === delUsername) {
+                socketsToDisconnect.push(socketId);
+                onlineAdmins.delete(socketId); // 從 Map 中移除
+                kickedUsers = true;
+            }
+        });
+
+        socketsToDisconnect.forEach(socketId => {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) {
+                socket.disconnect(true); // true = 關閉底層連線
+            }
+        });
+
+        if (kickedUsers) {
+            broadcastOnlineAdmins(); // 廣播更新後的列表
+        }
 
         await addAdminLog(req.user.nickname, `刪除管理員: ${delUsername}`); 
         res.json({ success: true, message: "管理員已刪除。" });
@@ -683,6 +711,19 @@ app.post("/api/admin/set-nickname", async (req, res) => {
         await redis.hset(KEY_NICKNAMES, targetUsername, sanitizedNickname);
         
         await addAdminLog(req.user.nickname, `將 ${targetUsername} 的綽號設為: ${sanitizedNickname}`);
+        
+        // 【優化 3】 即時更新在線列表中的綽號
+        let changedOnlineUser = false;
+        onlineAdmins.forEach((admin) => {
+            if (admin.username === targetUsername) {
+                admin.nickname = sanitizedNickname;
+                changedOnlineUser = true;
+            }
+        });
+        if (changedOnlineUser) {
+            broadcastOnlineAdmins();
+        }
+        
         res.json({ success: true, message: "綽號已更新。" });
 
     } catch (e) { res.status(500).json({ error: e.message }); }
