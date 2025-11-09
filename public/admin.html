@@ -15,8 +15,13 @@
 
 <div id="login-container">
 <h1>後台管理登入</h1>
+
+<label for="username-input" class="sr-only">管理帳號</label>
+<input type="text" id="username-input" placeholder="請輸入管理帳號" />
+
 <label for="password-input" class="sr-only">管理密碼</label>
-<input type="password" id="password-input" placeholder="請輸入管理密碼" />
+<input type="password" id="password-input" placeholder="請輸入管理密碼" style="margin-top: 15px;"/>
+
 <button id="login-button" type="button">登入</button>
 <p id="login-error"></p>
 </div>
@@ -30,7 +35,9 @@
 </div>
 
 
-<div class="card-container"> <div class="dashboard-column">
+<div class="card-container">
+    
+    <div class="dashboard-column">
         
         <div class="card-wrapper" id="card-control">
             <div class="admin-card">
@@ -72,7 +79,9 @@
             </div>
         </div> 
 
-    </div> <div class="dashboard-column">
+    </div> 
+    
+    <div class="dashboard-column">
 
         <div class="card-wrapper" id="card-editor">
             <div class="admin-card">
@@ -107,10 +116,34 @@
             </div>
         </div> 
 
-    </div> </div> </div> 
+        <div class="card-wrapper" id="card-user-management" style="display: none;">
+            <div class="admin-card">
+                <h3><span class="card-icon">👑</span> 超管：用戶管理</h3>
+                
+                <div class="control-group list-editor">
+                    <label>普通管理員列表</label>
+                    <ul id="user-list-ui">
+                        <li>(載入中...)</li>
+                    </ul>
+                </div>
+                
+                <div class="control-group form-group-boxed">
+                    <label>新增普通管理員</label>
+                    <label for="new-user-username" class="sr-only">新帳號</label>
+                    <input type="text" id="new-user-username" placeholder="新帳號">
+                    <label for="new-user-password" class="sr-only">新密碼</label>
+                    <input type="password" id="new-user-password" placeholder="新密碼" style="margin-top: 5px;">
+                    <button id="add-user-btn" type="button" class="btn-primary" style="margin-top: 10px;">新增用戶</button>
+                </div>
+                
+            </div>
+        </div>
+
+    </div> 
+</div> 
+</div> 
 
 <div id="toast-notification"></div>
 
-<script src="/js/admin.js?v=7"></script>
-</body>
+<script src="/js/admin.js?v=8"></script> </body>
 </html>
