@@ -19,7 +19,7 @@
 <input type="text" id="username-input" placeholder="請輸入管理帳號" />
 
 <label for="password-input" class="sr-only">管理密碼</label>
-<input type="password" id="password-input" placeholder="請輸入管理密碼" />
+<input type="password" id="password-input" placeholder="請輸入管理密碼" style="margin-top: 15px;"/>
 
 <button id="login-button" type="button">登入</button>
 <p id="login-error"></p>
@@ -73,10 +73,27 @@
                 <ul id="admin-log-ui">
                     <li>等待伺服器連線...</li>
                 </ul>
-                <button id="clear-log-btn" type="button" class="btn-clear-log">清除日誌</button>
+                <button id="clear-log-btn" type="button" class="btn-clear-log" style="display: none;">清除日誌</button>
                 </div>
             </div>
         </div> 
+        
+        <div class="card-wrapper" id="card-stats">
+            <div class="admin-card">
+                <h3><span class="card-icon">📊</span> 數據分析</h3>
+                <div class="control-group">
+                    <p style="font-size: 1.1rem; margin-bottom: 5px;">今日叫號次數</p>
+                    <div id="stats-today-count" style="font-weight:bold; color:#2563eb; font-size:2.5rem; line-height: 1;">0</div>
+                    
+                    <button id="btn-refresh-stats" type="button" class="btn-secondary" style="margin-top: 15px;">重新整理數據</button>
+                    
+                    <label style="margin-top:20px; display:block; font-weight:bold;">最近叫號紀錄</label>
+                    <ul id="stats-list-ui" style="width: 100%; max-height: 200px; overflow-y: auto; text-align: left; background: #f1f1f1; padding: 10px; list-style: none; font-size: 0.9rem; border-radius: 6px; box-sizing: border-box;">
+                        <li>(點擊按鈕載入...)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
 
     </div> 
     
@@ -126,7 +143,7 @@
             </div>
         </div> 
 
-        <div class="card-wrapper" id="card-user-management">
+        <div class="card-wrapper" id="card-user-management" style="display: none;">
             <div class="admin-card">
                 <h3><span class="card-icon">👑</span> 超管：用戶管理</h3>
                 
