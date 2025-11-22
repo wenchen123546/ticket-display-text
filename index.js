@@ -1,7 +1,7 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v6.4 Logic Update
- * 功能：設定號碼自動補足統計數量、手動增減數據、清空、WakeLock
+ * 伺服器 (index.js) - v7.0 Upgrade
+ * 功能：CSV 導出、預估等待時間、Confetti 支援
  * ==========================================
  */
 
@@ -152,10 +152,32 @@ async function addAdminLog(nickname, message) {
     } catch (e) { console.error("Log error:", e); }
 }
 
-// 【修改】 增加 delta 參數，允許一次增加多個數量
+// 【功能 2：智慧化預測】 計算平均等待時間 (分鐘/號)
+async function calculateAverageWaitTime() {
+    try {
+        // 取出最近 5 筆紀錄
+        const historyRaw = await redis.lrange(KEY_HISTORY_STATS, 0, 4); 
+        if (historyRaw.length < 2) return 0; // 數據不足
+
+        const history = historyRaw.map(JSON.parse);
+        // 計算首尾的時間差 / 號碼差
+        const newest = history[0];
+        const oldest = history[history.length - 1];
+        
+        const timeDiff = (new Date(newest.time) - new Date(oldest.time)) / 1000 / 60; // 分鐘
+        const numDiff = Math.abs(newest.num - oldest.num);
+        
+        if (numDiff === 0 || timeDiff <= 0) return 0;
+        
+        return timeDiff / numDiff; // 平均每號幾分鐘
+    } catch (e) {
+        console.error("Calc wait time error:", e);
+        return 0;
+    }
+}
+
 async function logHistory(number, operator, delta = 1) {
     try {
-        // 如果 delta <= 0，表示沒有增加服務人數（例如往回跳號），則不寫入統計
         if (delta <= 0) return;
 
         const { dateStr, hour } = getTaiwanDateInfo();
@@ -164,8 +186,6 @@ async function logHistory(number, operator, delta = 1) {
         const pipeline = redis.multi();
         pipeline.lpush(KEY_HISTORY_STATS, JSON.stringify(record));
         pipeline.ltrim(KEY_HISTORY_STATS, 0, 999); 
-        
-        // 根據 delta 增加該小時的計數
         pipeline.hincrby(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`, hour, delta); 
         pipeline.expire(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`, 30 * 86400);
         
@@ -206,9 +226,35 @@ const protectedAPIs = [
     "/api/featured/add", "/api/featured/remove", "/api/featured/clear",
     "/set-sound-enabled", "/set-public-status", "/reset",
     "/api/logs/clear", "/api/admin/stats", "/api/admin/broadcast",
-    "/api/admin/stats/adjust", "/api/admin/stats/clear"
+    "/api/admin/stats/adjust", "/api/admin/stats/clear",
+    "/api/admin/export-csv" // 新增 CSV 導出路由
 ];
 app.use(protectedAPIs, apiLimiter, authMiddleware);
+
+// 【功能 1：數據價值化】 CSV 導出
+app.post("/api/admin/export-csv", superAdminAuthMiddleware, async (req, res) => {
+    try {
+        const { dateStr } = getTaiwanDateInfo();
+        const historyRaw = await redis.lrange(KEY_HISTORY_STATS, 0, -1);
+        
+        const history = historyRaw.map(JSON.parse);
+        
+        // CSV Header (加入 BOM \uFEFF 防止 Excel 中文亂碼)
+        let csvContent = "\uFEFF時間,號碼,操作員\n";
+        
+        history.forEach(item => {
+            const time = new Date(item.time).toLocaleTimeString('zh-TW', { hour12: false });
+            csvContent += `${time},${item.num},${item.operator}\n`;
+        });
+
+        // 回傳 CSV 字串
+        res.json({ success: true, csvData: csvContent, fileName: `stats_${dateStr}.csv` });
+        
+        addAdminLog(req.user.nickname, "📥 下載了 CSV 報表");
+    } catch (e) {
+        res.status(500).json({ error: "Export Error: " + e.message });
+    }
+});
 
 app.post("/change-number", async (req, res) => {
     try {
@@ -216,47 +262,47 @@ app.post("/change-number", async (req, res) => {
         let num;
         if (direction === "next") {
             num = await redis.incr(KEY_CURRENT_NUMBER);
-            // 下一號：計數 +1
             await logHistory(num, req.user.nickname, 1);
             addAdminLog(req.user.nickname, `號碼增加為 ${num}`);
         } else if (direction === "prev") {
             num = await redis.decrIfPositive(KEY_CURRENT_NUMBER);
-            // 上一號：計數 +0 (不減少統計，也不增加)
             await logHistory(num, req.user.nickname, 0); 
             addAdminLog(req.user.nickname, `號碼回退為 ${num}`);
         } else {
             num = await redis.get(KEY_CURRENT_NUMBER) || 0;
         }
         io.emit("update", num);
+        
+        // 更新等待時間
+        const avgTime = await calculateAverageWaitTime();
+        io.emit("updateWaitTime", avgTime);
+        
         await updateTimestamp();
         res.json({ success: true, number: num });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 【修改】 設定號碼時，自動補足中間的差額到統計數據中
 app.post("/set-number", async (req, res) => {
     try {
         const newNum = parseInt(req.body.number);
         if (isNaN(newNum) || newNum < 0) return res.status(400).json({ error: "無效號碼" });
         
-        // 1. 取得舊號碼
         const oldNumStr = await redis.get(KEY_CURRENT_NUMBER);
         const oldNum = parseInt(oldNumStr) || 0;
-
-        // 2. 設定新號碼
         await redis.set(KEY_CURRENT_NUMBER, newNum);
 
-        // 3. 計算差額
-        // 如果新號碼比舊號碼大 (例如 10 -> 50)，則統計需增加 40
-        // 如果往回設 (例如 50 -> 10)，則不增加統計 (delta = 0)
         const diff = newNum - oldNum;
         const delta = diff > 0 ? diff : 0;
 
-        // 4. 寫入統計 (傳入 delta)
         await logHistory(newNum, req.user.nickname, delta);
         
         addAdminLog(req.user.nickname, `手動設定為 ${newNum} (統計增加 ${delta})`);
         io.emit("update", newNum);
+        
+        // 更新等待時間
+        const avgTime = await calculateAverageWaitTime();
+        io.emit("updateWaitTime", avgTime);
+
         await updateTimestamp();
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -304,17 +350,12 @@ app.post("/api/admin/stats/adjust", async (req, res) => {
     try {
         const { hour, delta } = req.body;
         if (hour === undefined || delta === undefined) return res.status(400).json({ error: "參數錯誤" });
-        
         const { dateStr } = getTaiwanDateInfo();
         const key = `${KEY_STATS_HOURLY_PREFIX}${dateStr}`;
-        
         const newVal = await redis.hincrby(key, hour, delta);
-        
         if (newVal < 0) await redis.hset(key, hour, 0);
-
         const op = delta > 0 ? "增加" : "減少";
         addAdminLog(req.user.nickname, `手動${op}了 ${hour} 點的統計數據`);
-        
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -412,6 +453,7 @@ app.post("/reset", async (req, res) => {
     io.emit("updateSoundSetting", false);
     io.emit("updatePublicStatus", true);
     io.emit("initAdminLogs", []);
+    io.emit("updateWaitTime", 0); // 重置時間
     await updateTimestamp();
     res.json({ success: true });
 });
@@ -490,6 +532,11 @@ io.on("connection", async (socket) => {
         socket.emit("updateTimestamp", results[3][1] || new Date().toISOString());
         socket.emit("updateSoundSetting", results[4][1] === "1");
         socket.emit("updatePublicStatus", results[5][1] !== "0");
+        
+        // 傳送初始平均時間
+        const avgTime = await calculateAverageWaitTime();
+        socket.emit("updateWaitTime", avgTime);
+
     } catch(e) { console.error("Socket init error:", e); }
 });
 
@@ -503,5 +550,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v6.4 ready on port ${PORT}`);
+    console.log(`🚀 Server v7.0 (Enhanced) ready on port ${PORT}`);
 });
