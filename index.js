@@ -1,16 +1,11 @@
 /*
  * ==========================================
  * 伺服器 (index.js)
- *
- * 【v_optimized】
- * - 優化 1: 'add-user' 使用 hsetnx 避免競爭條件
- * - 優化 2: 'del-user' 強制踢除在線 session 並銷毀所有 Session Token
- * - 優化 3: 'set-nickname' 即時更新 'onlineAdmins' Map
- * - 優化 4: 'clear' API 統一呼叫廣播函式
+ * 升級 v5：TTS 語音、推播通知、歷史數據統計
  * ==========================================
  */
 
-// --- 1. 模듈載入 ---
+// --- 1. 模組載入 ---
 const express = require("express");
 const http = require("http");
 const socketio = require("socket.io");
@@ -72,12 +67,12 @@ const KEY_SOUND_ENABLED = 'callsys:soundEnabled';
 const KEY_IS_PUBLIC = 'callsys:isPublic'; 
 const KEY_ADMIN_LOG = 'callsys:admin-log';
 const KEY_USERS = 'callsys:users'; 
-const KEY_NICKNAMES = 'callsys:nicknames'; // 儲存綽號
+const KEY_NICKNAMES = 'callsys:nicknames';
 const SESSION_PREFIX = 'callsys:session:';
-// 【新增】 Key 追蹤哪個用戶有哪個 Token
-const USER_TOKENS_PREFIX = 'callsys:user:tokens:'; 
+// 【新】 歷史數據 Key
+const KEY_HISTORY_STATS = 'callsys:stats:history';
 
-// 在線管理員追蹤 (使用 Map 儲存 socket.id -> user info)
+// 在線管理員追蹤
 const onlineAdmins = new Map();
 
 // --- 7. Express 中介軟體 (Middleware) ---
@@ -124,11 +119,10 @@ const authMiddleware = async (req, res, next) => {
         const sessionData = await redis.get(sessionKey);
 
         if (!sessionData) {
-            // 【修復】 這裡是權限終止的關鍵：Token 在 Redis 中不存在 (已被刪除或過期)
             return res.status(403).json({ error: "驗證失敗或 Session 已過期" });
         }
 
-        req.user = JSON.parse(sessionData); // req.user 將包含 { username, role, nickname }
+        req.user = JSON.parse(sessionData); 
         await redis.expire(sessionKey, 8 * 60 * 60);
         
         next();
@@ -138,7 +132,6 @@ const authMiddleware = async (req, res, next) => {
     }
 };
 
-// 超級管理員專用中介軟體
 const superAdminAuthMiddleware = (req, res, next) => {
     if (req.user && req.user.role === 'super') {
         next();
@@ -150,11 +143,6 @@ const superAdminAuthMiddleware = (req, res, next) => {
 
 // --- 8. 輔助函式 ---
 
-/**
- * 簡易的 HTML 標籤過濾函式 (防止 XSS)
- * @param {string} str 
- * @returns {string}
- */
 function sanitize(str) {
     if (typeof str !== 'string') return '';
     return str.replace(/<[^>]*>?/gm, '');
@@ -186,11 +174,10 @@ async function broadcastFeaturedContents() {
     }
 }
 
-// 伺服器端日誌函式
-async function addAdminLog(nickname, message) { // 參數改為 nickname
+async function addAdminLog(nickname, message) {
     try {
         const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-        const logMessage = `[${timestamp}] [${nickname}] ${message}`; // 顯示 nickname
+        const logMessage = `[${timestamp}] [${nickname}] ${message}`; 
         
         await redis.lpush(KEY_ADMIN_LOG, logMessage);
         await redis.ltrim(KEY_ADMIN_LOG, 0, 50);
@@ -201,10 +188,25 @@ async function addAdminLog(nickname, message) { // 參數改為 nickname
     }
 }
 
-// 廣播在線管理員列表
+// 【新】 記錄歷史數據函式
+async function logHistory(number, operator) {
+    try {
+        const record = {
+            num: number,
+            time: new Date().toISOString(),
+            operator: operator
+        };
+        // 存入 Redis List (只保留最近 1000 筆)
+        await redis.lpush(KEY_HISTORY_STATS, JSON.stringify(record));
+        await redis.ltrim(KEY_HISTORY_STATS, 0, 999); 
+    } catch (e) {
+        console.error("記錄歷史數據失敗:", e);
+    }
+}
+
 function broadcastOnlineAdmins() {
     try {
-        const adminList = Array.from(onlineAdmins.values()); // adminList 將包含 { username, role, nickname }
+        const adminList = Array.from(onlineAdmins.values());
         io.emit("updateOnlineAdmins", adminList);
     } catch (e) {
         console.error("broadcastOnlineAdmins 失敗:", e);
@@ -214,7 +216,6 @@ function broadcastOnlineAdmins() {
 
 // --- 9. API 路由 (Routes) ---
 
-// 登入路由
 app.post("/login", loginLimiter, async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -225,13 +226,11 @@ app.post("/login", loginLimiter, async (req, res) => {
         let isValid = false;
         let role = 'normal'; 
 
-        // 邏輯 1：檢查是否為超級管理員
         if (username === 'superadmin' && password === ADMIN_TOKEN) {
             isValid = true;
             role = 'super';
             console.log("一個超級管理員已登入。");
         } 
-        // 邏輯 2：檢查是否為普通管理員
         else {
             const storedHash = await redis.hget(KEY_USERS, username);
             if (storedHash) {
@@ -240,32 +239,24 @@ app.post("/login", loginLimiter, async (req, res) => {
             }
         }
 
-        // 邏輯 3：登入失敗
         if (!isValid) {
             return res.status(403).json({ error: "帳號或密碼錯誤。" });
         }
 
-        // 邏輯 4：登入成功，建立 Session
         const sessionToken = uuidv4();
         const sessionKey = `${SESSION_PREFIX}${sessionToken}`;
         
-        // 獲取綽號，若無則使用帳號
         let nickname = await redis.hget(KEY_NICKNAMES, username);
         if (!nickname) {
             nickname = username;
-            // 如果 superadmin 第一次登入，幫他設定預設綽號
             if (username === 'superadmin') {
                 await redis.hset(KEY_NICKNAMES, 'superadmin', 'superadmin');
             }
         }
 
-        const sessionData = JSON.stringify({ username, role, nickname }); // 存入綽號
+        const sessionData = JSON.stringify({ username, role, nickname }); 
         await redis.set(sessionKey, sessionData, "EX", 8 * 60 * 60); 
 
-        // 【新增】 追蹤此用戶擁有的 Token，以便日後強制登出
-        await redis.sadd(`${USER_TOKENS_PREFIX}${username}`, sessionToken);
-
-        // 回傳綽號
         res.json({ success: true, token: sessionToken, role: role, username: username, nickname: nickname });
 
     } catch (e) {
@@ -280,7 +271,7 @@ const protectedAPIs = [
     "/api/passed/add", "/api/passed/remove", "/api/passed/clear",
     "/api/featured/add", "/api/featured/remove", "/api/featured/clear",
     "/set-sound-enabled", "/set-public-status", "/reset",
-    "/api/logs/clear"
+    "/api/logs/clear", "/api/admin/stats" // 【新】 加入 stats
 ];
 app.use(protectedAPIs, apiLimiter, authMiddleware);
 
@@ -291,12 +282,16 @@ app.post("/change-number", async (req, res) => {
         let num;
         if (direction === "next") {
             num = await redis.incr(KEY_CURRENT_NUMBER);
+            // 【新】 記錄
+            await logHistory(num, nickname);
             await addAdminLog(nickname, `號碼增加為 ${num}`); 
         }
         else if (direction === "prev") {
             const oldNum = await redis.get(KEY_CURRENT_NUMBER) || 0;
             num = await redis.decrIfPositive(KEY_CURRENT_NUMBER);
             if (Number(oldNum) > 0) {
+                // 【新】 減少時也記錄一下，雖然通常只算增加
+                await logHistory(num, nickname); 
                 await addAdminLog(nickname, `號碼減少為 ${num}`); 
             }
         } 
@@ -321,6 +316,10 @@ app.post("/set-number", async (req, res) => {
             return res.status(400).json({ error: "請提供一個有效的非負整數。" });
         }
         await redis.set(KEY_CURRENT_NUMBER, num);
+        
+        // 【新】 記錄
+        await logHistory(num, nickname);
+        
         await addAdminLog(nickname, `號碼手動設定為 ${num}`); 
         io.emit("update", num);
         await updateTimestamp();
@@ -330,6 +329,29 @@ app.post("/set-number", async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
+// 【新】 獲取統計數據 API
+app.post("/api/admin/stats", async (req, res) => {
+    try {
+        // 讀取最近 100 筆，減少傳輸量
+        const rawData = await redis.lrange(KEY_HISTORY_STATS, 0, 99);
+        const history = rawData.map(JSON.parse);
+        
+        // 計算今日服務總數 (使用本地時間判斷)
+        // 注意：這裡是用伺服器時間，若需精準時區可引入 dayjs 或 moment
+        const now = new Date();
+        const historyAllRaw = await redis.lrange(KEY_HISTORY_STATS, 0, -1); // 為了計數，取全部 (若資料量巨大需優化)
+        const historyAll = historyAllRaw.map(JSON.parse);
+        
+        const todayString = now.toDateString(); // e.g., "Fri Nov 22 2025"
+        const todayCount = historyAll.filter(h => new Date(h.time).toDateString() === todayString).length;
+
+        res.json({ success: true, history, todayCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 
 app.post("/api/passed/add", async (req, res) => {
     try {
@@ -369,9 +391,8 @@ app.post("/api/featured/add", async (req, res) => {
             return res.status(400).json({ error: "網址請務必以 http:// 或 https:// 開頭。" });
         }
         
-        // 【修改】 對 linkText 進行過濾
         const sanitizedText = sanitize(linkText);
-        const item = { linkText: sanitizedText, linkUrl }; // 使用過濾後的文字
+        const item = { linkText: sanitizedText, linkUrl }; 
         
         await redis.rpush(KEY_FEATURED_CONTENTS, JSON.stringify(item));
         await addAdminLog(nickname, `精選連結新增: ${sanitizedText}`); 
@@ -400,7 +421,8 @@ app.post("/api/passed/clear", async (req, res) => {
         const nickname = req.user.nickname; 
         await redis.del(KEY_PASSED_NUMBERS);
         await addAdminLog(nickname, `過號列表已清空`); 
-        await broadcastPassedNumbers(); // 【優化】 統一呼叫廣播函式
+        io.emit("updatePassed", []);
+        await updateTimestamp();
         res.json({ success: true, message: "過號列表已清空" });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -410,7 +432,8 @@ app.post("/api/featured/clear", async (req, res) => {
         const nickname = req.user.nickname; 
         await redis.del(KEY_FEATURED_CONTENTS);
         await addAdminLog(nickname, `精選連結已清空`); 
-        await broadcastFeaturedContents(); // 【優化】 統一呼叫廣播函式
+        io.emit("updateFeaturedContents", []);
+        await updateTimestamp();
         res.json({ success: true, message: "精選連結已清空" });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -438,8 +461,6 @@ app.post("/set-public-status", async (req, res) => {
         const valueToSet = isPublic ? "1" : "0";
         await redis.set(KEY_IS_PUBLIC, valueToSet);
         await addAdminLog(nickname, `前台已設為: ${isPublic ? '對外開放' : '關閉維護'}`); 
-        
-        // 【修復】 必須廣播給所有 Socket.io 連線，讓前台即時更新
         io.emit("updatePublicStatus", isPublic); 
         await updateTimestamp();
         res.json({ success: true, isPublic: isPublic });
@@ -456,9 +477,10 @@ app.post("/reset", async (req, res) => {
         multi.set(KEY_CURRENT_NUMBER, 0);
         multi.del(KEY_PASSED_NUMBERS);
         multi.del(KEY_FEATURED_CONTENTS);
-        multi.set(KEY_SOUND_ENABLED, "0"); // 【修改】 預設改為 0 (關閉)
+        multi.set(KEY_SOUND_ENABLED, "0"); 
         multi.set(KEY_IS_PUBLIC, "1"); 
         multi.del(KEY_ADMIN_LOG);
+        multi.del(KEY_HISTORY_STATS); // 清除統計
         await multi.exec();
 
         await addAdminLog(nickname, `💥 系統已重置所有資料`); 
@@ -466,7 +488,7 @@ app.post("/reset", async (req, res) => {
         io.emit("update", 0);
         io.emit("updatePassed", []);
         io.emit("updateFeaturedContents", []);
-        io.emit("updateSoundSetting", false); // 【修改】 預設改為 false (關閉)
+        io.emit("updateSoundSetting", false); 
         io.emit("updatePublicStatus", true); 
         io.emit("initAdminLogs", []); 
 
@@ -485,23 +507,21 @@ io.on("connection", async (socket) => {
     let isAdmin = false;
     let userNickname = "Public_User"; 
     
-    // 驗證 Session Token
     if (token) {
         const sessionKey = `${SESSION_PREFIX}${token}`;
         const sessionData = await redis.get(sessionKey);
         
         if (sessionData) {
-            const user = JSON.parse(sessionData); // user 包含 { username, role, nickname }
+            const user = JSON.parse(sessionData); 
             isAdmin = true;
             userNickname = user.nickname; 
             
-            console.log(`✅ 一個已驗證的 Admin 連線 (${userNickname})`, socket.id); 
+            console.log(`✅ Admin 連線 (${userNickname})`, socket.id); 
             
-            // 將用戶完整資訊添加到在線列表並廣播
             onlineAdmins.set(socket.id, { 
-                username: user.username, // 唯一ID
+                username: user.username, 
                 role: user.role, 
-                nickname: user.nickname  // 顯示名稱
+                nickname: user.nickname 
             });
             broadcastOnlineAdmins();
 
@@ -511,27 +531,20 @@ io.on("connection", async (socket) => {
                 broadcastOnlineAdmins();
             });
 
-            // Admin 連線時，傳送日誌歷史
             try {
                 const logs = await redis.lrange(KEY_ADMIN_LOG, 0, 50);
                 socket.emit("initAdminLogs", logs); 
             } catch (e) {
                 console.error("讀取日誌歷史失敗:", e);
             }
-        } else {
-             // Token存在但Redis中無資料 (可能已被del-user指令刪除)
-             socket.emit("connect_error", new Error("驗證失敗或 Session 已過期"));
-             socket.disconnect(true);
-             return; 
         }
     }
 
     if (!isAdmin) {
-        console.log("🔌 一個 Public User 連線", socket.id);
+        console.log("🔌 Public User 連線", socket.id);
     }
 
     try {
-        // ... (載入初始資料的 pipeline 保持不變) ...
         const pipeline = redis.multi();
         pipeline.get(KEY_CURRENT_NUMBER);
         pipeline.zrange(KEY_PASSED_NUMBERS, 0, -1);
@@ -558,7 +571,7 @@ io.on("connection", async (socket) => {
         const passedNumbers = (passedNumbersRaw || []).map(Number);
         const featuredContents = (featuredContentsJSONs || []).map(JSON.parse);
         const lastUpdated = lastUpdatedRaw || new Date().toISOString();
-        const isSoundEnabled = soundEnabledRaw === null ? "0" : soundEnabledRaw; // 【修改】 預設改為 0 (關閉)
+        const isSoundEnabled = soundEnabledRaw === null ? "0" : soundEnabledRaw; 
         const isPublic = isPublicRaw === null ? "1" : isPublicRaw; 
 
         socket.emit("update", currentNumber);
@@ -585,20 +598,17 @@ const superAdminAPIs = [
 ];
 app.use(superAdminAPIs, apiLimiter, authMiddleware, superAdminAuthMiddleware);
 
-// 獲取所有普通管理員
 app.post("/api/admin/users", async (req, res) => {
     try {
         const usersList = [];
         const nicknamesMap = await redis.hgetall(KEY_NICKNAMES) || {};
         
-        // 1. 添加 Superadmin
         usersList.push({ 
             username: 'superadmin', 
             nickname: nicknamesMap['superadmin'] || 'superadmin', 
             role: 'super' 
         });
 
-        // 2. 添加所有普通管理員
         const normalUsernames = await redis.hkeys(KEY_USERS) || [];
         for (const username of normalUsernames) {
             usersList.push({
@@ -613,10 +623,8 @@ app.post("/api/admin/users", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 新增普通管理員
 app.post("/api/admin/add-user", async (req, res) => {
     try {
-        // 【修改】 取得 newNickname
         const { newUsername, newPassword, newNickname } = req.body; 
         
         if (!newUsername || !newPassword) {
@@ -626,28 +634,25 @@ app.post("/api/admin/add-user", async (req, res) => {
             return res.status(400).json({ error: "不可使用保留帳號。" });
         }
 
-        // 【優化 1】 使用 HSETNX 避免競爭條件
-        const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-        const result = await redis.hsetnx(KEY_USERS, newUsername, hash);
-
-        // 如果 result = 0，代表 key 已經存在
-        if (result === 0) {
+        const exists = await redis.hexists(KEY_USERS, newUsername);
+        if (exists) {
             return res.status(400).json({ error: "此帳號已被使用。" });
         }
+
+        const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+        await redis.hset(KEY_USERS, newUsername, hash);
         
-        // 【修改】 如果提供了綽號，則使用它；否則，使用帳號作為預設綽號
         const nicknameToSet = (newNickname && newNickname.trim() !== '') 
-            ? sanitize(newNickname.trim()) // 過濾 newNickname
+            ? sanitize(newNickname.trim()) 
             : newUsername;
         await redis.hset(KEY_NICKNAMES, newUsername, nicknameToSet); 
 
         await addAdminLog(req.user.nickname, `新增管理員: ${newUsername} (綽號: ${nicknameToSet})`);
-        res.json({ success: true, message: "管理員已新增。", nickname: nicknameToSet }); // 【新增】 返回綽號給 Optimistic UI
+        res.json({ success: true, message: "管理員已新增。" });
 
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 刪除普通管理員
 app.post("/api/admin/del-user", async (req, res) => {
     try {
         const { delUsername } = req.body;
@@ -660,45 +665,7 @@ app.post("/api/admin/del-user", async (req, res) => {
             return res.status(404).json({ error: "找不到該用戶。" });
         }
         
-        await redis.hdel(KEY_NICKNAMES, delUsername); // 刪除綽號
-
-        // ----------------------------------------------------
-        // 【修復/優化 2】 銷毀所有 Session Token，並強制踢出在線連線
-        // ----------------------------------------------------
-        
-        // 1. 銷毀所有已發放的 Session Token
-        const userTokensKey = `${USER_TOKENS_PREFIX}${delUsername}`;
-        const tokensToDestroy = await redis.smembers(userTokensKey);
-        if (tokensToDestroy && tokensToDestroy.length > 0) {
-            const tokenKeys = tokensToDestroy.map(token => `${SESSION_PREFIX}${token}`);
-            await redis.del(tokenKeys);
-            await redis.del(userTokensKey); // 刪除追蹤 Set
-        }
-
-        // 2. 踢除所有該用戶的在線連線
-        let kickedUsers = false;
-        const socketsToDisconnect = [];
-
-        onlineAdmins.forEach((admin, socketId) => {
-            if (admin.username === delUsername) {
-                socketsToDisconnect.push(socketId);
-                onlineAdmins.delete(socketId); 
-                kickedUsers = true;
-            }
-        });
-
-        socketsToDisconnect.forEach(socketId => {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
-                // 必須發送 "connect_error" 讓前端知道是 Session 無效，以觸發重新登入
-                socket.emit("connect_error", new Error("驗證失敗或 Session 已過期")); 
-                socket.disconnect(true);
-            }
-        });
-
-        if (kickedUsers) {
-            broadcastOnlineAdmins(); 
-        }
+        await redis.hdel(KEY_NICKNAMES, delUsername); 
 
         await addAdminLog(req.user.nickname, `刪除管理員: ${delUsername}`); 
         res.json({ success: true, message: "管理員已刪除。" });
@@ -706,7 +673,6 @@ app.post("/api/admin/del-user", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 設定綽號 API
 app.post("/api/admin/set-nickname", async (req, res) => {
     try {
         const { targetUsername, nickname } = req.body;
@@ -732,26 +698,12 @@ app.post("/api/admin/set-nickname", async (req, res) => {
         await redis.hset(KEY_NICKNAMES, targetUsername, sanitizedNickname);
         
         await addAdminLog(req.user.nickname, `將 ${targetUsername} 的綽號設為: ${sanitizedNickname}`);
-        
-        // 【優化 3】 即時更新在線列表中的綽號
-        let changedOnlineUser = false;
-        onlineAdmins.forEach((admin) => {
-            if (admin.username === targetUsername) {
-                admin.nickname = sanitizedNickname;
-                changedOnlineUser = true;
-            }
-        });
-        if (changedOnlineUser) {
-            broadcastOnlineAdmins();
-        }
-        
-        res.json({ success: true, message: "綽號已更新。", nickname: sanitizedNickname }); // 【新增】 返回新綽號給 Optimistic UI
+        res.json({ success: true, message: "綽號已更新。" });
 
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 
-// --- 12. 清空日誌 API ---
 app.post("/api/logs/clear", async (req, res) => {
     try {
         const nickname = req.user.nickname; 
