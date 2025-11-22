@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * admin.css - v6.2 Complete
+ * admin.css - v6.3 Complete
  * ==========================================
  */
 
@@ -591,12 +591,12 @@ input[type="url"] {
 .chart-container {
     display: flex;
     align-items: flex-end;
-    height: 180px; /* 圖表高度 */
+    height: 180px; 
     width: 100%;
     gap: 6px;
     padding: 10px 5px;
     box-sizing: border-box;
-    overflow-x: auto; /* 手機版可橫向滑動 */
+    overflow-x: auto; 
     border-bottom: 1px solid #ddd;
     margin-bottom: 15px;
     background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
@@ -609,9 +609,15 @@ input[type="url"] {
     align-items: center;
     justify-content: flex-end;
     flex: 1;
-    min-width: 25px; /* 防止太擠 */
+    min-width: 25px; 
     height: 100%;
     position: relative;
+    cursor: pointer; /* 【新】 滑鼠變成手型，提示可點擊 */
+    transition: transform 0.1s;
+}
+
+.chart-col:hover {
+    transform: translateY(-2px); /* 懸停效果 */
 }
 
 .chart-bar {
@@ -619,15 +625,14 @@ input[type="url"] {
     background-color: var(--color-primary);
     border-radius: 4px 4px 0 0;
     transition: height 0.5s ease, background-color 0.3s;
-    min-height: 1px; /* 確保 0 也有個底線 */
+    min-height: 1px; 
     position: relative;
 }
 
-.chart-bar:hover {
-    background-color: var(--color-secondary);
+.chart-col:hover .chart-bar {
+    background-color: var(--color-secondary); /* 懸停變色 */
 }
 
-/* 顯示數值 Tooltip (簡單版) */
 .chart-val {
     font-size: 0.8rem;
     font-weight: bold;
@@ -635,19 +640,38 @@ input[type="url"] {
     margin-bottom: 2px;
 }
 
-/* 底部小時標籤 */
 .chart-label {
     font-size: 0.75rem;
     color: #666;
     margin-top: 4px;
-    transform: rotate(0deg);
 }
 
-/* 標記當前小時 */
 .chart-col.current .chart-bar {
     background-color: var(--color-danger);
 }
 .chart-col.current .chart-label {
     color: var(--color-danger);
     font-weight: bold;
+}
+
+/* --- 16. 彈出視窗 (Modal) --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+}
+.modal-content {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    width: 300px;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
 }
