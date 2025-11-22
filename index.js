@@ -1,7 +1,7 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v6.3 Stats Mgmt
- * 功能：增減特定時段人數、清空統計、WakeLock、廣播
+ * 伺服器 (index.js) - v6.4 Logic Update
+ * 功能：設定號碼自動補足統計數量、手動增減數據、清空、WakeLock
  * ==========================================
  */
 
@@ -152,16 +152,23 @@ async function addAdminLog(nickname, message) {
     } catch (e) { console.error("Log error:", e); }
 }
 
-async function logHistory(number, operator) {
+// 【修改】 增加 delta 參數，允許一次增加多個數量
+async function logHistory(number, operator, delta = 1) {
     try {
+        // 如果 delta <= 0，表示沒有增加服務人數（例如往回跳號），則不寫入統計
+        if (delta <= 0) return;
+
         const { dateStr, hour } = getTaiwanDateInfo();
         const record = { num: number, time: new Date().toISOString(), operator };
         
         const pipeline = redis.multi();
         pipeline.lpush(KEY_HISTORY_STATS, JSON.stringify(record));
         pipeline.ltrim(KEY_HISTORY_STATS, 0, 999); 
-        pipeline.hincrby(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`, hour, 1); 
+        
+        // 根據 delta 增加該小時的計數
+        pipeline.hincrby(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`, hour, delta); 
         pipeline.expire(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`, 30 * 86400);
+        
         await pipeline.exec();
     } catch (e) { console.error("Log history error:", e); }
 }
@@ -199,7 +206,7 @@ const protectedAPIs = [
     "/api/featured/add", "/api/featured/remove", "/api/featured/clear",
     "/set-sound-enabled", "/set-public-status", "/reset",
     "/api/logs/clear", "/api/admin/stats", "/api/admin/broadcast",
-    "/api/admin/stats/adjust", "/api/admin/stats/clear" // 【新 API】
+    "/api/admin/stats/adjust", "/api/admin/stats/clear"
 ];
 app.use(protectedAPIs, apiLimiter, authMiddleware);
 
@@ -209,10 +216,13 @@ app.post("/change-number", async (req, res) => {
         let num;
         if (direction === "next") {
             num = await redis.incr(KEY_CURRENT_NUMBER);
-            await logHistory(num, req.user.nickname);
+            // 下一號：計數 +1
+            await logHistory(num, req.user.nickname, 1);
             addAdminLog(req.user.nickname, `號碼增加為 ${num}`);
         } else if (direction === "prev") {
             num = await redis.decrIfPositive(KEY_CURRENT_NUMBER);
+            // 上一號：計數 +0 (不減少統計，也不增加)
+            await logHistory(num, req.user.nickname, 0); 
             addAdminLog(req.user.nickname, `號碼回退為 ${num}`);
         } else {
             num = await redis.get(KEY_CURRENT_NUMBER) || 0;
@@ -223,15 +233,33 @@ app.post("/change-number", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// 【修改】 設定號碼時，自動補足中間的差額到統計數據中
 app.post("/set-number", async (req, res) => {
-    const num = parseInt(req.body.number);
-    if (isNaN(num) || num < 0) return res.status(400).json({ error: "無效號碼" });
-    await redis.set(KEY_CURRENT_NUMBER, num);
-    await logHistory(num, req.user.nickname);
-    addAdminLog(req.user.nickname, `手動設定為 ${num}`);
-    io.emit("update", num);
-    await updateTimestamp();
-    res.json({ success: true });
+    try {
+        const newNum = parseInt(req.body.number);
+        if (isNaN(newNum) || newNum < 0) return res.status(400).json({ error: "無效號碼" });
+        
+        // 1. 取得舊號碼
+        const oldNumStr = await redis.get(KEY_CURRENT_NUMBER);
+        const oldNum = parseInt(oldNumStr) || 0;
+
+        // 2. 設定新號碼
+        await redis.set(KEY_CURRENT_NUMBER, newNum);
+
+        // 3. 計算差額
+        // 如果新號碼比舊號碼大 (例如 10 -> 50)，則統計需增加 40
+        // 如果往回設 (例如 50 -> 10)，則不增加統計 (delta = 0)
+        const diff = newNum - oldNum;
+        const delta = diff > 0 ? diff : 0;
+
+        // 4. 寫入統計 (傳入 delta)
+        await logHistory(newNum, req.user.nickname, delta);
+        
+        addAdminLog(req.user.nickname, `手動設定為 ${newNum} (統計增加 ${delta})`);
+        io.emit("update", newNum);
+        await updateTimestamp();
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post("/api/admin/broadcast", async (req, res) => {
@@ -243,7 +271,6 @@ app.post("/api/admin/broadcast", async (req, res) => {
     res.json({ success: true });
 });
 
-// 統計 API
 app.post("/api/admin/stats", async (req, res) => {
     try {
         const { dateStr, hour } = getTaiwanDateInfo();
@@ -273,7 +300,6 @@ app.post("/api/admin/stats", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 【新】 手動調整特定小時數據
 app.post("/api/admin/stats/adjust", async (req, res) => {
     try {
         const { hour, delta } = req.body;
@@ -282,13 +308,9 @@ app.post("/api/admin/stats/adjust", async (req, res) => {
         const { dateStr } = getTaiwanDateInfo();
         const key = `${KEY_STATS_HOURLY_PREFIX}${dateStr}`;
         
-        // 使用 HINCRBY 增減數值
         const newVal = await redis.hincrby(key, hour, delta);
         
-        // 確保數值不小於 0
-        if (newVal < 0) {
-            await redis.hset(key, hour, 0);
-        }
+        if (newVal < 0) await redis.hset(key, hour, 0);
 
         const op = delta > 0 ? "增加" : "減少";
         addAdminLog(req.user.nickname, `手動${op}了 ${hour} 點的統計數據`);
@@ -297,20 +319,17 @@ app.post("/api/admin/stats/adjust", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 【新】 清空今日數據與歷史
 app.post("/api/admin/stats/clear", async (req, res) => {
     try {
         const { dateStr } = getTaiwanDateInfo();
         const multi = redis.multi();
-        multi.del(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`); // 清空今日小時 Hash
-        multi.del(KEY_HISTORY_STATS); // 清空歷史列表
+        multi.del(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`); 
+        multi.del(KEY_HISTORY_STATS); 
         await multi.exec();
-        
         addAdminLog(req.user.nickname, `⚠️ 管理員清空了統計數據`);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
 
 app.post("/api/passed/add", async (req, res) => {
     const num = parseInt(req.body.number);
@@ -484,5 +503,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v6.3 ready on port ${PORT}`);
+    console.log(`🚀 Server v6.4 ready on port ${PORT}`);
 });
