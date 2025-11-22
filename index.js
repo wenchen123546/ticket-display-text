@@ -385,8 +385,6 @@ app.post("/set-number", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ... (其他 Pass, Featured API 保持不變，略過重複部分以節省篇幅，邏輯相同) ...
-// 為了完整性，這裏列出關鍵修改的 Reset
 app.post("/reset", async (req, res) => {
     const multi = redis.multi();
     multi.set(KEY_CURRENT_NUMBER, 0);
@@ -414,11 +412,6 @@ app.post("/reset", async (req, res) => {
     res.json({ success: true });
 });
 
-// 引用原有的 API (CSV, Broadcast, Passed, Featured...) 
-// 請確保將原有的 app.post(...) 貼在這裡，不需變更邏輯
-// 為節省篇幅，假設此處包含所有原有的輔助 API
-
-// --- User Management & CSV APIs (Copy from original) ---
 app.post("/api/admin/export-csv", superAdminAuthMiddleware, async (req, res) => {
      try {
         const { dateStr } = getTaiwanDateInfo();
@@ -433,8 +426,6 @@ app.post("/api/admin/export-csv", superAdminAuthMiddleware, async (req, res) => 
         addAdminLog(req.user.nickname, "📥 下載了 CSV 報表");
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
-// ... (Include other APIs: broadcast, stats, passed, featured, user management) ...
-// 實際上線時請將 v7.0 的其他 API 複製過來，這裏不再贅述
 
 app.post("/api/admin/broadcast", async (req, res) => {
     const { message } = req.body;
@@ -459,9 +450,8 @@ app.post("/api/admin/stats", async (req, res) => {
     }
     res.json({ success: true, history: historyRaw.map(JSON.parse), hourlyCounts, todayCount: todayTotal, serverHour: hour });
 });
-// ... 其他 API 保持不變 ...
-// 為了能正常運作，將 admin APIs 補齊:
-app.post("/api/passed/add", async (req, res) => { /* ...同 v7.0... */ 
+
+app.post("/api/passed/add", async (req, res) => { 
     const num = parseInt(req.body.number);
     if(!num) return res.status(400).json({error:"Err"});
     await redis.zadd(KEY_PASSED_NUMBERS, num, num);
@@ -497,7 +487,6 @@ app.post("/api/featured/clear", async (req, res) => {
     res.json({success:true});
 });
 app.post("/api/logs/clear", async (req, res) => { await redis.del(KEY_ADMIN_LOG); io.emit("initAdminLogs", []); res.json({success:true}); });
-// User Mgmt
 app.use(["/api/admin/users", "/api/admin/add-user", "/api/admin/del-user", "/api/admin/set-nickname"], authMiddleware, superAdminAuthMiddleware);
 app.post("/api/admin/users", async (req, res) => {
     const nicknames = await redis.hgetall(KEY_NICKNAMES) || {};
@@ -527,7 +516,6 @@ app.post("/api/admin/set-nickname", async (req, res) => {
     res.json({ success: true });
 });
 
-// Socket Init
 io.on("connection", async (socket) => {
     const token = socket.handshake.auth.token;
     if (token) {
