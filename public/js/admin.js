@@ -25,7 +25,8 @@ const onlineUsersList = document.getElementById("online-users-list");
 const statsTodayCount = document.getElementById("stats-today-count");
 const statsListUI = document.getElementById("stats-list-ui");
 const btnRefreshStats = document.getElementById("btn-refresh-stats");
-const btnClearStats = document.getElementById("btn-clear-stats"); // 【新】
+const btnClearStats = document.getElementById("btn-clear-stats"); 
+const btnExportCsv = document.getElementById("btn-export-csv"); // 【新】 CSV 按鈕
 const hourlyChartEl = document.getElementById("hourly-chart");
 const broadcastInput = document.getElementById("broadcast-msg");
 const broadcastBtn = document.getElementById("btn-broadcast");
@@ -45,8 +46,6 @@ let username = "";
 let uniqueUsername = ""; 
 let toastTimer = null; 
 let publicToggleConfirmTimer = null; 
-
-// 用於編輯的暫存變數
 let editingHour = null;
 
 // --- 3. Socket.io ---
@@ -64,6 +63,7 @@ function showLogin() {
 }
 
 async function showPanel() {
+    // 如果是超級管理員，顯示用戶管理與 CSV 下載
     if (userRole === 'super') {
         const userManagementCard = document.getElementById("card-user-management");
         if (userManagementCard) {
@@ -72,6 +72,8 @@ async function showPanel() {
         }
         const clearLogBtnEl = document.getElementById("clear-log-btn");
         if (clearLogBtnEl) clearLogBtnEl.style.display = "block";
+        
+        if(btnExportCsv) btnExportCsv.style.display = "block"; // 【新】 顯示下載按鈕
     }
 
     loginContainer.style.display = "none";
@@ -177,7 +179,7 @@ socket.on("updateOnlineAdmins", (admins) => renderOnlineAdmins(admins));
 
 socket.on("update", (num) => {
     numberEl.textContent = num;
-    loadStats(); // 自動刷新統計
+    loadStats(); 
 });
 
 socket.on("updatePassed", (numbers) => renderPassedListUI(numbers));
@@ -395,7 +397,6 @@ if (broadcastBtn) {
     broadcastInput.addEventListener("keyup", (e) => { if (e.key === "Enter") broadcastBtn.click(); });
 }
 
-// 綁定 Enter 鍵
 newPassedNumberInput.addEventListener("keyup", (event) => { if (event.key === "Enter") addPassedBtn.click(); });
 newLinkTextInput.addEventListener("keyup", (event) => { if (event.key === "Enter") newLinkUrlInput.focus(); });
 newLinkUrlInput.addEventListener("keyup", (event) => { if (event.key === "Enter") addFeaturedBtn.click(); });
@@ -515,7 +516,7 @@ if (setNicknameBtn) {
     };
 }
 
-// --- 13. 數據分析 ---
+// --- 13. 數據分析 & CSV 下載 ---
 async function loadStats() {
     if (!statsListUI) return;
     if (statsListUI.children.length === 0 || statsListUI.textContent.includes("點擊按鈕")) {
@@ -563,7 +564,6 @@ function renderHourlyChart(counts, serverHour) {
         col.className = "chart-col";
         if (i === currentHour) col.classList.add("current");
 
-        // 【新】 綁定點擊事件開啟 Modal
         col.onclick = () => openEditModal(i, val);
 
         const valDiv = document.createElement("div");
@@ -612,14 +612,13 @@ function closeEditModal() {
 async function adjustStat(delta) {
     if (editingHour === null) return;
     
-    // 預先更新 UI 讓使用者覺得反應快
     let current = parseInt(modalCurrentCount.textContent);
     let next = current + delta;
     if (next < 0) next = 0;
     modalCurrentCount.textContent = next;
 
     await apiRequest("/api/admin/stats/adjust", { hour: editingHour, delta: delta });
-    await loadStats(); // 刷新背景的圖表
+    await loadStats(); 
 }
 
 const actionClearStats = async () => {
@@ -629,12 +628,39 @@ const actionClearStats = async () => {
     }
 }
 
-// 綁定 Modal 按鈕
+// 【功能 1：CSV 下載】 觸發函式
+async function downloadCSV() {
+    try {
+        const res = await fetch("/api/admin/export-csv", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token }) 
+        });
+        
+        if (!res.ok) throw new Error("下載失敗 (權限不足?)");
+        
+        const data = await res.json();
+        if(data.success && data.csvData) {
+            // 建立 Blob 並下載
+            const blob = new Blob([data.csvData], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = data.fileName || `report.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            showToast("✅ 報表下載成功", "success");
+        }
+    } catch (err) {
+        showToast("❌ 下載失敗: " + err.message, "error");
+    }
+}
+
 if (btnModalClose) btnModalClose.onclick = closeEditModal;
 if (btnStatsMinus) btnStatsMinus.onclick = () => adjustStat(-1);
 if (btnStatsPlus) btnStatsPlus.onclick = () => adjustStat(1);
 
-// 點擊 Modal 背景關閉
 if (modalOverlay) {
     modalOverlay.onclick = (e) => {
         if (e.target === modalOverlay) closeEditModal();
@@ -650,4 +676,8 @@ if (btnRefreshStats) {
 
 if (btnClearStats) {
     setupConfirmationButton(btnClearStats, "清空紀錄", "⚠️ 確認清空", actionClearStats);
+}
+
+if (btnExportCsv) {
+    btnExportCsv.onclick = downloadCSV;
 }
