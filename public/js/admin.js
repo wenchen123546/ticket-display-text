@@ -26,7 +26,7 @@ const statsTodayCount = document.getElementById("stats-today-count");
 const statsListUI = document.getElementById("stats-list-ui");
 const btnRefreshStats = document.getElementById("btn-refresh-stats");
 const btnClearStats = document.getElementById("btn-clear-stats"); 
-const btnExportCsv = document.getElementById("btn-export-csv"); // 【新】 CSV 按鈕
+const btnExportCsv = document.getElementById("btn-export-csv");
 const hourlyChartEl = document.getElementById("hourly-chart");
 const broadcastInput = document.getElementById("broadcast-msg");
 const broadcastBtn = document.getElementById("btn-broadcast");
@@ -38,6 +38,12 @@ const modalCurrentCount = document.getElementById("modal-current-count");
 const btnStatsMinus = document.getElementById("btn-stats-minus");
 const btnStatsPlus = document.getElementById("btn-stats-plus");
 const btnModalClose = document.getElementById("btn-modal-close");
+
+// LINE 訊息 DOM (新增)
+const lineMsgApproachInput = document.getElementById("line-msg-approach");
+const lineMsgArrivalInput = document.getElementById("line-msg-arrival");
+const btnSaveLineMsg = document.getElementById("btn-save-line-msg");
+const btnResetLineMsg = document.getElementById("btn-reset-line-msg");
 
 // --- 2. 全域變數 ---
 let token = ""; 
@@ -63,7 +69,6 @@ function showLogin() {
 }
 
 async function showPanel() {
-    // 如果是超級管理員，顯示用戶管理與 CSV 下載
     if (userRole === 'super') {
         const userManagementCard = document.getElementById("card-user-management");
         if (userManagementCard) {
@@ -73,7 +78,7 @@ async function showPanel() {
         const clearLogBtnEl = document.getElementById("clear-log-btn");
         if (clearLogBtnEl) clearLogBtnEl.style.display = "block";
         
-        if(btnExportCsv) btnExportCsv.style.display = "block"; // 【新】 顯示下載按鈕
+        if(btnExportCsv) btnExportCsv.style.display = "block";
     }
 
     loginContainer.style.display = "none";
@@ -81,6 +86,7 @@ async function showPanel() {
     document.title = `後台管理 - ${username}`; 
     
     await loadStats(); 
+    await loadLineSettings(); // 載入 LINE 設定
     socket.connect();
 }
 
@@ -628,7 +634,6 @@ const actionClearStats = async () => {
     }
 }
 
-// 【功能 1：CSV 下載】 觸發函式
 async function downloadCSV() {
     try {
         const res = await fetch("/api/admin/export-csv", {
@@ -641,7 +646,6 @@ async function downloadCSV() {
         
         const data = await res.json();
         if(data.success && data.csvData) {
-            // 建立 Blob 並下載
             const blob = new Blob([data.csvData], { type: 'text/csv;charset=utf-8;' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -680,4 +684,39 @@ if (btnClearStats) {
 
 if (btnExportCsv) {
     btnExportCsv.onclick = downloadCSV;
+}
+
+// --- LINE 訊息設定邏輯 (新增) ---
+async function loadLineSettings() {
+    if (!lineMsgApproachInput) return; 
+    const data = await apiRequest("/api/admin/line-settings/get", {}, true);
+    if (data && data.success) {
+        lineMsgApproachInput.value = data.approach;
+        lineMsgArrivalInput.value = data.arrival;
+    }
+}
+
+if (btnSaveLineMsg) {
+    btnSaveLineMsg.onclick = async () => {
+        const approach = lineMsgApproachInput.value.trim();
+        const arrival = lineMsgArrivalInput.value.trim();
+        if(!approach || !arrival) return alert("內容不可為空");
+
+        btnSaveLineMsg.disabled = true;
+        if (await apiRequest("/api/admin/line-settings/save", { approach, arrival })) {
+            showToast("✅ LINE 文案已更新", "success");
+        }
+        btnSaveLineMsg.disabled = false;
+    };
+}
+
+if (btnResetLineMsg) {
+    setupConfirmationButton(btnResetLineMsg, "恢復預設值", "⚠️ 確認恢復", async () => {
+        const data = await apiRequest("/api/admin/line-settings/reset", {}, true);
+        if (data && data.success) {
+            lineMsgApproachInput.value = data.approach;
+            lineMsgArrivalInput.value = data.arrival;
+            showToast("↺ 已恢復預設文案", "success");
+        }
+    });
 }
