@@ -1,7 +1,7 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v6.1 Enhanced
- * 功能：每小時數據統計、廣播、WakeLock、優雅關機
+ * 伺服器 (index.js) - v6.2 Fixed
+ * 修復：數據即時更新、台灣時區校正、統計圖表準確度
  * ==========================================
  */
 
@@ -67,7 +67,6 @@ const KEY_USERS = 'callsys:users';
 const KEY_NICKNAMES = 'callsys:nicknames';
 const SESSION_PREFIX = 'callsys:session:';
 const KEY_HISTORY_STATS = 'callsys:stats:history';
-// 【修改】 改用 Hourly Hash 儲存每小時數據
 const KEY_STATS_HOURLY_PREFIX = 'callsys:stats:hourly:'; 
 
 const onlineAdmins = new Map();
@@ -125,6 +124,32 @@ async function updateTimestamp() {
     io.emit("updateTimestamp", now);
 }
 
+// 【修正】 取得台灣時間資訊 (確保跨日與小時正確)
+function getTaiwanDateInfo() {
+    // 使用 Intl.DateTimeFormat 強制轉換為台北時間
+    const formatter = new Intl.DateTimeFormat('en-CA', { // en-CA 格式為 YYYY-MM-DD
+        timeZone: 'Asia/Taipei',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', hour12: false
+    });
+    
+    // 解析時間字串 "2025-11-22, 22"
+    const parts = formatter.formatToParts(new Date());
+    const year = parts.find(p => p.type === 'year').value;
+    const month = parts.find(p => p.type === 'month').value;
+    const day = parts.find(p => p.type === 'day').value;
+    const hourStr = parts.find(p => p.type === 'hour').value; // 可能是 "09" 或 "24"
+    
+    let hour = parseInt(hourStr);
+    // 處理 24:00 的邊界情況 (部分環境)
+    if (hour === 24) hour = 0;
+
+    return {
+        dateStr: `${year}-${month}-${day}`,
+        hour: hour
+    };
+}
+
 async function broadcastData(key, eventName, isJSON = false) {
     try {
         const raw = isJSON ? await redis.lrange(key, 0, -1) : await redis.zrange(key, 0, -1);
@@ -136,33 +161,28 @@ async function broadcastData(key, eventName, isJSON = false) {
 
 async function addAdminLog(nickname, message) {
     try {
-        const log = `[${new Date().toLocaleTimeString('zh-TW', { hour12: false })}] [${nickname}] ${message}`;
+        // 日誌時間也強制轉為台灣時間顯示
+        const timeString = new Date().toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+        const log = `[${timeString}] [${nickname}] ${message}`;
         await redis.lpush(KEY_ADMIN_LOG, log);
         await redis.ltrim(KEY_ADMIN_LOG, 0, 99); 
         io.emit("newAdminLog", log);
     } catch (e) { console.error("Log error:", e); }
 }
 
-// 【修改】 統計功能：每小時詳細計數
+// 【修正】 統計功能：使用台灣時間寫入 Redis
 async function logHistory(number, operator) {
     try {
-        const now = new Date();
-        // 取得 YYYY-MM-DD
-        const dateStr = now.toISOString().split('T')[0]; 
-        // 取得當前小時 (0-23)
-        const hour = now.getHours(); 
-
-        const record = { num: number, time: now.toISOString(), operator };
+        const { dateStr, hour } = getTaiwanDateInfo();
+        
+        const record = { num: number, time: new Date().toISOString(), operator };
         
         const pipeline = redis.multi();
         pipeline.lpush(KEY_HISTORY_STATS, JSON.stringify(record));
         pipeline.ltrim(KEY_HISTORY_STATS, 0, 999); 
         
-        // 【關鍵】 使用 HINCRBY 針對該小時欄位 +1
-        // Key: callsys:stats:hourly:YYYY-MM-DD, Field: hour, Value: count
+        // Key: callsys:stats:hourly:2025-11-22, Field: 22 (晚上10點)
         pipeline.hincrby(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`, hour, 1); 
-        
-        // 設定過期時間 (保留 30 天)
         pipeline.expire(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`, 30 * 86400);
         
         await pipeline.exec();
@@ -204,7 +224,7 @@ app.post("/login", loginLimiter, async (req, res) => {
         }
 
         const sessionData = JSON.stringify({ username, role, nickname });
-        await redis.set(`${SESSION_PREFIX}${sessionToken}`, sessionData, "EX", 28800); // 8hr
+        await redis.set(`${SESSION_PREFIX}${sessionToken}`, sessionData, "EX", 28800); 
 
         res.json({ success: true, token: sessionToken, role, username, nickname });
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -260,23 +280,22 @@ app.post("/api/admin/broadcast", async (req, res) => {
     res.json({ success: true });
 });
 
-// 【修改】 統計 API：回傳每小時數據
+// 【修正】 統計 API：回傳台灣時間數據
 app.post("/api/admin/stats", async (req, res) => {
     try {
-        const dateStr = new Date().toISOString().split('T')[0];
+        const { dateStr, hour } = getTaiwanDateInfo(); // 取得台灣日期與當前小時
         
         const [historyRaw, hourlyData] = await Promise.all([
             redis.lrange(KEY_HISTORY_STATS, 0, 99),
             redis.hgetall(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`)
         ]);
 
-        // 轉換為長度 24 的陣列
         const hourlyCounts = new Array(24).fill(0);
         let todayTotal = 0;
 
         if (hourlyData) {
-            for (const [hour, count] of Object.entries(hourlyData)) {
-                const h = parseInt(hour);
+            for (const [hStr, count] of Object.entries(hourlyData)) {
+                const h = parseInt(hStr);
                 const c = parseInt(count);
                 if (h >= 0 && h < 24) {
                     hourlyCounts[h] = c;
@@ -288,8 +307,9 @@ app.post("/api/admin/stats", async (req, res) => {
         res.json({ 
             success: true, 
             history: historyRaw.map(JSON.parse), 
-            hourlyCounts: hourlyCounts, // [0, 0, ..., 5, 2, ...]
-            todayCount: todayTotal 
+            hourlyCounts: hourlyCounts, 
+            todayCount: todayTotal,
+            serverHour: hour // 回傳伺服器認定的台灣當前小時
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -483,5 +503,5 @@ process.on('SIGINT', shutdown);
 
 // --- 13. Start ---
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v6.1 ready on port ${PORT}`);
+    console.log(`🚀 Server v6.2 ready on port ${PORT}`);
 });
