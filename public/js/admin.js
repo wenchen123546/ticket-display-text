@@ -21,13 +21,18 @@ const clearLogBtn = document.getElementById("clear-log-btn");
 const resetAllBtn = document.getElementById("resetAll");
 const onlineUsersList = document.getElementById("online-users-list"); 
 
+// 【新】 統計介面 DOM
+const statsTodayCount = document.getElementById("stats-today-count");
+const statsListUI = document.getElementById("stats-list-ui");
+const btnRefreshStats = document.getElementById("btn-refresh-stats");
+
 // --- 2. 全域變數 ---
-let token = ""; // 儲存 Session Token
+let token = ""; 
 let userRole = "normal"; 
-let username = ""; // 這將儲存「綽號」 (顯示名稱)
-let uniqueUsername = ""; // 這將儲存「帳號」 (唯一 ID)
+let username = ""; 
+let uniqueUsername = ""; 
 let toastTimer = null; 
-// let publicToggleConfirmTimer = null; 
+let publicToggleConfirmTimer = null; 
 
 
 // --- 3. Socket.io ---
@@ -47,29 +52,25 @@ function showLogin() {
 }
 
 async function showPanel() {
-    // 1. 【修改】 先準備超管面板 (此時 adminPanel 仍是 display: none)
     if (userRole === 'super') {
-        // 顯示用戶管理
         const userManagementCard = document.getElementById("card-user-management");
         if (userManagementCard) {
-            userManagementCard.style.display = "block"; // 準備好卡片
-            // await loadAdminUsers(); // 【修改】 初始載入仍需 API
-            await loadAdminUsers();
+            userManagementCard.style.display = "block"; 
+            await loadAdminUsers(); 
         }
-        
-        // 【新增】 顯示清除日誌按鈕
         const clearLogBtnEl = document.getElementById("clear-log-btn");
         if (clearLogBtnEl) {
             clearLogBtnEl.style.display = "block";
         }
     }
 
-    // 2. 【修改】 所有內容都準備好後，再一次性顯示
     loginContainer.style.display = "none";
     adminPanel.style.display = "block";
-    document.title = `後台管理 - ${username}`; // 顯示綽號
+    document.title = `後台管理 - ${username}`; 
     
-    // 3. 最後才連線 Socket
+    // 【新】 載入統計數據
+    await loadStats();
+
     socket.connect();
 }
 
@@ -89,11 +90,10 @@ async function attemptLogin(loginName, loginPass) {
             loginError.textContent = data.error || "登入失敗";
             showLogin();
         } else {
-            // 登入成功
             token = data.token;       
             userRole = data.role;     
-            username = data.nickname; // 儲存綽號 (賦值給 Global)
-            uniqueUsername = data.username; // 儲存唯一帳號 (賦值給 Global)
+            username = data.nickname; 
+            uniqueUsername = data.username; 
             socket.auth.token = token; 
             await showPanel();
         }
@@ -140,7 +140,7 @@ function showToast(message, type = 'info') {
 socket.on("connect", () => {
     console.log("Socket.io 已連接");
     statusBar.classList.remove("visible");
-    showToast(`✅ 已連線 (${username})`, "success"); // 顯示綽號
+    showToast(`✅ 已連線 (${username})`, "success"); 
 });
 socket.on("disconnect", () => {
     console.warn("Socket.io 已斷線");
@@ -157,8 +157,6 @@ socket.on("connect_error", (err) => {
 });
 
 // --- 伺服器日誌監聽器 ---
-
-// 【修改】 初始日誌載入 (舊→新)
 socket.on("initAdminLogs", (logs) => {
     adminLogUI.innerHTML = "";
     if (!logs || logs.length === 0) {
@@ -166,17 +164,15 @@ socket.on("initAdminLogs", (logs) => {
         return;
     }
     const fragment = document.createDocumentFragment();
-    // 伺服器傳來的是 [新...舊]，反轉陣列使其變為 [舊...新]
     logs.reverse().forEach(logMsg => {
         const li = document.createElement("li");
         li.textContent = logMsg;
-        fragment.appendChild(li); // 依序附加 (舊的在最上面)
+        fragment.appendChild(li); 
     });
-    adminLogUI.appendChild(fragment); // (新的在最下面)
-    adminLogUI.scrollTop = adminLogUI.scrollHeight; // 滾動到底部 (顯示最新)
+    adminLogUI.appendChild(fragment); 
+    adminLogUI.scrollTop = adminLogUI.scrollHeight; 
 });
 
-// 【修改】 新日誌 (附加到最下面)
 socket.on("newAdminLog", (logMessage) => {
     const firstLi = adminLogUI.querySelector("li");
     if (firstLi && firstLi.textContent.includes("[目前尚無日誌]")) {
@@ -185,20 +181,20 @@ socket.on("newAdminLog", (logMessage) => {
     
     const li = document.createElement("li");
     li.textContent = logMessage;
-    adminLogUI.appendChild(li); // 【修改】 改為 appendChild (附加到最下面)
-    adminLogUI.scrollTop = adminLogUI.scrollHeight; // 【修改】 自動滾動到底部
+    adminLogUI.appendChild(li); 
+    adminLogUI.scrollTop = adminLogUI.scrollHeight; 
 });
 
 
 // --- 在線管理員監聽器 ---
 socket.on("updateOnlineAdmins", (admins) => {
-    console.log("在線列表更新:", admins);
     renderOnlineAdmins(admins);
 });
 
 // --- 資料更新監聽器 ---
 socket.on("update", (num) => {
     numberEl.textContent = num;
+    // 【新】 當號碼改變時，若正在觀看數據面板，可考慮是否自動重整，這裡先保持手動重整
 });
 socket.on("updatePassed", (numbers) => {
     renderPassedListUI(numbers);
@@ -207,16 +203,12 @@ socket.on("updateFeaturedContents", (contents) => {
     renderFeaturedListUI(contents);
 });
 socket.on("updateSoundSetting", (isEnabled) => {
-    console.log("收到音效設定:", isEnabled);
     soundToggle.checked = isEnabled;
 });
 socket.on("updatePublicStatus", (isPublic) => {
-    console.log("收到公開狀態:", isPublic);
     publicToggle.checked = isPublic;
 });
-socket.on("updateTimestamp", (timestamp) => {
-    console.log("Timestamp updated:", timestamp);
-});
+
 
 // --- 7. API 請求函式 ---
 async function apiRequest(endpoint, body, a_returnResponse = false) {
@@ -231,7 +223,6 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
 
         if (!res.ok) {
             if (res.status === 403) {
-                // 【修復】 403 Forbidden 應強制重新登入，這可能是 Session 被管理員刪除
                 alert("驗證失敗或 Session 已過期，請重新登入。");
                 showLogin();
             } else {
@@ -370,54 +361,6 @@ function renderFeaturedListUI(contents) {
     featuredListUI.appendChild(fragment);
 }
 
-// ----------------------------------------------------
-// 【優化】 實作 Optimistic UI 的輔助函式 (user management)
-// ----------------------------------------------------
-
-/**
- * 創建一個管理員列表項目 DOM
- * @param {object} user - { username, nickname, role }
- * @returns {HTMLLIElement}
- */
-function createUserListItem(user) {
-    const li = document.createElement("li");
-    li.setAttribute('data-username', user.username); // 用於 Optimistic 查找
-    const icon = user.role === 'super' ? '👑' : '👤';
-    // 顯示 綽號 (帳號)
-    li.innerHTML = `<span>${icon} <strong>${user.nickname}</strong> (${user.username})</span>`;
-    
-    // 超管自己不能刪除自己
-    if (user.role !== 'super') {
-        const deleteBtn = document.createElement("button");
-        deleteBtn.type = "button";
-        deleteBtn.className = "delete-item-btn";
-        deleteBtn.textContent = "×";
-        
-        const actionCallback = async () => {
-            // Optimistic Update: 立即移除視覺效果
-            li.style.opacity = '0.5';
-            deleteBtn.disabled = true;
-
-            const success = await apiRequest("/api/admin/del-user", { delUsername: user.username });
-            if (success) {
-                // Final Update: 永久移除 DOM
-                li.remove();
-                showToast(`✅ 已刪除用戶: ${user.username}`, "success");
-                // 不再需要 loadAdminUsers()
-            } else {
-                // Rollback: 失敗時復原
-                li.style.opacity = '1';
-                deleteBtn.disabled = false;
-            }
-        };
-        
-        setupConfirmationButton(deleteBtn, "×", "⚠️", actionCallback);
-        li.appendChild(deleteBtn);
-    }
-    return li;
-}
-
-// 渲染在線管理員列表
 function renderOnlineAdmins(admins) {
     if (!onlineUsersList) return;
     
@@ -428,24 +371,21 @@ function renderOnlineAdmins(admins) {
         return;
     }
     
-    // 排序：自己 > 超管 > 其他 (按字母)
     admins.sort((a, b) => {
-        // 使用 uniqueUsername 判斷 "自己"
         if (a.username === uniqueUsername) return -1;
         if (b.username === uniqueUsername) return 1;
         if (a.role === 'super' && b.role !== 'super') return -1;
         if (a.role !== 'super' && b.role === 'super') return 1;
-        return a.nickname.localeCompare(b.nickname); // 按綽號排序
+        return a.nickname.localeCompare(b.nickname); 
     });
 
     const fragment = document.createDocumentFragment();
     admins.forEach(admin => {
         const li = document.createElement("li");
         const icon = admin.role === 'super' ? '👑' : '👤';
-        const isSelf = admin.username === uniqueUsername; // 使用 uniqueUsername 判斷
+        const isSelf = admin.username === uniqueUsername; 
         const selfClass = isSelf ? 'is-self' : '';
         
-        // 顯示 admin.nickname
         li.innerHTML = `<span class="role-icon">${icon}</span> <span class="username ${selfClass}">${admin.nickname}</span>`;
         fragment.appendChild(li);
     });
@@ -479,6 +419,7 @@ const actionResetAll = async () => {
     if (success) {
         document.getElementById("manualNumber").value = "";
         showToast("💥 所有資料已重置", "success");
+        await loadStats(); // 重置後重新載入統計
     }
 };
 async function changeNumber(direction) {
@@ -588,20 +529,48 @@ publicToggle.addEventListener("change", () => {
     const isPublic = publicToggle.checked;
 
     if (isPublic) {
-        // "開啟" 網站不需要確認，直接執行
+        if (publicToggleConfirmTimer) {
+            clearTimeout(publicToggleConfirmTimer.timer);
+            clearInterval(publicToggleConfirmTimer.interval);
+            publicToggleConfirmTimer = null;
+            publicToggleLabel.textContent = originalToggleText;
+            publicToggleLabel.classList.remove("is-confirming-label");
+        }
         apiRequest("/set-public-status", { isPublic: true });
     } else {
-        // "關閉" 網站需要確認
-        const confirmed = window.confirm(
-            "您確定要關閉前台，啟用維護模式嗎？\n所有公開用戶將會斷線。"
-        );
-        
-        if (confirmed) {
-            // 用戶確認，執行 API
+        if (publicToggleConfirmTimer) {
+            clearTimeout(publicToggleConfirmTimer.timer);
+            clearInterval(publicToggleConfirmTimer.interval);
+            publicToggleConfirmTimer = null;
+            publicToggleLabel.textContent = originalToggleText;
+            publicToggleLabel.classList.remove("is-confirming-label");
+            
             apiRequest("/set-public-status", { isPublic: false });
+            
         } else {
-            // 用戶取消，將開關切回 "checked" (開啟)
             publicToggle.checked = true; 
+            
+            let countdown = 5;
+            publicToggleLabel.textContent = `⚠️ 點此確認關閉 (${countdown}s)`;
+            publicToggleLabel.classList.add("is-confirming-label");
+
+            const interval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    publicToggleLabel.textContent = `⚠️ 點此確認關閉 (${countdown}s)`;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 1000);
+
+            const timer = setTimeout(() => {
+                clearInterval(interval);
+                publicToggleLabel.textContent = originalToggleText;
+                publicToggleLabel.classList.remove("is-confirming-label");
+                publicToggleConfirmTimer = null;
+            }, 5000);
+            
+            publicToggleConfirmTimer = { timer, interval };
         }
     }
 });
@@ -612,15 +581,12 @@ const userListUI = document.getElementById("user-list-ui");
 const newUserUsernameInput = document.getElementById("new-user-username");
 const newUserPasswordInput = document.getElementById("new-user-password");
 const addUserBtn = document.getElementById("add-user-btn");
-const newUserNicknameInput = document.getElementById("new-user-nickname"); // 取得綽號 DOM
-
-// 綽號表單 DOM
+const newUserNicknameInput = document.getElementById("new-user-nickname"); 
 const setNickUsernameInput = document.getElementById("set-nick-username");
 const setNickNicknameInput = document.getElementById("set-nick-nickname");
 const setNicknameBtn = document.getElementById("set-nickname-btn");
 
 
-// 載入用戶列表 (用於初始載入)
 async function loadAdminUsers() {
     if (userRole !== 'super' || !userListUI) return;
     
@@ -629,7 +595,6 @@ async function loadAdminUsers() {
     if (data && data.users) {
         userListUI.innerHTML = "";
         
-        // 排序 (超管優先，然後按帳號)
         data.users.sort((a, b) => {
             if (a.role === 'super' && b.role !== 'super') return -1;
             if (a.role !== 'super' && b.role === 'super') return 1;
@@ -637,13 +602,35 @@ async function loadAdminUsers() {
         });
 
         data.users.forEach(user => {
-             // 初始載入使用輔助函式，讓刪除按鈕能正常運作
-             userListUI.appendChild(createUserListItem(user));
+            const li = document.createElement("li");
+            const icon = user.role === 'super' ? '👑' : '👤';
+            li.innerHTML = `<span>${icon} <strong>${user.nickname}</strong> (${user.username})</span>`;
+            
+            if (user.role !== 'super') {
+                const deleteBtn = document.createElement("button");
+                deleteBtn.type = "button";
+                deleteBtn.className = "delete-item-btn";
+                deleteBtn.textContent = "×";
+                
+                const actionCallback = async () => {
+                    deleteBtn.disabled = true;
+                    const success = await apiRequest("/api/admin/del-user", { delUsername: user.username });
+                    if (success) {
+                        showToast(`✅ 已刪除用戶: ${user.username}`, "success");
+                        await loadAdminUsers(); 
+                    } else {
+                        deleteBtn.disabled = false;
+                    }
+                };
+                
+                setupConfirmationButton(deleteBtn, "×", "⚠️", actionCallback);
+                li.appendChild(deleteBtn);
+            }
+            userListUI.appendChild(li);
         });
     }
 }
 
-// 綁定新增用戶按鈕
 if (addUserBtn) {
     addUserBtn.onclick = async () => {
         const newUsername = newUserUsernameInput.value;
@@ -656,37 +643,23 @@ if (addUserBtn) {
         }
 
         addUserBtn.disabled = true;
-        // 傳送新綽號至 API
-        const responseData = await apiRequest("/api/admin/add-user", { 
+        const success = await apiRequest("/api/admin/add-user", { 
             newUsername, 
             newPassword,
             newNickname 
-        }, true); // 請求回傳 Response
-
-        if (responseData) {
+        });
+        
+        if (success) {
             showToast(`✅ 已新增用戶: ${newUsername}`, "success");
-            
-            // ----------------------------------------------------
-            // 【優化】 Optimistic UI: 新增用戶 (無需重新載入列表)
-            // ----------------------------------------------------
-            const user = { 
-                username: newUsername, 
-                nickname: responseData.nickname || newUsername, // 使用伺服器返回的綽號
-                role: 'normal'
-            };
-            const newItem = createUserListItem(user);
-            userListUI.appendChild(newItem); 
-            
             newUserUsernameInput.value = "";
             newUserPasswordInput.value = "";
             newUserNicknameInput.value = ""; 
-            // 不再需要 loadAdminUsers()
+            await loadAdminUsers(); 
         }
         addUserBtn.disabled = false;
     };
 }
 
-// 綁定設定綽號按鈕
 if (setNicknameBtn) {
     setNicknameBtn.onclick = async () => {
         const targetUsername = setNickUsernameInput.value.trim();
@@ -698,31 +671,55 @@ if (setNicknameBtn) {
         }
 
         setNicknameBtn.disabled = true;
-        const responseData = await apiRequest("/api/admin/set-nickname", { 
-            targetUsername, 
-            nickname 
-        }, true); // 請求回傳 Response
+        const success = await apiRequest("/api/admin/set-nickname", { targetUsername, nickname });
         
-        if (responseData) {
+        if (success) {
             showToast(`✅ 已更新 ${targetUsername} 的綽號`, "success");
-            
-            // ----------------------------------------------------
-            // 【優化】 Optimistic UI: 設定綽號 (無需重新載入列表)
-            // ----------------------------------------------------
-            const userLi = userListUI.querySelector(`li[data-username="${targetUsername}"]`);
-            if (userLi) {
-                 const icon = userLi.querySelector('span').textContent.startsWith('👑') ? '👑' : '👤';
-                 // 使用伺服器返回的 sanitized 綽號
-                 userLi.innerHTML = `<span>${icon} <strong>${responseData.nickname}</strong> (${targetUsername})</span>`;
-            } else {
-                // 如果找不到，可能是 superadmin 第一次設定綽號，強制重載列表
-                await loadAdminUsers(); 
-            }
-
             setNickUsernameInput.value = "";
             setNickNicknameInput.value = "";
-            // 不再需要 loadAdminUsers() 
+            await loadAdminUsers(); 
         }
         setNicknameBtn.disabled = false;
     };
+}
+
+// --- 15. 【新】 數據分析函式 ---
+async function loadStats() {
+    if (!statsListUI) return;
+    statsListUI.innerHTML = "<li>載入中...</li>";
+    
+    const data = await apiRequest("/api/admin/stats", {}, true);
+    
+    if (data && data.success) {
+        // 1. 更新今日總數
+        statsTodayCount.textContent = data.todayCount;
+        
+        // 2. 更新列表
+        statsListUI.innerHTML = "";
+        if (!data.history || data.history.length === 0) {
+            statsListUI.innerHTML = "<li>尚無數據</li>";
+            return;
+        }
+        
+        const fragment = document.createDocumentFragment();
+        data.history.forEach(item => {
+            const li = document.createElement("li");
+            const time = new Date(item.time).toLocaleTimeString('zh-TW');
+            // 格式： 10:30:05 - 號碼 50 (操作者: admin)
+            li.textContent = `${time} - 號碼 ${item.num} (${item.operator})`;
+            li.style.borderBottom = "1px solid #ccc";
+            li.style.padding = "4px 0";
+            fragment.appendChild(li);
+        });
+        statsListUI.appendChild(fragment);
+    } else {
+        statsListUI.innerHTML = "<li>載入失敗</li>";
+    }
+}
+
+if (btnRefreshStats) {
+    btnRefreshStats.addEventListener("click", () => {
+        loadStats();
+        showToast("數據已更新", "info");
+    });
 }
