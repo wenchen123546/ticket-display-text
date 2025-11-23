@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v17.0 Manual Set Issued Number
+ * 伺服器 (index.js) - v17.1 With Full LINE Bot Features
  * ==========================================
  */
 
@@ -27,7 +27,7 @@ const REDIS_URL = process.env.UPSTASH_REDIS_URL;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN; 
 
 const SALT_ROUNDS = 10; 
-const REMIND_BUFFER = 5;
+const REMIND_BUFFER = 5; // 提醒緩衝區 (前5號通知)
 const MAX_HISTORY_FOR_PREDICTION = 15; 
 const MAX_VALID_SERVICE_MINUTES = 20;  
 
@@ -282,19 +282,131 @@ async function checkAndNotifyLineUsers(currentNum) {
     } catch (e) { console.error("Line Notify Error:", e); }
 }
 
+// --- LINE Event Handler (主要修改處) ---
 async function handleLineEvent(event) {
     if (event.type !== 'message' || event.message.type !== 'text') return Promise.resolve(null);
-    const text = event.message.text.trim();
-    const isQuery = ['查詢', '號碼', '進度', '?', '？'].some(k => text.includes(k));
     
-    if (isQuery) {
-        const currentNum = parseInt(await redis.get(KEY_CURRENT_NUMBER)) || 0;
-        const issuedNum = parseInt(await redis.get(KEY_LAST_ISSUED)) || 0;
-        return lineClient.replyMessage(event.replyToken, {
+    // 移除前後空白並統一格式
+    const text = event.message.text.trim();
+    const userId = event.source.userId;
+    const replyToken = event.replyToken;
+
+    // 1. 【查詢進度】
+    if (['查詢進度', '查詢', '進度', 'status', '？', '?'].includes(text)) {
+        const [current, issued] = await redis.mget(KEY_CURRENT_NUMBER, KEY_LAST_ISSUED);
+        const currentNum = parseInt(current) || 0;
+        const issuedNum = parseInt(issued) || 0;
+        
+        // 檢查使用者是否有正在追蹤的號碼
+        const trackingNum = await redis.get(`${KEY_LINE_USER_STATUS}${userId}`);
+        let personalStatus = "";
+        
+        if (trackingNum) {
+            const diff = parseInt(trackingNum) - currentNum;
+            if (diff > 0) {
+                personalStatus = `\n\n📌 您正在追蹤：${trackingNum} 號\n⏳ 前方還有：${diff} 組`;
+            } else if (diff === 0) {
+                personalStatus = `\n\n🎉 輪到您了！請前往櫃台 (號碼 ${trackingNum})`;
+            } else {
+                personalStatus = `\n\n⚠️ 您追蹤的 ${trackingNum} 號可能已過號`;
+            }
+        }
+
+        return lineClient.replyMessage(replyToken, {
             type: "text",
-            text: `📊 現場狀況\n\n目前叫號：${currentNum} 號\n已發號至：${issuedNum} 號`
+            text: `📊 現場狀況報告\n\n目前叫號：${currentNum} 號\n已發號至：${issuedNum} 號${personalStatus}`
         });
     }
+
+    // 2. 【過號名單】
+    if (['過號名單', '過號', 'passed'].includes(text)) {
+        // Redis ZRANGE 返回陣列
+        const passedList = await redis.zrange(KEY_PASSED_NUMBERS, 0, -1);
+        
+        let msgText = "";
+        if (!passedList || passedList.length === 0) {
+            msgText = "🟢 目前沒有過號名單。";
+        } else {
+            msgText = `📋 目前過號名單：\n\n${passedList.join(', ')}\n\n若您的號碼在名單中，請儘速洽詢櫃台。`;
+        }
+
+        return lineClient.replyMessage(replyToken, {
+            type: "text",
+            text: msgText
+        });
+    }
+
+    // 3. 【設定提醒】 (格式：設定提醒 100)
+    if (text.startsWith('設定提醒')) {
+        // 解析數字
+        const inputNumStr = text.replace('設定提醒', '').trim();
+        const targetNum = parseInt(inputNumStr);
+
+        // 防呆驗證
+        if (isNaN(targetNum)) {
+            return lineClient.replyMessage(replyToken, {
+                type: "text",
+                text: "💡 設定失敗\n請輸入「設定提醒 號碼」，例如：\n設定提醒 105"
+            });
+        }
+
+        const currentNum = parseInt(await redis.get(KEY_CURRENT_NUMBER)) || 0;
+
+        if (targetNum <= currentNum) {
+            return lineClient.replyMessage(replyToken, {
+                type: "text",
+                text: `⚠️ 設定失敗\n${targetNum} 號已經過號或正在叫號 (目前 ${currentNum} 號)。`
+            });
+        }
+
+        // 邏輯：
+        // 1. 清除舊的設定 (如果有的話)，避免一個人訂閱多個號碼造成混亂
+        const oldTarget = await redis.get(`${KEY_LINE_USER_STATUS}${userId}`);
+        if (oldTarget) {
+            await redis.srem(`${KEY_LINE_SUB_PREFIX}${oldTarget}`, userId);
+        }
+
+        // 2. 寫入新的設定
+        // 紀錄 User -> Number (方便查詢與取消)
+        // 紀錄 Number -> [User1, User2] (方便廣播)
+        const pipeline = redis.multi();
+        pipeline.set(`${KEY_LINE_USER_STATUS}${userId}`, targetNum); // 記錄該用戶追蹤哪個號碼
+        pipeline.sadd(`${KEY_LINE_SUB_PREFIX}${targetNum}`, userId); // 將用戶加入該號碼的訂閱清單
+        // 設定過期時間 (例如 12 小時)，避免殘留垃圾資料
+        pipeline.expire(`${KEY_LINE_USER_STATUS}${userId}`, 43200);
+        pipeline.expire(`${KEY_LINE_SUB_PREFIX}${targetNum}`, 43200);
+        await pipeline.exec();
+
+        const diff = targetNum - currentNum;
+        return lineClient.replyMessage(replyToken, {
+            type: "text",
+            text: `✅ 提醒設定成功！\n\n目標號碼：${targetNum} 號\n目前進度：${currentNum} 號\n前方等待：${diff} 組\n\n當號碼接近時 (前 ${REMIND_BUFFER} 組) 我們會傳送訊息通知您。`
+        });
+    }
+
+    // 4. 【取消提醒】
+    if (['取消提醒', '取消', 'cancel'].includes(text)) {
+        const trackingNum = await redis.get(`${KEY_LINE_USER_STATUS}${userId}`);
+
+        if (!trackingNum) {
+            return lineClient.replyMessage(replyToken, {
+                type: "text",
+                text: "ℹ️ 您目前沒有設定任何叫號提醒。"
+            });
+        }
+
+        // 從 Redis 移除
+        const pipeline = redis.multi();
+        pipeline.del(`${KEY_LINE_USER_STATUS}${userId}`); // 刪除用戶狀態
+        pipeline.srem(`${KEY_LINE_SUB_PREFIX}${trackingNum}`, userId); // 從該號碼的訂閱清單移除
+        await pipeline.exec();
+
+        return lineClient.replyMessage(replyToken, {
+            type: "text",
+            text: `🗑️ 已取消對 ${trackingNum} 號的提醒通知。`
+        });
+    }
+    
     return Promise.resolve(null);
 }
 
@@ -650,5 +762,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v17.0 (Manual Issued) ready on port ${PORT}`);
+    console.log(`🚀 Server v17.1 (Full LINE Bot) ready on port ${PORT}`);
 });
