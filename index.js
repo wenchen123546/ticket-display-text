@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v13.1 Final
+ * 伺服器 (index.js) - v13.2 Render Fix
  * ==========================================
  */
 
@@ -16,6 +16,10 @@ const line = require('@line/bot-sdk');
 const cron = require('node-cron'); // 排程套件
 
 const app = express();
+
+// 【新增】設定信任代理 (解決 Render/Heroku 部署時的 Rate Limit 錯誤)
+app.set('trust proxy', 1);
+
 const server = http.createServer(app);
 const io = socketio(server, { cors: { origin: "*" }, pingTimeout: 60000 });
 
