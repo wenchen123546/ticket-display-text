@@ -5,7 +5,12 @@ const usernameInput = document.getElementById("username-input");
 const passwordInput = document.getElementById("password-input");
 const loginButton = document.getElementById("login-button");
 const loginError = document.getElementById("login-error");
+
+// 【新】儀表板元素
 const numberEl = document.getElementById("number");
+const issuedNumberEl = document.getElementById("issued-number");
+const waitingCountEl = document.getElementById("waiting-count");
+
 const statusBar = document.getElementById("status-bar");
 const passedListUI = document.getElementById("passed-list-ui");
 const newPassedNumberInput = document.getElementById("new-passed-number");
@@ -39,7 +44,7 @@ const btnStatsMinus = document.getElementById("btn-stats-minus");
 const btnStatsPlus = document.getElementById("btn-stats-plus");
 const btnModalClose = document.getElementById("btn-modal-close");
 
-// LINE 訊息 DOM (新增)
+// LINE 訊息 DOM
 const lineMsgApproachInput = document.getElementById("line-msg-approach");
 const lineMsgArrivalInput = document.getElementById("line-msg-arrival");
 const btnSaveLineMsg = document.getElementById("btn-save-line-msg");
@@ -77,7 +82,6 @@ async function showPanel() {
         }
         const clearLogBtnEl = document.getElementById("clear-log-btn");
         if (clearLogBtnEl) clearLogBtnEl.style.display = "block";
-        
         if(btnExportCsv) btnExportCsv.style.display = "block";
     }
 
@@ -86,7 +90,7 @@ async function showPanel() {
     document.title = `後台管理 - ${username}`; 
     
     await loadStats(); 
-    await loadLineSettings(); // 載入 LINE 設定
+    await loadLineSettings(); 
     socket.connect();
 }
 
@@ -183,6 +187,22 @@ socket.on("newAdminLog", (logMessage) => {
 });
 socket.on("updateOnlineAdmins", (admins) => renderOnlineAdmins(admins));
 
+// 【重要修改】同時監聽 updateQueue 以顯示完整數據
+socket.on("updateQueue", (data) => {
+    const current = data.current;
+    const issued = data.issued;
+    
+    // 更新目前叫號
+    numberEl.textContent = current;
+    
+    // 更新發號狀態
+    if(issuedNumberEl) issuedNumberEl.textContent = issued;
+    if(waitingCountEl) waitingCountEl.textContent = Math.max(0, issued - current);
+    
+    loadStats(); 
+});
+
+// 為了相容性，保留 update
 socket.on("update", (num) => {
     numberEl.textContent = num;
     loadStats(); 
@@ -686,7 +706,7 @@ if (btnExportCsv) {
     btnExportCsv.onclick = downloadCSV;
 }
 
-// --- LINE 訊息設定邏輯 (新增) ---
+// --- LINE 訊息設定邏輯 ---
 async function loadLineSettings() {
     if (!lineMsgApproachInput) return; 
     const data = await apiRequest("/api/admin/line-settings/get", {}, true);
