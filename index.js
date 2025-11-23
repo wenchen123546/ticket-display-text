@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v17.1 With Full LINE Bot Features
+ * 伺服器 (index.js) - v17.2 Dynamic LINE Unlock Password
  * ==========================================
  */
 
@@ -72,6 +72,10 @@ const KEY_LINE_USER_STATUS = 'callsys:line:user:';
 const KEY_LINE_MSG_APPROACH = 'callsys:line:msg:approach';
 const KEY_LINE_MSG_ARRIVAL = 'callsys:line:msg:arrival';
 
+// 新增 Keys：後台解鎖密碼 & 使用者解鎖狀態
+const KEY_LINE_UNLOCK_PWD = 'callsys:line:unlock_pwd';
+const KEY_LINE_ADMIN_UNLOCK = 'callsys:line:admin_session:';
+
 const DEFAULT_LINE_MSG_APPROACH = "🔔 叫號提醒！\n\n目前已叫號至 {current} 號。\n您的 {target} 號即將輪到 (剩 {diff} 組)，請準備前往現場！";
 const DEFAULT_LINE_MSG_ARRIVAL = "🎉 輪到您了！\n\n目前號碼：{current} 號\n請立即前往櫃台辦理。";
 
@@ -131,6 +135,7 @@ cron.schedule('0 4 * * *', async () => {
         const allLineKeys = [...keys, ...userKeys];
         if(allLineKeys.length > 0) multi.del(allLineKeys);
 
+        // 也可以選擇每日重置解鎖密碼，這裡暫不重置密碼
         await multi.exec();
         
         io.emit("update", 0);
@@ -282,22 +287,61 @@ async function checkAndNotifyLineUsers(currentNum) {
     } catch (e) { console.error("Line Notify Error:", e); }
 }
 
-// --- LINE Event Handler (主要修改處) ---
+// --- LINE Event Handler (動態密碼版) ---
 async function handleLineEvent(event) {
     if (event.type !== 'message' || event.message.type !== 'text') return Promise.resolve(null);
     
-    // 移除前後空白並統一格式
     const text = event.message.text.trim();
     const userId = event.source.userId;
     const replyToken = event.replyToken;
 
-    // 1. 【查詢進度】
+    // --- 1. 後台登入與解鎖 ---
+    
+    // (A) 點擊後台登入
+    if (text === '後台登入') {
+        const isUnlocked = await redis.get(`${KEY_LINE_ADMIN_UNLOCK}${userId}`);
+
+        if (isUnlocked) {
+            // 已解鎖：發送連結 (請修改下方 your-domain.com 為真實網址)
+            // 可替換為 liff://... 以獲得更好體驗
+            const host = process.env.RENDER_EXTERNAL_URL || "https://your-domain.com"; 
+            return lineClient.replyMessage(replyToken, {
+                type: "text",
+                text: `🔗 後台傳送門已開啟：\n\n請點擊連結進入後台：\n${host}/admin.html\n\n(此連結包含敏感權限，請勿轉傳)`
+            });
+        } else {
+            // 未解鎖
+            return lineClient.replyMessage(replyToken, {
+                type: "text",
+                text: "🔒 按鈕已鎖定\n\n此功能僅限管理員使用。\n請輸入後台設定的「解鎖密碼」以驗證身份。"
+            });
+        }
+    }
+
+    // (B) 檢查是否輸入了解鎖密碼
+    // 先從 Redis 抓取設定的密碼，如果沒有設定，預設為 "unlock" + ADMIN_TOKEN
+    let currentUnlockPass = await redis.get(KEY_LINE_UNLOCK_PWD);
+    if (!currentUnlockPass) currentUnlockPass = `unlock${ADMIN_TOKEN}`;
+
+    if (text === currentUnlockPass) {
+        // 密碼正確 -> 設定 10 分鐘 (600秒) 解鎖 Session
+        await redis.set(`${KEY_LINE_ADMIN_UNLOCK}${userId}`, "1", "EX", 600);
+        
+        return lineClient.replyMessage(replyToken, {
+            type: "text",
+            text: "🔓 管理員權限已驗證\n\n您現在可以點擊「後台登入」按鈕取得連結。\n(權限將在 10 分鐘後自動上鎖)"
+        });
+    }
+
+
+    // --- 2. 一般使用者功能 ---
+
+    // 查詢進度
     if (['查詢進度', '查詢', '進度', 'status', '？', '?'].includes(text)) {
         const [current, issued] = await redis.mget(KEY_CURRENT_NUMBER, KEY_LAST_ISSUED);
         const currentNum = parseInt(current) || 0;
         const issuedNum = parseInt(issued) || 0;
         
-        // 檢查使用者是否有正在追蹤的號碼
         const trackingNum = await redis.get(`${KEY_LINE_USER_STATUS}${userId}`);
         let personalStatus = "";
         
@@ -318,61 +362,38 @@ async function handleLineEvent(event) {
         });
     }
 
-    // 2. 【過號名單】
+    // 過號名單
     if (['過號名單', '過號', 'passed'].includes(text)) {
-        // Redis ZRANGE 返回陣列
         const passedList = await redis.zrange(KEY_PASSED_NUMBERS, 0, -1);
-        
         let msgText = "";
         if (!passedList || passedList.length === 0) {
             msgText = "🟢 目前沒有過號名單。";
         } else {
             msgText = `📋 目前過號名單：\n\n${passedList.join(', ')}\n\n若您的號碼在名單中，請儘速洽詢櫃台。`;
         }
-
-        return lineClient.replyMessage(replyToken, {
-            type: "text",
-            text: msgText
-        });
+        return lineClient.replyMessage(replyToken, { type: "text", text: msgText });
     }
 
-    // 3. 【設定提醒】 (格式：設定提醒 100)
+    // 設定提醒
     if (text.startsWith('設定提醒')) {
-        // 解析數字
         const inputNumStr = text.replace('設定提醒', '').trim();
         const targetNum = parseInt(inputNumStr);
 
-        // 防呆驗證
         if (isNaN(targetNum)) {
-            return lineClient.replyMessage(replyToken, {
-                type: "text",
-                text: "💡 設定失敗\n請輸入「設定提醒 號碼」，例如：\n設定提醒 105"
-            });
+            return lineClient.replyMessage(replyToken, { type: "text", text: "💡 設定失敗\n請輸入「設定提醒 號碼」，例如：\n設定提醒 105" });
         }
 
         const currentNum = parseInt(await redis.get(KEY_CURRENT_NUMBER)) || 0;
-
         if (targetNum <= currentNum) {
-            return lineClient.replyMessage(replyToken, {
-                type: "text",
-                text: `⚠️ 設定失敗\n${targetNum} 號已經過號或正在叫號 (目前 ${currentNum} 號)。`
-            });
+            return lineClient.replyMessage(replyToken, { type: "text", text: `⚠️ 設定失敗\n${targetNum} 號已經過號或正在叫號 (目前 ${currentNum} 號)。` });
         }
 
-        // 邏輯：
-        // 1. 清除舊的設定 (如果有的話)，避免一個人訂閱多個號碼造成混亂
         const oldTarget = await redis.get(`${KEY_LINE_USER_STATUS}${userId}`);
-        if (oldTarget) {
-            await redis.srem(`${KEY_LINE_SUB_PREFIX}${oldTarget}`, userId);
-        }
+        if (oldTarget) await redis.srem(`${KEY_LINE_SUB_PREFIX}${oldTarget}`, userId);
 
-        // 2. 寫入新的設定
-        // 紀錄 User -> Number (方便查詢與取消)
-        // 紀錄 Number -> [User1, User2] (方便廣播)
         const pipeline = redis.multi();
-        pipeline.set(`${KEY_LINE_USER_STATUS}${userId}`, targetNum); // 記錄該用戶追蹤哪個號碼
-        pipeline.sadd(`${KEY_LINE_SUB_PREFIX}${targetNum}`, userId); // 將用戶加入該號碼的訂閱清單
-        // 設定過期時間 (例如 12 小時)，避免殘留垃圾資料
+        pipeline.set(`${KEY_LINE_USER_STATUS}${userId}`, targetNum); 
+        pipeline.sadd(`${KEY_LINE_SUB_PREFIX}${targetNum}`, userId); 
         pipeline.expire(`${KEY_LINE_USER_STATUS}${userId}`, 43200);
         pipeline.expire(`${KEY_LINE_SUB_PREFIX}${targetNum}`, 43200);
         await pipeline.exec();
@@ -384,27 +405,17 @@ async function handleLineEvent(event) {
         });
     }
 
-    // 4. 【取消提醒】
+    // 取消提醒
     if (['取消提醒', '取消', 'cancel'].includes(text)) {
         const trackingNum = await redis.get(`${KEY_LINE_USER_STATUS}${userId}`);
-
         if (!trackingNum) {
-            return lineClient.replyMessage(replyToken, {
-                type: "text",
-                text: "ℹ️ 您目前沒有設定任何叫號提醒。"
-            });
+            return lineClient.replyMessage(replyToken, { type: "text", text: "ℹ️ 您目前沒有設定任何叫號提醒。" });
         }
-
-        // 從 Redis 移除
         const pipeline = redis.multi();
-        pipeline.del(`${KEY_LINE_USER_STATUS}${userId}`); // 刪除用戶狀態
-        pipeline.srem(`${KEY_LINE_SUB_PREFIX}${trackingNum}`, userId); // 從該號碼的訂閱清單移除
+        pipeline.del(`${KEY_LINE_USER_STATUS}${userId}`); 
+        pipeline.srem(`${KEY_LINE_SUB_PREFIX}${trackingNum}`, userId); 
         await pipeline.exec();
-
-        return lineClient.replyMessage(replyToken, {
-            type: "text",
-            text: `🗑️ 已取消對 ${trackingNum} 號的提醒通知。`
-        });
+        return lineClient.replyMessage(replyToken, { type: "text", text: `🗑️ 已取消對 ${trackingNum} 號的提醒通知。` });
     }
     
     return Promise.resolve(null);
@@ -438,7 +449,8 @@ const protectedAPIs = [
     "/set-sound-enabled", "/set-public-status", "/reset",
     "/api/logs/clear", "/api/admin/stats", "/api/admin/broadcast", 
     "/api/admin/stats/adjust", "/api/admin/stats/clear", "/api/admin/export-csv", 
-    "/api/admin/line-settings/get", "/api/admin/line-settings/save", "/api/admin/line-settings/reset"
+    "/api/admin/line-settings/get", "/api/admin/line-settings/save", "/api/admin/line-settings/reset",
+    "/api/admin/line-settings/set-unlock-pass", "/api/admin/line-settings/get-unlock-pass"
 ];
 app.use(protectedAPIs, apiLimiter, authMiddleware);
 
@@ -464,6 +476,28 @@ app.post("/api/admin/line-settings/reset", async (req, res) => {
         res.json({ success: true, approach: DEFAULT_LINE_MSG_APPROACH, arrival: DEFAULT_LINE_MSG_ARRIVAL });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// 新增：超級管理員設定 LINE 解鎖密碼的 API
+app.post("/api/admin/line-settings/set-unlock-pass", superAdminAuthMiddleware, async (req, res) => {
+    try {
+        const { password } = req.body;
+        if (!password || password.trim() === "") return res.status(400).json({ error: "密碼不可為空" });
+        
+        // 儲存密碼
+        await redis.set(KEY_LINE_UNLOCK_PWD, password.trim());
+        addAdminLog(req.user.nickname, "🔑 更新了 LINE 後台解鎖密碼");
+        
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/admin/line-settings/get-unlock-pass", superAdminAuthMiddleware, async (req, res) => {
+    try {
+        const password = await redis.get(KEY_LINE_UNLOCK_PWD);
+        res.json({ success: true, password: password || "" });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 
 app.post("/api/admin/export-csv", superAdminAuthMiddleware, async (req, res) => {
     try {
@@ -562,7 +596,6 @@ app.post("/set-number", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 【新】手動設定已發號碼 API
 app.post("/set-issued-number", async (req, res) => {
     try {
         const newIssued = parseInt(req.body.number);
@@ -589,7 +622,7 @@ app.post("/api/admin/broadcast", async (req, res) => {
     const cleanMsg = sanitize(message).substring(0, 50); 
     io.emit("adminBroadcast", cleanMsg);
     if (lineClient) {
-        // (LINE broadcast logic simplified for brevity)
+        // (LINE broadcast logic simplified)
     }
     addAdminLog(req.user.nickname, `📢 發送廣播: "${cleanMsg}"`);
     res.json({ success: true });
@@ -762,5 +795,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v17.1 (Full LINE Bot) ready on port ${PORT}`);
+    console.log(`🚀 Server v17.2 (Dynamic LINE Unlock) ready on port ${PORT}`);
 });
