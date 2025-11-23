@@ -27,7 +27,10 @@ const clearLogBtn = document.getElementById("clear-log-btn");
 const resetAllBtn = document.getElementById("resetAll");
 const onlineUsersList = document.getElementById("online-users-list"); 
 
-// 【修正：補回遺失的用戶管理 DOM】
+// 【新】手動設定已發號碼 DOM
+const manualIssuedInput = document.getElementById("manualIssuedNumber");
+const setIssuedBtn = document.getElementById("setIssuedNumber");
+
 const userListUI = document.getElementById("user-list-ui");
 const newUserUsernameInput = document.getElementById("new-user-username");
 const newUserPasswordInput = document.getElementById("new-user-password");
@@ -37,7 +40,6 @@ const setNickUsernameInput = document.getElementById("set-nick-username");
 const setNickNicknameInput = document.getElementById("set-nick-nickname");
 const setNicknameBtn = document.getElementById("set-nickname-btn");
 
-// 模式切換元素
 const modeSwitcherGroup = document.getElementById("mode-switcher-group");
 const modeRadios = document.getElementsByName("systemMode");
 
@@ -96,7 +98,6 @@ async function showPanel() {
         if (clearLogBtnEl) clearLogBtnEl.style.display = "block";
         if(btnExportCsv) btnExportCsv.style.display = "block";
         
-        // 顯示模式切換區塊
         if(modeSwitcherGroup) modeSwitcherGroup.style.display = "block";
         await loadAdminUsers(); 
     }
@@ -213,7 +214,6 @@ socket.on("updateQueue", (data) => {
 });
 socket.on("update", (num) => { if(numberEl) numberEl.textContent = num; loadStats(); });
 
-// 監聽模式變更
 socket.on("updateSystemMode", (mode) => {
     if (modeRadios) {
         for(let r of modeRadios) {
@@ -281,7 +281,6 @@ function setupConfirmationButton(buttonEl, originalText, confirmText, actionCall
     });
 }
 
-// 模式切換事件綁定
 if (modeRadios) {
     modeRadios.forEach(radio => {
         radio.addEventListener("change", async () => {
@@ -290,7 +289,7 @@ if (modeRadios) {
                 if(await apiRequest("/set-system-mode", { mode: val })) {
                     showToast("✅ 模式已切換", "success");
                 } else {
-                    socket.emit("requestUpdate"); // 失敗則重整
+                    socket.emit("requestUpdate");
                 }
             } else {
                 const other = val === 'ticketing' ? 'input' : 'ticketing';
@@ -368,10 +367,21 @@ async function changeNumber(direction) { await apiRequest("/change-number", { di
 async function setNumber() { const num = document.getElementById("manualNumber").value; if (num === "") return; if (await apiRequest("/set-number", { number: num })) { document.getElementById("manualNumber").value = ""; showToast("✅ 號碼已設定", "success"); } }
 const actionClearAdminLog = async () => { showToast("🧼 正在清除日誌...", "info"); await apiRequest("/api/logs/clear", {}); }
 
+// 【新】手動設定已發號碼函式
+async function setIssuedNumber() {
+    const num = manualIssuedInput.value;
+    if (num === "") return;
+    if (await apiRequest("/set-issued-number", { number: num })) {
+        manualIssuedInput.value = "";
+        showToast("✅ 已發號碼已更新", "success");
+    }
+}
+
 // --- 11. 綁定事件 ---
 document.getElementById("next").onclick = () => changeNumber("next");
 document.getElementById("prev").onclick = () => changeNumber("prev");
 document.getElementById("setNumber").onclick = setNumber;
+if(setIssuedBtn) setIssuedBtn.onclick = setIssuedNumber;
 
 setupConfirmationButton(document.getElementById("clear-log-btn"), "清除日誌", "⚠️ 點此確認清除", actionClearAdminLog);
 setupConfirmationButton(document.getElementById("resetNumber"), "重置號碼", "⚠️ 點此確認重置", actionResetNumber);
@@ -433,7 +443,7 @@ publicToggle.addEventListener("change", () => {
     }
 });
 
-// --- 超級管理員功能 (修正變數錯誤) ---
+// --- 超級管理員功能 ---
 async function loadAdminUsers() {
     if (userRole !== 'super' || !userListUI) return;
     const data = await apiRequest("/api/admin/users", {}, true); 
