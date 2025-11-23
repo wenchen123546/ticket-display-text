@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * admin.css - v24 Fix Layout & Toggle
+ * admin.css - v25 Merged Layout
  * ==========================================
  */
 
@@ -254,15 +254,15 @@ input[type="text"], input[type="password"], input[type="url"] { text-align: left
     box-sizing: border-box; 
     margin-bottom: 20px; 
     flex-shrink: 0;
-    border-radius: 8px; /* 統一圓角 */
+    border-radius: 8px;
 }
 
-/* 【重要修復】防止 Checkbox 被全域樣式拉伸 */
+/* 防止 Checkbox 被拉伸 */
 .control-group.sound-toggle-group input[type="checkbox"], 
 .control-group.system-toggle-group input[type="checkbox"] {
     width: auto !important; /* 強制寬度自動 */
     margin: 0 !important;   /* 移除多餘外距 */
-    transform: scale(1.5);  /* 放大好按一點 */
+    transform: scale(1.5);  /* 放大 */
     cursor: pointer;
 }
 
