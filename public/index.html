@@ -29,9 +29,16 @@
     
     <div class="content-wrapper">
         
-        <div class="card" id="current-number-card">
-            <h2>目前號碼</h2>
-            <p id="number">0</p>
+        <div class="card" id="status-board">
+            <div class="status-item main-item">
+                <h2>目前叫號</h2>
+                <p id="number">0</p>
+            </div>
+            <div class="status-divider"></div>
+            <div class="status-item sub-item">
+                <h2>已發號碼</h2>
+                <p id="issued-number-main">0</p>
+            </div>
         </div>
 
         <div class="card" id="ticket-section" style="padding: 0; overflow: hidden;">
@@ -43,7 +50,6 @@
                         免排隊、免等待！線上領取號碼牌，<br>到號自動通知您。
                     </p>
                     <div style="display:flex; justify-content:center; align-items:center; gap:15px; flex-direction:column;">
-                        <p style="margin:0; font-size:1.1rem; color:#333;">目前發到：<span id="issued-number" style="font-weight:bold; color:#2563eb; font-size:1.4rem;">-</span> 號</p>
                         <button id="btn-take-ticket" class="btn-primary-action">
                             🎫 立即取號
                         </button>
