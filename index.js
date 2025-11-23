@@ -1,7 +1,6 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v11.1 LINE System Overhaul
- * 包含：Flex Message, Multicast, Redis 雙向索引, Rich Menu 支援
+ * 伺服器 (index.js) - v11.0 LINE System Overhaul
  * ==========================================
  */
 
@@ -75,9 +74,9 @@ const SESSION_PREFIX = 'callsys:session:';
 const KEY_HISTORY_STATS = 'callsys:stats:history';
 const KEY_STATS_HOURLY_PREFIX = 'callsys:stats:hourly:'; 
 
-// --- LINE 相關 Keys ---
+// --- LINE 相關 Keys (更新) ---
 const KEY_LINE_SUB_PREFIX = 'callsys:line:notify:'; // 用號碼查 User IDs (Set)
-const KEY_LINE_USER_STATUS = 'callsys:line:user:';  // 用 User ID 查號碼 (String) [反向索引]
+const KEY_LINE_USER_STATUS = 'callsys:line:user:';  // 用 User ID 查號碼 (String) [NEW]
 const KEY_LINE_MSG_APPROACH = 'callsys:line:msg:approach';
 const KEY_LINE_MSG_ARRIVAL = 'callsys:line:msg:arrival';
 
@@ -212,7 +211,7 @@ function broadcastOnlineAdmins() {
     io.emit("updateOnlineAdmins", Array.from(onlineAdmins.values()));
 }
 
-// --- LINE Logic (Flex Message + Handler) ---
+// --- LINE Logic (Enhanced) ---
 
 // 1. Helper: 產生 Flex Message
 function createStatusFlexMessage(currentNum, waitTime, myTarget = null) {
@@ -314,7 +313,7 @@ async function handleLineEvent(event) {
         const currentNum = parseInt(await redis.get(KEY_CURRENT_NUMBER)) || 0;
         const waitTime = await calculateAverageWaitTime();
         
-        // 使用反向索引查詢使用者狀態
+        // 查詢使用者是否有設定提醒 (使用反向索引)
         const userTargetStr = await redis.get(`${KEY_LINE_USER_STATUS}${userId}`);
         const userTarget = userTargetStr ? parseInt(userTargetStr) : null;
 
@@ -322,15 +321,7 @@ async function handleLineEvent(event) {
         return lineClient.replyMessage(event.replyToken, flexMsg);
     }
 
-    // B. 設定提醒引導 (配合 Rich Menu 按鈕)
-    if (text === '設定提醒' || text === '設定') {
-        return lineClient.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '🔔 想設定到號提醒嗎？\n\n請直接輸入您手上的「號碼數字」。\n例如：拿到 88 號，請輸入「88」。'
-        });
-    }
-
-    // C. 取消指令
+    // B. 取消指令
     if (text === '取消' || text === '取消提醒') {
         const userTargetStr = await redis.get(`${KEY_LINE_USER_STATUS}${userId}`);
         if (!userTargetStr) {
@@ -338,16 +329,16 @@ async function handleLineEvent(event) {
         }
         const targetNum = parseInt(userTargetStr);
         
-        // 雙向移除
+        // 從 Set 和 String 中移除
         const pipeline = redis.multi();
-        pipeline.srem(`${KEY_LINE_SUB_PREFIX}${targetNum}`, userId); 
-        pipeline.del(`${KEY_LINE_USER_STATUS}${userId}`);
+        pipeline.srem(`${KEY_LINE_SUB_PREFIX}${targetNum}`, userId); // 移除訂閱清單
+        pipeline.del(`${KEY_LINE_USER_STATUS}${userId}`);            // 移除個人狀態
         await pipeline.exec();
 
         return lineClient.replyMessage(event.replyToken, { type: 'text', text: `🗑️ 已取消 ${targetNum} 號的到號提醒。` });
     }
 
-    // D. 設定指令 (數字)
+    // C. 設定指令 (數字)
     const match = text.match(/^(?:提醒|設定)?\s*(\d+)$/);
     if (match) {
         const targetNum = parseInt(match[1]);
@@ -359,20 +350,20 @@ async function handleLineEvent(event) {
             });
         }
 
-        // 檢查是否已經有設定其他號碼
+        // 檢查是否已經有設定其他號碼 (避免重複訂閱多個)
         const existingTarget = await redis.get(`${KEY_LINE_USER_STATUS}${userId}`);
         const pipeline = redis.multi();
         
         if (existingTarget) {
-            // 移除舊的訂閱
+            // 如果有舊的，先從舊的清單移除
             pipeline.srem(`${KEY_LINE_SUB_PREFIX}${existingTarget}`, userId);
         }
 
-        // 寫入新的雙向索引
+        // 寫入新的
         const subKey = `${KEY_LINE_SUB_PREFIX}${targetNum}`;
-        pipeline.sadd(subKey, userId);               
+        pipeline.sadd(subKey, userId);               // 加入號碼訂閱清單
         pipeline.expire(subKey, 86400); 
-        pipeline.set(`${KEY_LINE_USER_STATUS}${userId}`, targetNum, "EX", 86400); 
+        pipeline.set(`${KEY_LINE_USER_STATUS}${userId}`, targetNum, "EX", 86400); // 記錄這個人訂了幾號
         await pipeline.exec();
 
         return lineClient.replyMessage(event.replyToken, { 
@@ -395,7 +386,7 @@ function formatLineMessage(template, current, target) {
         .replace(/{diff}/g, diff);
 }
 
-// 3. Notify Logic (Multicast)
+// 3. Notify Logic (使用 Multicast 優化)
 async function checkAndNotifyLineUsers(currentNum) {
     if (!lineClient) return;
     try {
@@ -404,18 +395,20 @@ async function checkAndNotifyLineUsers(currentNum) {
         if (!tplApproach) tplApproach = DEFAULT_LINE_MSG_APPROACH;
         if (!tplArrival) tplArrival = DEFAULT_LINE_MSG_ARRIVAL;
 
-        // A. 接近通知
+        // A. 接近通知 (Multicast)
         const notifyTarget = currentNum + 3; 
         const subKey = `${KEY_LINE_SUB_PREFIX}${notifyTarget}`;
         const subscribers = await redis.smembers(subKey);
         
         if (subscribers.length > 0) {
             const msgText = formatLineMessage(tplApproach, currentNum, notifyTarget);
+            // 使用 multicast 批次發送 (比迴圈 pushMessage 快)
+            // 注意：LINE Multicast 上限一次 500 人，此處假設量體不大。若量大需 chunking。
             await lineClient.multicast(subscribers, [{ type: 'text', text: msgText }]);
             console.log(`LINE: 已發送接近通知給 ${subscribers.length} 人`);
         }
 
-        // B. 到號通知
+        // B. 到號通知 (Multicast + Clean up)
         const exactKey = `${KEY_LINE_SUB_PREFIX}${currentNum}`;
         const exactSubscribers = await redis.smembers(exactKey);
         
@@ -423,12 +416,12 @@ async function checkAndNotifyLineUsers(currentNum) {
             const msgText = formatLineMessage(tplArrival, currentNum, currentNum);
             await lineClient.multicast(exactSubscribers, [{ type: 'text', text: msgText }]);
             
-            // 清理狀態
+            // 清理這些使用者的訂閱狀態 (因為已經到號了)
             const pipeline = redis.multi();
             exactSubscribers.forEach(uid => {
                 pipeline.del(`${KEY_LINE_USER_STATUS}${uid}`);
             });
-            pipeline.del(exactKey);
+            pipeline.del(exactKey); // 刪除該號碼的訂閱清單
             await pipeline.exec();
             
             console.log(`LINE: 已發送到號通知給 ${exactSubscribers.length} 人並清除狀態`);
@@ -565,16 +558,22 @@ app.post("/api/admin/broadcast", async (req, res) => {
     io.emit("adminBroadcast", cleanMsg);
     
     // 2. LINE 廣播 (發送給所有正在等待的 LINE 使用者)
+    // 注意：這裡只示範廣播給「已設定訂閱」的使用者，避免過度打擾陌生人
     if (lineClient) {
         try {
-            // 找出所有有訂閱的 User ID (從反向索引查比較快)
-            const userKeys = await redis.keys(`${KEY_LINE_USER_STATUS}*`);
-            if (userKeys.length > 0) {
-                // 從 key "callsys:line:user:U12345..." 提取 U12345...
-                const userIds = userKeys.map(k => k.replace(KEY_LINE_USER_STATUS, ''));
-                
-                if (userIds.length > 0) {
-                    await lineClient.multicast(userIds, [{ 
+            const keys = await redis.keys(`${KEY_LINE_SUB_PREFIX}*`);
+            if (keys.length > 0) {
+                const pipeline = redis.pipeline();
+                keys.forEach(k => pipeline.smembers(k));
+                const results = await pipeline.exec();
+                const allUserIds = new Set();
+                results.forEach(([err, members]) => {
+                    if (members) members.forEach(m => allUserIds.add(m));
+                });
+
+                const uniqueUsers = Array.from(allUserIds);
+                if (uniqueUsers.length > 0) {
+                    await lineClient.multicast(uniqueUsers, [{ 
                         type: 'text', 
                         text: `📢 店家公告：${cleanMsg}` 
                     }]);
@@ -715,7 +714,7 @@ app.post("/reset", async (req, res) => {
     
     // 重置 LINE 相關 (除了文案設定)
     const keys = await redis.keys(`${KEY_LINE_SUB_PREFIX}*`);
-    const userKeys = await redis.keys(`${KEY_LINE_USER_STATUS}*`); 
+    const userKeys = await redis.keys(`${KEY_LINE_USER_STATUS}*`); // 清除反向索引
     const allLineKeys = [...keys, ...userKeys];
     if(allLineKeys.length > 0) multi.del(allLineKeys);
 
@@ -820,5 +819,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v11.1 ready on port ${PORT}`);
+    console.log(`🚀 Server v11.0 ready on port ${PORT}`);
 });
