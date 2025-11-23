@@ -3,6 +3,8 @@ const socket = io();
 
 // --- 2. 元素節點 (DOM) ---
 const numberEl = document.getElementById("number");
+const issuedNumberMainEl = document.getElementById("issued-number-main"); // 【新】主畫面發號顯示
+
 const passedListEl = document.getElementById("passedList");
 const featuredContainerEl = document.getElementById("featured-container");
 const statusBar = document.getElementById("status-bar");
@@ -19,7 +21,6 @@ const takeTicketView = document.getElementById("take-ticket-view");
 const inputModeView = document.getElementById("input-mode-view");
 const myTicketView = document.getElementById("my-ticket-view");
 
-const issuedNumberEl = document.getElementById("issued-number");
 const btnTakeTicket = document.getElementById("btn-take-ticket");
 const btnTrackTicket = document.getElementById("btn-track-ticket");
 const manualTicketInput = document.getElementById("manual-ticket-input");
@@ -40,9 +41,8 @@ let audioPermissionGranted = false;
 let ttsEnabled = false; 
 let wakeLock = null; 
 let avgServiceTime = 0; 
-let currentSystemMode = 'ticketing'; // 預設
+let currentSystemMode = 'ticketing'; 
 
-// 票券狀態 (從 LocalStorage 讀取)
 let lastIssuedNumber = 0;
 let myTicket = localStorage.getItem('callsys_ticket') ? parseInt(localStorage.getItem('callsys_ticket')) : null;
 
@@ -76,7 +76,9 @@ socket.on("updateQueue", (data) => {
     const issued = data.issued;
     
     lastIssuedNumber = issued;
-    if(issuedNumberEl) issuedNumberEl.textContent = issued;
+    
+    // 【新】更新主畫面已發號碼
+    if(issuedNumberMainEl) issuedNumberMainEl.textContent = issued;
 
     handleNewNumber(current);
     updateTicketUI(current);
@@ -105,7 +107,6 @@ socket.on("updatePublicStatus", (status) => {
     else { socket.disconnect(); statusBar.classList.remove("visible"); }
 });
 
-// 【新】監聽系統模式變更
 socket.on("updateSystemMode", (mode) => {
     currentSystemMode = mode;
     switchSystemModeUI(mode);
@@ -126,11 +127,10 @@ function switchSystemModeUI(mode) {
         inputModeContainer.style.display = "block";
     }
     
-    // 如果使用者已經有票，不管哪個模式都顯示「我的票券」介面
     if (myTicket) {
         showMyTicketMode();
     } else {
-        showTakeTicketMode(); // 這會根據上面的 container display 設定來顯示正確的輸入介面
+        showTakeTicketMode();
     }
 }
 
@@ -194,30 +194,23 @@ function updateTicketUI(currentNum) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    // 預設先檢查是否有票
     if (myTicket) {
         showMyTicketMode();
     }
 });
 
 function showMyTicketMode() {
-    // 隱藏取號/輸入介面
     takeTicketView.style.display = "none";
     inputModeView.style.display = "none";
-    // 顯示票券介面
     myTicketView.style.display = "block";
-    
     myTicketNumEl.textContent = myTicket;
-    
     if ("Notification" in window && Notification.permission === "default") {
         Notification.requestPermission();
     }
 }
 
 function showTakeTicketMode() {
-    // 根據目前的模式顯示對應介面
     myTicketView.style.display = "none";
-    
     if (currentSystemMode === 'ticketing') {
         takeTicketView.style.display = "block";
         inputModeView.style.display = "none";
@@ -303,7 +296,6 @@ setInterval(updateTimeText, 10000);
 
 // --- 8. 按鈕事件 ---
 
-// 線上取號按鈕
 if(btnTakeTicket) {
     btnTakeTicket.addEventListener("click", async () => {
         if ("Notification" in window && Notification.permission !== "granted") {
@@ -338,7 +330,6 @@ if(btnTakeTicket) {
     });
 }
 
-// 手動輸入按鈕
 if(btnTrackTicket) {
     btnTrackTicket.addEventListener("click", async () => {
         const val = manualTicketInput.value;
@@ -359,7 +350,6 @@ if(btnTrackTicket) {
     });
 }
 
-// 放棄按鈕
 if(btnCancelTicket) {
     btnCancelTicket.addEventListener("click", () => {
         if(confirm("確定要放棄/清除目前的追蹤嗎？")) {
