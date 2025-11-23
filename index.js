@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v13.0 Final Integrated
+ * 伺服器 (index.js) - v13.1 Env Vars Update
  * ==========================================
  */
 
@@ -20,11 +20,14 @@ const server = http.createServer(app);
 const io = socketio(server, { cors: { origin: "*" }, pingTimeout: 60000 });
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN; 
 const REDIS_URL = process.env.UPSTASH_REDIS_URL;
 const SALT_ROUNDS = 10; 
 
-// --- 設定區 ---
+// --- 環境變數設定區 ---
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN; // 網頁版 Superadmin 登入密碼
+const ADMIN_RICH_MENU_ID = process.env.ADMIN_RICH_MENU_ID; // LINE 管理員選單 ID
+const ADMIN_SWITCH_PASSWORD = process.env.ADMIN_SWITCH_PASSWORD; // LINE 切換指令密碼 (!admin xxx)
+
 // 1. 叫號提醒緩衝 (提前 5 號)
 const REMIND_BUFFER = 5;
 
@@ -32,18 +35,19 @@ const REMIND_BUFFER = 5;
 const MAX_HISTORY_FOR_PREDICTION = 15; // 參考最近 15 筆
 const MAX_VALID_SERVICE_MINUTES = 20;  // 超過 20 分鐘視為異常
 
-// 3. 管理員選單設定 (請填入 LINE 後台的 Rich Menu ID)
-const ADMIN_RICH_MENU_ID = "richmenu-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"; // <--- 請替換成您的 ID
-const ADMIN_SWITCH_PASSWORD = process.env.ADMIN_TOKEN || "123456"; // 切換密碼
-
 const lineConfig = {
     channelAccessToken: process.env.LINE_ACCESS_TOKEN,
     channelSecret: process.env.LINE_CHANNEL_SECRET
 };
 
+// 檢查必要環境變數
 if (!ADMIN_TOKEN || !REDIS_URL) {
-    console.error("❌ 錯誤： 環境變數未設定");
+    console.error("❌ 錯誤：核心環境變數 (ADMIN_TOKEN, UPSTASH_REDIS_URL) 未設定");
     process.exit(1);
+}
+
+if (!ADMIN_RICH_MENU_ID || !ADMIN_SWITCH_PASSWORD) {
+    console.warn("⚠️ 警告：未設定 ADMIN_RICH_MENU_ID 或 ADMIN_SWITCH_PASSWORD，LINE 管理員切換功能將無法使用。");
 }
 
 let lineClient = null;
@@ -368,6 +372,10 @@ async function handleLineEvent(event) {
     // --- 1. 管理員選單切換 (!admin / !logout) ---
     if (text.startsWith('!admin ')) {
         const inputPass = text.split(' ')[1];
+        if (!ADMIN_RICH_MENU_ID) {
+             return lineClient.replyMessage(event.replyToken, { type: 'text', text: '❌ 系統未設定 ADMIN_RICH_MENU_ID' });
+        }
+
         if (inputPass === ADMIN_SWITCH_PASSWORD) {
             try {
                 await lineClient.linkRichMenuToUser(userId, ADMIN_RICH_MENU_ID);
@@ -394,7 +402,6 @@ async function handleLineEvent(event) {
     // --- 2. 關鍵字判定 (支援圖文選單按鈕) ---
     const isQuery = ['查詢', '號碼', '進度', '?', '？', '查詢捐血進度', '查詢進度', '🔍 查詢進度'].some(k => text.includes(k));
     const isPassed = ['過號', '過號查詢', '📋 過號名單', '過號名單'].some(k => text.includes(k));
-    // 依需求僅保留 "取消提醒" 關鍵字
     const isCancel = ['取消提醒', '❌ 取消提醒'].includes(text);
 
     // 查詢進度
