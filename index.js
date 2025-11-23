@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v14.0 Manual Rich Menu Mode
+ * 伺服器 (index.js) - v14.1 Official Rich Menu Mode
  * ==========================================
  */
 
@@ -14,8 +14,6 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt'); 
 const line = require('@line/bot-sdk'); 
 const cron = require('node-cron'); 
-// const fs = require('fs'); // 不再需要讀取圖片檔
-// const path = require('path'); // 不再需要處理路徑
 
 const app = express();
 
@@ -29,8 +27,6 @@ const io = socketio(server, { cors: { origin: "*" }, pingTimeout: 60000 });
 const PORT = process.env.PORT || 3000;
 const REDIS_URL = process.env.UPSTASH_REDIS_URL;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN; 
-
-// 【修改說明】 移除了 ADMIN_RICH_MENU_ID 與 ADMIN_SWITCH_PASSWORD，因為選單將由 LINE 後台全權管理
 
 const SALT_ROUNDS = 10; 
 const REMIND_BUFFER = 5;
@@ -51,7 +47,7 @@ if (!ADMIN_TOKEN || !REDIS_URL) {
 let lineClient = null;
 if (lineConfig.channelAccessToken && lineConfig.channelSecret) {
     lineClient = new line.Client(lineConfig);
-    console.log("✅ LINE Bot Client 已初始化 (Manual Menu Mode)");
+    console.log("✅ LINE Bot Client 已初始化 (Official Menu Mode)");
 } else {
     console.warn("⚠️ 警告：未設定 LINE 環境變數");
 }
@@ -97,8 +93,6 @@ app.use(helmet({
       },
     },
 }));
-
-// 【修改說明】 移除了 app.get('/setup-rich-menu') 路由
 
 if (lineClient) {
     app.post('/callback', line.middleware(lineConfig), (req, res) => {
@@ -286,11 +280,7 @@ async function handleLineEvent(event) {
     const text = event.message.text.trim();
     const userId = event.source.userId;
 
-    // 【修改說明】 移除了 !admin 與 !logout 指令
-    // 由於我們改用 LINE 官方後台手動建立選單，
-    // API 無法控制手動選單的切換，因此移除這些切換邏輯。
-    
-    // 關鍵字比對 (對應您在 LINE 後台設定的按鈕文字)
+    // 關鍵字比對 (對應您在 LINE 後台圖文選單設定的文字動作)
     const isQuery = ['查詢', '號碼', '進度', '?', '？', '查詢捐血進度', '查詢進度', '🔍 查詢進度'].some(k => text.includes(k));
     const isPassed = ['過號', '過號查詢', '📋 過號名單', '過號名單'].some(k => text.includes(k));
     const isCancel = ['取消提醒', '❌ 取消提醒'].includes(text);
@@ -324,6 +314,7 @@ async function handleLineEvent(event) {
         return lineClient.replyMessage(event.replyToken, { type: 'text', text: '💡 請直接輸入您的號碼以設定提醒。\n\n例如：若您是 88 號，請直接回覆「88」。' });
     }
 
+    // 處理數字輸入 (設定提醒)
     const match = text.match(/^(?:提醒|設定)?\s*(\d+)$/);
     if (match) {
         const targetNum = parseInt(match[1]);
@@ -724,5 +715,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v14.0 (Manual Menu) ready on port ${PORT}`);
+    console.log(`🚀 Server v14.1 (Official Menu) ready on port ${PORT}`);
 });
