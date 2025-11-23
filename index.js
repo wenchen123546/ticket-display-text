@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v14.1 Official Rich Menu Mode
+ * 伺服器 (index.js) - v15.0 Full Integrated Version
  * ==========================================
  */
 
@@ -61,6 +61,7 @@ redis.on('error', (err) => console.error("❌ Redis 錯誤:", err));
 
 // Keys
 const KEY_CURRENT_NUMBER = 'callsys:number';
+const KEY_LAST_ISSUED = 'callsys:issued'; // 【新】目前發出的最後一張號碼
 const KEY_PASSED_NUMBERS = 'callsys:passed';
 const KEY_FEATURED_CONTENTS = 'callsys:featured';
 const KEY_LAST_UPDATED = 'callsys:updated';
@@ -110,6 +111,8 @@ app.use(express.json());
 
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 });
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
+// 【新】取號專用限制：1小時內同 IP 最多取 10 次
+const ticketLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, message: "取號過於頻繁，請稍後再試" });
 
 const authMiddleware = async (req, res, next) => {
     try {
@@ -129,11 +132,13 @@ const superAdminAuthMiddleware = (req, res, next) => {
     else res.status(403).json({ error: "權限不足" });
 };
 
+// 每日自動重置 (包含 Issued)
 cron.schedule('0 4 * * *', async () => {
     console.log("⏰ 執行每日自動重置...");
     try {
         const multi = redis.multi();
         multi.set(KEY_CURRENT_NUMBER, 0);
+        multi.set(KEY_LAST_ISSUED, 0); // 【新】
         multi.del(KEY_PASSED_NUMBERS);
         const keys = await redis.keys(`${KEY_LINE_SUB_PREFIX}*`);
         const userKeys = await redis.keys(`${KEY_LINE_USER_STATUS}*`);
@@ -142,6 +147,7 @@ cron.schedule('0 4 * * *', async () => {
 
         await multi.exec();
         io.emit("update", 0);
+        io.emit("updateQueue", { current: 0, issued: 0 }); // 【新】
         io.emit("updatePassed", []);
         io.emit("adminBroadcast", "系統已執行每日自動歸零");
         addAdminLog("系統", "⏰ 執行每日自動歸零");
@@ -197,6 +203,24 @@ async function broadcastData(key, eventName, isJSON = false) {
     } catch (e) { console.error(`Broadcast ${eventName} error:`, e); }
 }
 
+// 【新】廣播排隊狀態 (整合 Current 與 Issued)
+async function broadcastQueueStatus() {
+    const [current, issued] = await redis.mget(KEY_CURRENT_NUMBER, KEY_LAST_ISSUED);
+    const currentNum = parseInt(current) || 0;
+    let issuedNum = parseInt(issued) || 0;
+    
+    // 如果因為手動跳號導致 Current > Issued，自動修正 Issued
+    if (issuedNum < currentNum) {
+        issuedNum = currentNum;
+        await redis.set(KEY_LAST_ISSUED, issuedNum);
+    }
+    
+    // update: 給後台與舊版相容
+    io.emit("update", currentNum);
+    // updateQueue: 給前台顯示排隊進度
+    io.emit("updateQueue", { current: currentNum, issued: issuedNum });
+}
+
 async function addAdminLog(nickname, message) {
     try {
         const timeString = new Date().toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
@@ -250,7 +274,7 @@ function broadcastOnlineAdmins() {
     io.emit("updateOnlineAdmins", Array.from(onlineAdmins.values()));
 }
 
-// --- LINE Flex Messages ---
+// --- LINE Flex Messages (完整保留) ---
 function createStatusFlexMessage(currentNum, waitTime, myTarget = null) {
     let statusText = "目前無設定提醒", statusColor = "#aaaaaa", diffText = "無";
     if (myTarget) {
@@ -280,7 +304,7 @@ async function handleLineEvent(event) {
     const text = event.message.text.trim();
     const userId = event.source.userId;
 
-    // 關鍵字比對 (對應您在 LINE 後台圖文選單設定的文字動作)
+    // 關鍵字比對
     const isQuery = ['查詢', '號碼', '進度', '?', '？', '查詢捐血進度', '查詢進度', '🔍 查詢進度'].some(k => text.includes(k));
     const isPassed = ['過號', '過號查詢', '📋 過號名單', '過號名單'].some(k => text.includes(k));
     const isCancel = ['取消提醒', '❌ 取消提醒'].includes(text);
@@ -445,6 +469,27 @@ app.post("/api/admin/export-csv", superAdminAuthMiddleware, async (req, res) => 
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// 【新】線上取號 API
+app.post("/api/ticket/take", ticketLimiter, async (req, res) => {
+    try {
+        // 1. 增加發號計數
+        const newTicket = await redis.incr(KEY_LAST_ISSUED);
+        
+        // 2. 確保 Current 至少為 0
+        const current = await redis.get(KEY_CURRENT_NUMBER);
+        if (current === null) await redis.set(KEY_CURRENT_NUMBER, 0);
+
+        // 3. 廣播
+        await broadcastQueueStatus();
+        io.emit("updateWaitTime", await calculateSmartWaitTime());
+
+        // 4. 回傳
+        res.json({ success: true, ticket: newTicket });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post("/change-number", async (req, res) => {
     try {
         const { direction } = req.body;
@@ -458,10 +503,12 @@ app.post("/change-number", async (req, res) => {
             await logHistory(num, req.user.nickname, 0); 
             addAdminLog(req.user.nickname, `號碼回退為 ${num}`);
         } else { num = await redis.get(KEY_CURRENT_NUMBER) || 0; }
-        io.emit("update", num);
+        
+        // 變更：統一廣播
         checkAndNotifyLineUsers(num);
         io.emit("updateWaitTime", await calculateSmartWaitTime());
         await updateTimestamp();
+        await broadcastQueueStatus(); 
         res.json({ success: true, number: num });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -472,13 +519,22 @@ app.post("/set-number", async (req, res) => {
         if (isNaN(newNum) || newNum < 0) return res.status(400).json({ error: "無效號碼" });
         const oldNum = parseInt(await redis.get(KEY_CURRENT_NUMBER)) || 0;
         await redis.set(KEY_CURRENT_NUMBER, newNum);
+        
+        // 若手動設定超過目前發號，補齊發號
+        const issued = parseInt(await redis.get(KEY_LAST_ISSUED)) || 0;
+        if (newNum > issued) {
+            await redis.set(KEY_LAST_ISSUED, newNum);
+        }
+
         const delta = Math.max(0, newNum - oldNum);
         await logHistory(newNum, req.user.nickname, delta);
         addAdminLog(req.user.nickname, `手動設定為 ${newNum} (統計增加 ${delta})`);
-        io.emit("update", newNum);
+        
         checkAndNotifyLineUsers(newNum);
         io.emit("updateWaitTime", await calculateSmartWaitTime());
         await updateTimestamp();
+        await broadcastQueueStatus();
+
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -607,6 +663,7 @@ app.post("/set-public-status", async (req, res) => {
 app.post("/reset", async (req, res) => {
     const multi = redis.multi();
     multi.set(KEY_CURRENT_NUMBER, 0);
+    multi.set(KEY_LAST_ISSUED, 0); // 【新】
     multi.del(KEY_PASSED_NUMBERS);
     multi.del(KEY_FEATURED_CONTENTS);
     multi.set(KEY_SOUND_ENABLED, "0");
@@ -620,7 +677,8 @@ app.post("/reset", async (req, res) => {
 
     await multi.exec();
     addAdminLog(req.user.nickname, `💥 系統全域重置`);
-    io.emit("update", 0);
+    
+    await broadcastQueueStatus(); // 廣播
     io.emit("updatePassed", []);
     io.emit("updateFeaturedContents", []);
     io.emit("updateSoundSetting", false);
@@ -689,18 +747,25 @@ io.on("connection", async (socket) => {
     try {
         const pipeline = redis.multi();
         pipeline.get(KEY_CURRENT_NUMBER);
+        pipeline.get(KEY_LAST_ISSUED); // 【新】
         pipeline.zrange(KEY_PASSED_NUMBERS, 0, -1);
         pipeline.lrange(KEY_FEATURED_CONTENTS, 0, -1);
         pipeline.get(KEY_LAST_UPDATED);
         pipeline.get(KEY_SOUND_ENABLED);
         pipeline.get(KEY_IS_PUBLIC);
         const results = await pipeline.exec();
-        socket.emit("update", Number(results[0][1] || 0));
-        socket.emit("updatePassed", (results[1][1] || []).map(Number));
-        socket.emit("updateFeaturedContents", (results[2][1] || []).map(JSON.parse));
-        socket.emit("updateTimestamp", results[3][1] || new Date().toISOString());
-        socket.emit("updateSoundSetting", results[4][1] === "1");
-        socket.emit("updatePublicStatus", results[5][1] !== "0");
+        
+        const curr = Number(results[0][1] || 0);
+        const issued = Number(results[1][1] || 0);
+
+        socket.emit("update", curr); // For Admin
+        socket.emit("updateQueue", { current: curr, issued: issued }); // 【新】For User
+
+        socket.emit("updatePassed", (results[2][1] || []).map(Number));
+        socket.emit("updateFeaturedContents", (results[3][1] || []).map(JSON.parse));
+        socket.emit("updateTimestamp", results[4][1] || new Date().toISOString());
+        socket.emit("updateSoundSetting", results[5][1] === "1");
+        socket.emit("updatePublicStatus", results[6][1] !== "0");
         socket.emit("updateWaitTime", await calculateSmartWaitTime());
     } catch(e) { console.error("Socket init error:", e); }
 });
@@ -715,5 +780,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v14.1 (Official Menu) ready on port ${PORT}`);
+    console.log(`🚀 Server v15.0 (Ticketing + Full) ready on port ${PORT}`);
 });
