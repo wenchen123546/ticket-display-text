@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v13.3 With Setup Tool
+ * 伺服器 (index.js) - v13.4 OA Manager Mode
  * ==========================================
  */
 
@@ -14,8 +14,8 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt'); 
 const line = require('@line/bot-sdk'); 
 const cron = require('node-cron'); 
-const fs = require('fs'); // 新增：用於讀取圖片
-const path = require('path'); // 新增：用於路徑處理
+const fs = require('fs'); 
+const path = require('path'); 
 
 const app = express();
 
@@ -102,22 +102,20 @@ app.use(helmet({
 }));
 
 // ==========================================
-// 🛠️ [新功能] 自動建立選單的工具路徑
+// 🛠️ [修改版] 自動建立選單工具 (只建立 Admin 版)
 // ==========================================
 app.get('/setup-rich-menu', async (req, res) => {
-    if (!lineClient) return res.status(500).send("❌ LINE Client 未初始化 (請檢查 LINE_ACCESS_TOKEN)");
+    if (!lineClient) return res.status(500).send("❌ LINE Client 未初始化");
 
-    // 檢查圖片是否存在
-    const publicImgPath = path.join(__dirname, 'menu_public.jpg');
+    // 只需要檢查 Admin 圖片
     const adminImgPath = path.join(__dirname, 'menu_admin.jpg');
 
-    if (!fs.existsSync(publicImgPath) || !fs.existsSync(adminImgPath)) {
+    if (!fs.existsSync(adminImgPath)) {
         return res.status(400).send(`
             <h1>❌ 圖片缺失</h1>
-            <p>請確認您的專案根目錄中已上傳以下兩張圖片：</p>
+            <p>請確認您的專案根目錄中已上傳以下圖片：</p>
             <ul>
-                <li>menu_public.jpg (目前狀態: ${fs.existsSync(publicImgPath) ? '✅' : '❌'})</li>
-                <li>menu_admin.jpg (目前狀態: ${fs.existsSync(adminImgPath) ? '✅' : '❌'})</li>
+                <li>menu_admin.jpg (目前狀態: ❌)</li>
             </ul>
         `);
     }
@@ -125,43 +123,33 @@ app.get('/setup-rich-menu', async (req, res) => {
     try {
         const results = [];
 
-        // 1. 建立民眾版 (預設)
-        const publicMenuId = await lineClient.createRichMenu({
-            size: { width: 2500, height: 1686 },
-            selected: true,
-            name: "Public Menu",
-            chatBarText: "叫號服務",
-            areas: [
-                { bounds: { x: 0, y: 0, width: 1250, height: 1686 }, action: { type: "message", text: "查詢進度" } },
-                { bounds: { x: 1250, y: 0, width: 1250, height: 1686 }, action: { type: "message", text: "過號名單" } }
-            ]
-        });
-        await lineClient.setRichMenuImage(publicMenuId, fs.createReadStream(publicImgPath));
-        await lineClient.setDefaultRichMenu(publicMenuId);
-        results.push(`✅ 民眾版選單建立成功 (已設為預設): ${publicMenuId}`);
-
-        // 2. 建立管理員版
+        // 1. 建立管理員版選單
         const adminMenuId = await lineClient.createRichMenu({
-            size: { width: 2500, height: 1686 },
+            size: { width: 2500, height: 1686 }, // 您可以根據圖片實際尺寸調整高度 1686 或 843
             selected: true,
             name: "Admin Menu",
             chatBarText: "後台操作",
             areas: [
-                { bounds: { x: 0, y: 0, width: 2500, height: 1686 }, action: { type: "message", text: "!logout" } }
+                { 
+                    // 整個版面都是按鈕，點擊觸發登出
+                    bounds: { x: 0, y: 0, width: 2500, height: 1686 }, 
+                    action: { type: "message", text: "!logout" } 
+                }
             ]
         });
         await lineClient.setRichMenuImage(adminMenuId, fs.createReadStream(adminImgPath));
         results.push(`✅ 管理員版選單建立成功: ${adminMenuId}`);
+        results.push(`ℹ️ 民眾版選單：未透過程式設定 (請至 LINE Official Account Manager 後台自行設定)`);
 
         // 回傳結果頁面
         res.send(`
-            <h1>🎉 選單建立成功！</h1>
+            <h1>🎉 管理員選單建立成功！</h1>
             <p>請複製下方的 ID，並填入 Render 的 Environment Variables 中：</p>
             <hr>
             <h3>Key: <span style="color:red">ADMIN_RICH_MENU_ID</span></h3>
             <h3>Value: <span style="background:#eee; padding:5px; border:1px solid #ccc">${adminMenuId}</span></h3>
             <hr>
-            <p>設定完成後，Render 會自動重啟，警告訊息就會消失。</p>
+            <p>民眾看到的選單將由您在 LINE 官方後台的設定決定。</p>
             <pre>${results.join('\n')}</pre>
         `);
 
@@ -811,5 +799,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v13.3 ready on port ${PORT}`);
+    console.log(`🚀 Server v13.4 ready on port ${PORT}`);
 });
