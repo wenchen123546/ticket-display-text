@@ -36,16 +36,33 @@
 
         <div class="card" id="ticket-section" style="padding: 0; overflow: hidden;">
             
-            <div id="take-ticket-view" style="padding: 25px;">
-                <h3 style="margin-top:0; color:#555;">線上取號</h3>
-                <p style="color:#666; font-size: 0.9rem; margin-bottom: 20px;">
-                    免排隊、免等待！線上領取號碼牌，<br>到號自動通知您。
-                </p>
-                <div style="display:flex; justify-content:center; align-items:center; gap:15px; flex-direction:column;">
-                    <p style="margin:0; font-size:1.1rem; color:#333;">目前發到：<span id="issued-number" style="font-weight:bold; color:#2563eb; font-size:1.4rem;">-</span> 號</p>
-                    <button id="btn-take-ticket" class="btn-primary-action">
-                        🎫 立即取號
-                    </button>
+            <div id="ticketing-mode-container">
+                <div id="take-ticket-view" style="padding: 25px;">
+                    <h3 style="margin-top:0; color:#555;">線上取號</h3>
+                    <p style="color:#666; font-size: 0.9rem; margin-bottom: 20px;">
+                        免排隊、免等待！線上領取號碼牌，<br>到號自動通知您。
+                    </p>
+                    <div style="display:flex; justify-content:center; align-items:center; gap:15px; flex-direction:column;">
+                        <p style="margin:0; font-size:1.1rem; color:#333;">目前發到：<span id="issued-number" style="font-weight:bold; color:#2563eb; font-size:1.4rem;">-</span> 號</p>
+                        <button id="btn-take-ticket" class="btn-primary-action">
+                            🎫 立即取號
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="input-mode-container" style="display: none;">
+                <div id="input-mode-view" style="padding: 25px;">
+                    <h3 style="margin-top:0; color:#555;">手動輸入追蹤</h3>
+                    <p style="color:#666; font-size: 0.9rem; margin-bottom: 20px;">
+                        請輸入您手上的號碼牌號碼，<br>我們將在到號時通知您。
+                    </p>
+                    <div style="display:flex; justify-content:center; align-items:center; gap:15px; flex-direction:column;">
+                        <input type="number" id="manual-ticket-input" placeholder="輸入號碼" style="font-size: 1.5rem; padding: 10px; width: 120px; text-align: center; border: 2px solid #ccc; border-radius: 8px;">
+                        <button id="btn-track-ticket" class="btn-primary-action" style="background-color: #0ea5e9;">
+                            🔔 設定提醒
+                        </button>
+                    </div>
                 </div>
             </div>
 
