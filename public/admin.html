@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>後台管理 - 叫號控制</title>
 <script src="/socket.io/socket.io.js"></script>
-<link rel="stylesheet" href="/css/admin.css?v=27"> 
+<link rel="stylesheet" href="/css/admin.css?v=28"> 
 </head>
 <body>
 
@@ -86,15 +86,16 @@
         </div> 
         
         <div class="card-wrapper" id="card-logs">
-            <div class="admin-card" style="display: flex; flex-direction: column;">
+            <div class="admin-card" style="display: flex; flex-direction: column; height: 100%;">
                 
-                <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; margin-bottom: 20px; border-bottom: 2px dashed #eee; padding-bottom: 15px;">
-                    <h3 style="border-bottom: none; margin-bottom: 10px;"><span class="card-icon">📋</span> 操作日誌</h3>
-                    <div class="control-group admin-log-container" style="height: 100%; display: flex; flex-direction: column;">
-                        <ul id="admin-log-ui" style="flex: 1; max-height: none; height: auto;">
+                <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 15px; border-bottom: 2px dashed #eee; padding-bottom: 15px;">
+                    <h3 style="border-bottom: none; margin-bottom: 10px; flex-shrink: 0;"><span class="card-icon">📋</span> 操作日誌</h3>
+                    
+                    <div class="control-group admin-log-container" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                        <ul id="admin-log-ui" style="flex: 1; overflow-y: auto; margin: 0;">
                             <li>等待連線...</li>
                         </ul>
-                        <button id="clear-log-btn" type="button" class="btn-clear-log" style="display: none; margin-top: 10px;">清除日誌</button>
+                        <button id="clear-log-btn" type="button" class="btn-clear-log" style="display: none; margin-top: 10px; flex-shrink: 0;">清除日誌</button>
                     </div>
                 </div>
 
@@ -252,6 +253,6 @@
 
 <div id="toast-notification"></div>
 
-<script src="/js/admin.js?v=27"></script> 
+<script src="/js/admin.js?v=28"></script> 
 </body>
 </html>
