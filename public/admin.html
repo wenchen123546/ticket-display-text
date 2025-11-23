@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>後台管理 - 叫號控制</title>
 <script src="/socket.io/socket.io.js"></script>
-<link rel="stylesheet" href="/css/admin.css?v=29"> 
+<link rel="stylesheet" href="/css/admin.css?v=30"> 
 </head>
 <body>
 
@@ -195,6 +195,18 @@
             <div class="admin-card">
                 <h3><span class="card-icon">💬</span> LINE 通知設定</h3>
                 
+                <div class="control-group form-group-boxed" id="unlock-pwd-group" style="display:none; background:#fff7ed; border-color:#fdba74;">
+                    <label style="color:#c2410c;">🔑 LINE 後台解鎖密碼</label>
+                    <p style="font-size:0.8rem; color:#666; margin:0 0 5px 0;">
+                        使用者在 LINE 輸入此密碼後，可暫時獲得後台連結 (10分鐘)。<br>
+                        (若未設定，預設為 <code>unlock</code> + AdminToken)
+                    </p>
+                    <div class="input-group">
+                        <input type="text" id="line-unlock-pwd" placeholder="輸入解鎖密碼" style="flex:2;">
+                        <button id="btn-save-unlock-pwd" type="button" class="btn-warn" style="flex:1;">設定</button>
+                    </div>
+                </div>
+
                 <div class="control-group form-group-boxed">
                     <label>🔔 即將到號 (前3號)</label>
                     <p style="font-size:0.8rem; color:#666; margin:0 0 5px 0;">
@@ -209,8 +221,8 @@
                 </div>
 
                 <div class="control-group button-row">
-                    <button id="btn-save-line-msg" type="button" class="btn-primary">儲存</button>
-                    <button id="btn-reset-line-msg" type="button" class="btn-reset-single">重置</button>
+                    <button id="btn-save-line-msg" type="button" class="btn-primary">儲存文案</button>
+                    <button id="btn-reset-line-msg" type="button" class="btn-reset-single">重置文案</button>
                 </div>
             </div>
         </div>
@@ -261,6 +273,6 @@
 
 <div id="toast-notification"></div>
 
-<script src="/js/admin.js?v=29"></script> 
+<script src="/js/admin.js?v=30"></script> 
 </body>
 </html>
