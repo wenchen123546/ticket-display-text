@@ -63,6 +63,11 @@
                     <button id="btn-call-prev" type="button" class="btn-glass btn-big">
                         <span class="icon">◀</span> <span data-i18n="btn_prev">上一號</span>
                     </button>
+                    
+                    <button id="btn-mark-passed" type="button" class="btn-warn btn-big" style="flex: 0.8; margin: 0 5px;">
+                        <span class="icon">⏭️</span> <span data-i18n="btn_pass">過號</span>
+                    </button>
+
                     <button id="btn-call-next" type="button" class="btn-primary btn-big btn-large-shadow">
                         <span data-i18n="btn_next">下一號</span> <span class="icon">▶</span>
                     </button>
@@ -136,7 +141,7 @@
             <div class="admin-card">
                 <h3><span class="card-icon">📝</span> <span data-i18n="card_title_editor">過號與公告</span></h3>
                 <div class="control-group list-editor">
-                    <label>手動編輯過號</label>
+                    <label>手動編輯過號 (點擊重呼)</label>
                     <ul id="passed-list-ui"></ul>
                     <div class="input-group">
                         <label for="new-passed-number" class="sr-only">過號號碼</label>
