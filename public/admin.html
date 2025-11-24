@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/admin.css?v=73"> 
+<link rel="stylesheet" href="/css/admin.css?v=74"> 
 </head>
 <body>
 
@@ -290,7 +290,7 @@
                 <div class="card-container">
                     <div class="card-wrapper full-width-card" id="card-line-settings">
                         <div class="admin-card">
-                            <h3><span class="card-icon">💬</span> <span data-i18n="card_title_line">LINE 通知設定</span></h3>
+                            <h3><span class="card-icon">💬</span> <span data-i18n="card_title_line">LINE 通知與自動回覆</span></h3>
                             
                             <div class="control-group form-group-boxed highlight-orange" id="unlock-pwd-group" style="display:none;">
                                 <label>🔑 LINE 後台解鎖密碼</label>
@@ -301,21 +301,58 @@
                                 </div>
                             </div>
 
+                            <label class="sub-header">🔔 主動推播通知</label>
                             <div class="control-group form-group-boxed">
-                                <label>🔔 即將到號 (前3號)</label>
-                                <p class="var-hint">可用變數: {current} {target} {diff}</p>
-                                <textarea id="line-msg-approach"></textarea>
+                                <label>快到了 (前5號)</label>
+                                <p class="var-hint">變數: {current} {target} {diff}</p>
+                                <textarea id="line-msg-approach" placeholder="例如：您的 {target} 號快到了..."></textarea>
                             </div>
 
                             <div class="control-group form-group-boxed">
-                                <label>🎉 正式到號</label>
-                                <p class="var-hint">可用變數: {current}</p>
-                                <textarea id="line-msg-arrival"></textarea>
+                                <label>正式到號</label>
+                                <p class="var-hint">變數: {current} {target}</p>
+                                <textarea id="line-msg-arrival" placeholder="例如：輪到您了！..."></textarea>
                             </div>
 
-                            <div class="control-group button-row">
-                                <button id="btn-save-line-msg" type="button" class="btn-primary">儲存文案</button>
-                                <button id="btn-reset-line-msg" type="button" class="btn-reset-single">重置預設</button>
+                            <label class="sub-header">🤖 關鍵字自動回覆</label>
+                            
+                            <div class="control-group form-group-boxed">
+                                <label>關鍵字：「查詢」、「status」</label>
+                                <p class="var-hint">變數: {current} {issued} {personal}</p>
+                                <textarea id="line-msg-status" style="height:80px;"></textarea>
+                                
+                                <div style="margin-top:10px; border-top:1px dashed #ccc; padding-top:10px;">
+                                    <label style="font-size:0.9rem; color:#666;">↳ 若使用者有追蹤號碼 ({personal})：</label>
+                                    <p class="var-hint">變數: {target} {diff}</p>
+                                    <textarea id="line-msg-personal" style="height:60px;" placeholder="附加在查詢結果後方的文字"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="control-group form-group-boxed">
+                                <label>關鍵字：「設定提醒 [號碼]」</label>
+                                <p class="var-hint">變數: {target} {current} {diff}</p>
+                                <textarea id="line-msg-set-ok" style="height:80px;"></textarea>
+                            </div>
+
+                            <details>
+                                <summary style="cursor:pointer; padding:10px; color:var(--primary); font-weight:bold;">更多回覆設定 (過號、取消)...</summary>
+                                
+                                <div class="control-group form-group-boxed" style="margin-top:15px;">
+                                    <label>關鍵字：「過號」、「passed」</label>
+                                    <p class="var-hint">變數: {list}</p>
+                                    <textarea id="line-msg-passed" style="height:80px;"></textarea>
+                                </div>
+
+                                <div class="control-group form-group-boxed">
+                                    <label>關鍵字：「取消提醒」</label>
+                                    <p class="var-hint">變數: {target}</p>
+                                    <textarea id="line-msg-cancel" style="height:60px;"></textarea>
+                                </div>
+                            </details>
+
+                            <div class="control-group button-row" style="margin-top:20px;">
+                                <button id="btn-save-line-msg" type="button" class="btn-primary">儲存所有文案</button>
+                                <button id="btn-reset-line-msg" type="button" class="btn-reset-single">重置為預設值</button>
                             </div>
                         </div>
                     </div>
@@ -341,6 +378,6 @@
 
 <div id="toast-notification"></div>
 
-<script src="/js/admin.js?v=73"></script> 
+<script src="/js/admin.js?v=74"></script> 
 </body>
 </html>
