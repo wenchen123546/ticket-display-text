@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/admin.css?v=74"> 
+<link rel="stylesheet" href="/css/admin.css?v=75"> 
 </head>
 <body>
 
@@ -301,6 +301,12 @@
                                 </div>
                             </div>
 
+                            <div class="control-group form-group-boxed">
+                                <label>🔒 登入提示訊息 (未解鎖時)</label>
+                                <p class="var-hint">當使用者輸入「後台登入」但尚未驗證時顯示</p>
+                                <textarea id="line-msg-login-hint" placeholder="例如：請輸入「解鎖密碼」..."></textarea>
+                            </div>
+
                             <label class="sub-header">🔔 主動推播通知</label>
                             <div class="control-group form-group-boxed">
                                 <label>快到了 (前5號)</label>
@@ -378,6 +384,6 @@
 
 <div id="toast-notification"></div>
 
-<script src="/js/admin.js?v=74"></script> 
+<script src="/js/admin.js?v=75"></script> 
 </body>
 </html>
