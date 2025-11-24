@@ -1,10 +1,10 @@
 /*
  * ==========================================
- * 後台邏輯 (admin.js) - v18.4 Final i18n Fix
+ * 後台邏輯 (admin.js) - v18.5 With Missed Number Handling
  * ==========================================
  */
 
-// --- 0. i18n 翻譯設定 (已修正：移除混雜的英文後綴) ---
+// --- 0. i18n 翻譯設定 ---
 const adminI18n = {
     "zh-TW": {
         "status_disconnected": "連線中斷，正在嘗試重新連線...",
@@ -24,6 +24,7 @@ const adminI18n = {
         "card_title_line": "LINE 通知設定",
         "btn_prev": "上一號",
         "btn_next": "下一號",
+        "btn_pass": "過號", 
         "btn_issue_prev": "收回",
         "btn_issue_next": "發號",
         "btn_set": "設定",
@@ -72,7 +73,9 @@ const adminI18n = {
         "log_no_data": "[目前尚無日誌]",
         "btn_clear_log": "清除紀錄",
         "btn_reset_passed": "清空過號列表",
-        "btn_reset_links": "清空連結"
+        "btn_reset_links": "清空連結",
+        "toast_passed_marked": "⏩ 已標記過號，跳至下一號",
+        "toast_recalled": "↩️ 已重呼過號"
     },
     "en": {
         "status_disconnected": "Disconnected, reconnecting...",
@@ -92,6 +95,7 @@ const adminI18n = {
         "card_title_line": "LINE Settings",
         "btn_prev": "Prev",
         "btn_next": "Next",
+        "btn_pass": "Skip",
         "btn_issue_prev": "Recall",
         "btn_issue_next": "Issue",
         "btn_set": "Set",
@@ -140,7 +144,9 @@ const adminI18n = {
         "log_no_data": "[No logs yet]",
         "btn_clear_log": "Clear Logs",
         "btn_reset_passed": "Clear List",
-        "btn_reset_links": "Clear Links"
+        "btn_reset_links": "Clear Links",
+        "toast_passed_marked": "⏩ Skipped to next",
+        "toast_recalled": "↩️ Number recalled"
     }
 };
 
@@ -177,6 +183,7 @@ const waitingCountEl = document.getElementById("waiting-count");
 // 按鈕
 const btnCallPrev = document.getElementById("btn-call-prev");
 const btnCallNext = document.getElementById("btn-call-next");
+const btnMarkPassed = document.getElementById("btn-mark-passed"); // [New]
 const btnIssuePrev = document.getElementById("btn-issue-prev");
 const btnIssueNext = document.getElementById("btn-issue-next");
 
@@ -513,17 +520,57 @@ if (modeRadios) {
 }
 
 // --- 9. 渲染 ---
+// [Modified] 重寫過號列表渲染，加入重呼按鈕
 function renderPassedListUI(numbers) {
     passedListUI.innerHTML = "";
     if (!Array.isArray(numbers)) return;
     const fragment = document.createDocumentFragment();
+    
     numbers.forEach((number) => {
         const li = document.createElement("li");
-        li.innerHTML = `<span>${number}</span>`;
+        li.style.display = "flex";
+        li.style.justifyContent = "space-between";
+        li.style.alignItems = "center";
+
+        // 左側：號碼與重呼按鈕
+        const leftDiv = document.createElement("div");
+        leftDiv.style.display = "flex";
+        leftDiv.style.alignItems = "center";
+        leftDiv.style.gap = "10px";
+
+        const numSpan = document.createElement("span");
+        numSpan.textContent = number;
+        numSpan.style.fontWeight = "bold";
+        
+        // 重呼按鈕
+        const recallBtn = document.createElement("button");
+        recallBtn.className = "btn-secondary";
+        recallBtn.style.padding = "2px 8px";
+        recallBtn.style.fontSize = "0.8rem";
+        recallBtn.textContent = "↩️ 重呼";
+        recallBtn.onclick = async () => {
+             if(confirm(`確定要插隊重呼 ${number} 號嗎？`)) {
+                 await apiRequest("/api/control/recall-passed", { number });
+                 showToast(at["toast_recalled"], "success");
+             }
+        };
+
+        leftDiv.appendChild(numSpan);
+        leftDiv.appendChild(recallBtn);
+        li.appendChild(leftDiv);
+
+        // 右側：刪除按鈕
         const deleteBtn = document.createElement("button");
-        deleteBtn.type = "button"; deleteBtn.className = "delete-item-btn"; deleteBtn.innerHTML = "✕"; 
-        const actionCallback = async () => { deleteBtn.disabled = true; await apiRequest("/api/passed/remove", { number: number }); };
+        deleteBtn.type = "button"; 
+        deleteBtn.className = "delete-item-btn"; 
+        deleteBtn.innerHTML = "✕"; 
+        
+        const actionCallback = async () => { 
+            deleteBtn.disabled = true; 
+            await apiRequest("/api/passed/remove", { number: number }); 
+        };
         setupConfirmationButton(deleteBtn, "✕", "⚠️", actionCallback);
+        
         li.appendChild(deleteBtn);
         fragment.appendChild(li);
     });
@@ -597,6 +644,18 @@ const actionClearAdminLog = async () => { showToast(at["toast_log_clearing"], "i
 
 if(btnCallPrev) btnCallPrev.onclick = () => changeNumber("prev");
 if(btnCallNext) btnCallNext.onclick = () => changeNumber("next");
+
+// [New] 過號按鈕綁定
+if (btnMarkPassed) {
+    btnMarkPassed.onclick = async () => {
+        btnMarkPassed.disabled = true;
+        if (await apiRequest("/api/control/pass-current", {})) {
+            showToast(at["toast_passed_marked"], "warning");
+        }
+        btnMarkPassed.disabled = false;
+    };
+}
+
 if(btnIssuePrev) btnIssuePrev.onclick = () => changeIssuedNumber("prev");
 if(btnIssueNext) btnIssueNext.onclick = () => changeIssuedNumber("next");
 
