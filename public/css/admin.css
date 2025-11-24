@@ -137,7 +137,9 @@ body {
     position: fixed; top: 0; left: 0; width: 100%;
     background: var(--danger-gradient); color: white;
     padding: 12px; text-align: center; font-weight: 700;
-    transform: translateY(-100%); transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateY(-100%); 
+    /* [新增] 增加 background-color 過渡效果，使斷線/重連顏色變化更平滑 */
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s ease;
     z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 #status-bar.visible { transform: translateY(0); }
@@ -185,7 +187,6 @@ body {
 }
 
 .full-width-card { grid-column: 1 / -1; } 
-/* [Fix] min-width: 0 是解決 Flex 子元素溢出的關鍵 */
 .card-wrapper { height: 100%; width: 100%; min-width: 0; }
 
 .admin-card {
@@ -196,7 +197,7 @@ body {
     border: 1px solid rgba(255,255,255,0.6);
     height: 100%;
     display: flex; flex-direction: column;
-    min-width: 0; /* [Fix] 防止內容撐開卡片 */
+    min-width: 0;
 }
 .accent-blue { border-top: 4px solid #3b82f6; }
 .accent-green { border-top: 4px solid #10b981; }
@@ -241,7 +242,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(1); }
 .btn-warn { background: var(--warning); color: white; border-radius: 10px; }
 
 /* 輸入框與表單 */
-.control-group { margin-bottom: 20px; width: 100%; min-width: 0; /* [Fix] */ }
+.control-group { margin-bottom: 20px; width: 100%; min-width: 0; }
 .section-hint { font-size: 0.8rem; color: #64748b; margin-top: 8px; font-style: italic; }
 .form-group-boxed { background: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 16px; margin-bottom: 20px; width: 100%; box-sizing: border-box; min-width: 0; }
 .highlight-orange { background: #fff7ed; border-color: #ffedd5; }
@@ -291,14 +292,13 @@ li {
     display: flex; justify-content: space-between; align-items: center; 
     font-size: 0.9rem; gap: 8px; flex-wrap: wrap; 
 }
-/* [Fix] 列表內容強制換行 */
 li span { word-break: break-word; white-space: normal; }
 
 .admin-log-container ul { background: #1e293b; color: #cbd5e1; border: none; font-family: monospace; }
 .admin-log-container li { border-color: #334155; }
 .delete-item-btn { width: 32px; height: 32px; border-radius: 8px; background: #fee2e2; color: #ef4444; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
-/* 圖表 - [Fix] 強制容器寬度，避免撐開父層 */
+/* 圖表 */
 .chart-container {
     height: 160px; display: flex; align-items: flex-end; gap: 4px;
     margin-bottom: 20px; overflow-x: auto; padding-top: 20px; 
