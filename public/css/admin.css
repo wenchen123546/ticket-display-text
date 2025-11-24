@@ -245,7 +245,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(1); }
 .highlight-orange { background: #fff7ed; border-color: #ffedd5; }
 .form-group-boxed label { display: block; font-weight: 700; font-size: 0.95rem; margin-bottom: 10px; }
 
-/* 修正：強制文字換行，防止 LINE 提示字撐開 */
+/* 強制文字換行，防止 LINE 提示字撐開 */
 .var-hint { 
     font-size: 0.8rem; color: var(--text-sub); 
     background: rgba(255,255,255,0.6); padding: 5px 10px; 
@@ -253,14 +253,14 @@ button:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(1); }
     white-space: normal; word-break: break-all;
 }
 
-.input-group { display: flex; gap: 8px; width: 100%; flex-wrap: wrap; /* 允許換行 */ }
+.input-group { display: flex; gap: 8px; width: 100%; flex-wrap: wrap; }
 .input-group.vertical { flex-direction: column; }
 .input-row { display: flex; gap: 10px; width: 100%; }
 
 .input-group input {
     flex: 1; padding: 10px 12px;
     border: 1px solid #e2e8f0; border-radius: 10px;
-    font-size: 0.95rem; min-width: 150px; /* 最小寬度 */
+    font-size: 0.95rem; min-width: 150px;
 }
 .input-group button { 
     white-space: nowrap; padding: 0 16px; border-radius: 10px; 
@@ -284,7 +284,13 @@ ul { padding: 0; margin: 0; list-style: none; }
     background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
     max-height: 200px; overflow-y: auto; margin-bottom: 12px; width: 100%;
 }
-li { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; gap: 8px; }
+li { 
+    padding: 10px 14px; border-bottom: 1px solid #e2e8f0; 
+    display: flex; justify-content: space-between; align-items: center; 
+    font-size: 0.9rem; gap: 8px; flex-wrap: wrap; 
+}
+li span { word-break: break-all; white-space: normal; } /* [Fix] 列表文字換行 */
+
 .admin-log-container ul { background: #1e293b; color: #cbd5e1; border: none; font-family: monospace; }
 .admin-log-container li { border-color: #334155; }
 .delete-item-btn { width: 32px; height: 32px; border-radius: 8px; background: #fee2e2; color: #ef4444; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -328,16 +334,18 @@ li { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; display: flex; justif
     .dashboard-item { min-width: 45%; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; }
     .dashboard-item:last-child, .dashboard-item:nth-last-child(2) { border-bottom: none; }
 
-    .big-action-row { gap: 8px; }
-    .btn-big { padding: 12px 8px; font-size: 0.9rem; }
+    /* [Fix] 手機版按鈕區域：允許換行並調整最小寬度 */
+    .big-action-row { gap: 8px; flex-wrap: wrap; }
+    .btn-big { padding: 12px 8px; font-size: 0.9rem; min-width: 45%; flex: 1 1 45%; }
     .btn-big .icon { font-size: 1.1rem; }
+    
+    /* [Fix] 叫號控制區的3顆按鈕，在極小螢幕自動縮小 */
+    #card-calling .btn-big { min-width: 30%; }
 
     .card-container { grid-template-columns: 1fr; }
     .admin-card { padding: 16px; }
     #toast-notification { bottom: 80px; }
 
-    /* --- [修復] 手機版特定區域溢出問題 --- */
-    
     /* 1. 數據報表：按鈕改為垂直堆疊 */
     .stats-actions-row { flex-direction: column; gap: 8px; }
     .stats-actions-row button { height: 44px; width: 100%; }
