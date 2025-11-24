@@ -1,15 +1,38 @@
-// --- 0. i18n 字典與設定 (New: 國際化) ---
+/*
+ * ==========================================
+ * 前端邏輯 (main.js) - v18.2 with i18n & UX
+ * ==========================================
+ */
+
+// --- 0. i18n 字典與設定 (國際化) ---
 const i18nData = {
     "zh-TW": {
+        "app_title": "💉熱血不宜攔！🩸",
         "current_number": "目前叫號",
         "issued_number": "已發號碼",
+        "online_ticket_title": "線上取號",
+        "online_ticket_desc": "免排隊、免等待！線上領取號碼牌，到號自動通知您。",
         "take_ticket": "🎫 立即取號",
         "taking_ticket": "取號中...",
+        "manual_track_title": "手動輸入追蹤",
+        "manual_track_desc": "請輸入您手上的號碼牌號碼，我們將在到號時通知您。",
+        "set_reminder": "🔔 設定提醒",
+        "btn_give_up": "🗑️ 放棄",
         "my_number": "您的號碼",
+        "ticket_current_label": "目前叫號",
         "wait_count": "前方等待",
+        "unit_group": "組",
         "status_wait": "⏳ 請稍候，還有 %s 組",
         "status_arrival": "🎉 輪到您了！請前往櫃台",
         "status_passed": "⚠️ 您可能已過號",
+        "passed_list_title": "已過號",
+        "passed_empty": "目前尚無過號",
+        "copy_link": "複製連結",
+        "sound_enable": "啟用音效",
+        "sound_on": "音效開啟",
+        "sound_mute": "啟用音效",
+        "featured_empty": "暫無精選連結",
+        "scan_qr": "掃描查看進度",
         "error_network": "連線錯誤，請稍後再試",
         "manual_input_placeholder": "輸入號碼",
         "take_success": "取號成功！",
@@ -17,23 +40,38 @@ const i18nData = {
         "input_empty": "請輸入號碼",
         "cancel_confirm": "確定要放棄/清除目前的追蹤嗎？",
         "copy_success": "✅ 已複製",
-        "sound_enable": "🔊 啟用音效",
-        "sound_on": "🔊 音效開啟",
-        "sound_mute": "🔇 啟用音效",
         "public_announcement": "📢 店家公告：",
         "queue_notification": "再 %s 組就輪到您囉！",
-        "arrival_notification": "輪到您了！請前往櫃台"
+        "arrival_notification": "輪到您了！請前往櫃台",
+        "estimated_wait": "預估等待：約 %s 分鐘"
     },
     "en": {
+        "app_title": "Waiting Queue",
         "current_number": "Current Number",
         "issued_number": "Issued Number",
-        "take_ticket": "🎫 Take Ticket",
+        "online_ticket_title": "Get Ticket Online",
+        "online_ticket_desc": "Skip the line! Get your ticket online and we'll notify you.",
+        "take_ticket": "🎫 Get Ticket",
         "taking_ticket": "Processing...",
+        "manual_track_title": "Track My Ticket",
+        "manual_track_desc": "Enter your physical ticket number to get notified.",
+        "set_reminder": "🔔 Set Reminder",
+        "btn_give_up": "🗑️ Cancel",
         "my_number": "Your Number",
+        "ticket_current_label": "Now Serving",
         "wait_count": "Waiting",
+        "unit_group": "groups",
         "status_wait": "⏳ Waiting: %s groups ahead",
         "status_arrival": "🎉 It's your turn!",
         "status_passed": "⚠️ Number passed",
+        "passed_list_title": "Passed Numbers",
+        "passed_empty": "No passed numbers",
+        "copy_link": "Copy Link",
+        "sound_enable": "Enable Sound",
+        "sound_on": "Sound On",
+        "sound_mute": "Enable Sound",
+        "featured_empty": "No featured links",
+        "scan_qr": "Scan to track",
         "error_network": "Network error, try again",
         "manual_input_placeholder": "Enter Number",
         "take_success": "Success!",
@@ -41,32 +79,24 @@ const i18nData = {
         "input_empty": "Please enter a number",
         "cancel_confirm": "Are you sure you want to stop tracking?",
         "copy_success": "✅ Copied",
-        "sound_enable": "🔊 Enable Sound",
-        "sound_on": "🔊 Sound On",
-        "sound_mute": "🔇 Enable Sound",
         "public_announcement": "📢 Announcement: ",
         "queue_notification": "%s groups to go!",
-        "arrival_notification": "It's your turn!"
+        "arrival_notification": "It's your turn!",
+        "estimated_wait": "Est. wait: %s mins"
     }
 };
 
-// 偵測語言
-const userLang = navigator.language || navigator.userLanguage; 
-const currentLang = userLang.startsWith('zh') ? 'zh-TW' : 'en';
-const t = i18nData[currentLang];
-
-function applyI18n() {
-    // 針對有 data-i18n 屬性的元素進行替換
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if(t[key]) el.textContent = t[key];
-    });
-    // 特殊處理 placeholder
-    const manualInput = document.getElementById("manual-ticket-input");
-    if(manualInput) manualInput.placeholder = t["manual_input_placeholder"];
+// 語言設定邏輯
+const langSelector = document.getElementById('language-selector');
+let storedLang = localStorage.getItem('callsys_lang');
+if (!storedLang) {
+    // 預設偵測瀏覽器
+    storedLang = (navigator.language || navigator.userLanguage).startsWith('zh') ? 'zh-TW' : 'en';
 }
+let currentLang = storedLang;
+let t = i18nData[currentLang];
 
-// --- 1. Helper: Toast & Vibration (New: UX 優化) ---
+// --- 1. Helper: Toast & Vibration (UX 優化) ---
 function showToast(msg, type = 'info') {
     let container = document.getElementById('toast-container');
     if (!container) {
@@ -79,10 +109,9 @@ function showToast(msg, type = 'info') {
     el.textContent = msg;
     container.appendChild(el);
     
-    // 動畫進場
     requestAnimationFrame(() => el.classList.add('show'));
     
-    // 震動回饋 (手機端)
+    // 震動回饋
     if (navigator.vibrate) navigator.vibrate(50); 
 
     setTimeout(() => {
@@ -95,22 +124,19 @@ function vibratePattern(pattern) {
     if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
-// --- PWA Service Worker 註冊 (New) ---
+// --- PWA Service Worker ---
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').then(reg => {
-            console.log('SW registered');
-        }).catch(err => console.log('SW fail', err));
+        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW fail', err));
     });
 }
 
 // --- 2. Socket.io 初始化 ---
 const socket = io();
 
-// --- 3. 元素節點 (DOM) ---
+// --- 3. DOM Elements ---
 const numberEl = document.getElementById("number");
 const issuedNumberMainEl = document.getElementById("issued-number-main");
-
 const passedListEl = document.getElementById("passedList");
 const featuredContainerEl = document.getElementById("featured-container");
 const statusBar = document.getElementById("status-bar");
@@ -137,7 +163,7 @@ const btnCancelTicket = document.getElementById("btn-cancel-ticket");
 const ticketStatusText = document.getElementById("ticket-status-text");
 const ticketWaitTimeEl = document.getElementById("ticket-wait-time");
 
-// --- 4. 狀態變數 ---
+// --- 4. State Variables ---
 let isSoundEnabled = false; 
 let isLocallyMuted = false; 
 let lastUpdateTime = null;
@@ -147,27 +173,55 @@ let ttsEnabled = false;
 let wakeLock = null; 
 let avgServiceTime = 0; 
 let currentSystemMode = 'ticketing'; 
-
 let lastIssuedNumber = 0;
 let myTicket = localStorage.getItem('callsys_ticket') ? parseInt(localStorage.getItem('callsys_ticket')) : null;
 
-// --- 5. Wake Lock API ---
+// --- 5. Wake Lock ---
 async function requestWakeLock() {
     if ('wakeLock' in navigator) {
         try {
             wakeLock = await navigator.wakeLock.request('screen');
             wakeLock.addEventListener('release', () => {});
-        } catch (err) { console.error(`${err.name}, ${err.message}`); }
+        } catch (err) { console.error(err); }
     }
 }
 document.addEventListener('visibilitychange', async () => {
     if (wakeLock !== null && document.visibilityState === 'visible') { await requestWakeLock(); }
 });
 
-// --- 6. Socket Events ---
+// --- 6. i18n Application Logic ---
+function applyI18n() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if(t[key]) el.textContent = t[key];
+    });
+    // Placeholder handling
+    if(manualTicketInput) manualTicketInput.placeholder = t["manual_input_placeholder"];
+    
+    // Update button text if not processing
+    if(btnTakeTicket && !btnTakeTicket.disabled) {
+        btnTakeTicket.textContent = t["take_ticket"];
+    }
+}
+
+if(langSelector) {
+    langSelector.value = currentLang;
+    langSelector.addEventListener('change', (e) => {
+        currentLang = e.target.value;
+        localStorage.setItem('callsys_lang', currentLang);
+        t = i18nData[currentLang];
+        applyI18n();
+        // Refresh dynamic UI components
+        const curr = parseInt(numberEl.textContent) || 0;
+        updateTicketUI(curr);
+        updateMuteUI(isLocallyMuted);
+    });
+}
+
+// --- 7. Socket Events ---
 socket.on("connect", () => {
-    console.log("Socket.io 已連接");
-    // [New] 主動加入 public 房間
+    console.log("Socket connected");
+    // [Performance] Join public room
     socket.emit('joinRoom', 'public');
     
     if (isPublic) statusBar.classList.remove("visible");
@@ -176,26 +230,24 @@ socket.on("connect", () => {
 
 socket.on("disconnect", () => {
     statusBar.classList.add("visible");
-    lastUpdatedEl.textContent = "連線中斷...";
+    lastUpdatedEl.textContent = t["error_network"];
 });
 
 socket.on("updateQueue", (data) => {
     const current = data.current;
     const issued = data.issued;
-    
     lastIssuedNumber = issued;
     if(issuedNumberMainEl) issuedNumberMainEl.textContent = issued;
-
     handleNewNumber(current);
     updateTicketUI(current);
 });
 
-socket.on("update", (num) => { });
+socket.on("update", (num) => {}); // Legacy support
 
 socket.on("adminBroadcast", (msg) => {
     if (!isLocallyMuted) {
         speakText(msg, 1.0); 
-        // [Mod] 使用 Toast 取代 alert，體驗更好
+        // Use Toast instead of alert
         showToast(`${t["public_announcement"]}${msg}`, "info");
     }
 });
@@ -223,7 +275,7 @@ socket.on("updatePassed", (numbers) => renderPassed(numbers));
 socket.on("updateFeaturedContents", (contents) => renderFeatured(contents));
 socket.on("updateTimestamp", (ts) => { lastUpdateTime = new Date(ts); updateTimeText(); });
 
-// --- 7. 核心邏輯 ---
+// --- 8. Core Logic ---
 
 function switchSystemModeUI(mode) {
     if (mode === 'ticketing') {
@@ -246,12 +298,13 @@ function handleNewNumber(num) {
         playNotificationSound();
         setTimeout(() => {
             if (numberEl.textContent !== String(num) && isSoundEnabled && !isLocallyMuted) {
+                // Determine language for TTS? Usually system default, or hardcode zh-TW for now
                 speakText(`現在號碼，${num}號`, 0.9);
             }
         }, 800);
         
         numberEl.textContent = num;
-        document.title = `${num}號 - 候位中`;
+        document.title = `${num} - ${t["app_title"]}`;
         numberEl.classList.add("updated");
         setTimeout(() => numberEl.classList.remove("updated"), 500);
     }
@@ -265,55 +318,43 @@ function updateTicketUI(currentNum) {
     
     if (diff > 0) {
         ticketWaitingCount.textContent = diff;
-        // [Mod] i18n
         ticketStatusText.textContent = t["status_wait"].replace("%s", diff);
         myTicketView.style.background = "linear-gradient(135deg, #2563eb 0%, #1e40af 100%)"; 
         
         if (avgServiceTime > 0) {
             const min = Math.ceil(diff * avgServiceTime);
-            ticketWaitTimeEl.textContent = `預估等待：約 ${min} 分鐘`;
+            ticketWaitTimeEl.textContent = t["estimated_wait"].replace("%s", min);
             ticketWaitTimeEl.style.display = "block";
         } else {
             ticketWaitTimeEl.style.display = "none";
         }
 
         if (diff <= 3) {
-             // [New] 震動提示
-             vibratePattern([100]);
+             vibratePattern([100]); // Haptic feedback
              if (document.hidden && Notification.permission === "granted") {
-                 new Notification("準備叫號", { body: t["queue_notification"].replace("%s", diff), tag: 'approach' });
+                 new Notification(t["app_title"], { body: t["queue_notification"].replace("%s", diff), tag: 'approach' });
              }
         }
     } else if (diff === 0) {
         ticketWaitingCount.textContent = "0";
-        // [Mod] i18n
         ticketStatusText.textContent = t["status_arrival"];
         myTicketView.style.background = "linear-gradient(135deg, #059669 0%, #10b981 100%)"; 
         ticketWaitTimeEl.style.display = "none";
         
         triggerConfetti();
-        // [New] 強烈震動
-        vibratePattern([200, 100, 200, 100, 200]);
+        vibratePattern([200, 100, 200, 100, 200]); // Strong feedback
 
         if (isSoundEnabled && !isLocallyMuted) speakText("恭喜，輪到您了，請前往櫃台", 1.0);
         if (Notification.permission === "granted") {
-             new Notification("到號通知", { body: t["arrival_notification"], requireInteraction: true, tag: 'arrival' });
+             new Notification(t["app_title"], { body: t["arrival_notification"], requireInteraction: true, tag: 'arrival' });
         }
     } else {
         ticketWaitingCount.textContent = "-";
-        // [Mod] i18n
         ticketStatusText.textContent = t["status_passed"];
         myTicketView.style.background = "linear-gradient(135deg, #d97706 0%, #b45309 100%)"; 
         ticketWaitTimeEl.style.display = "none";
     }
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-    applyI18n(); // [New] 套用語言
-    if (myTicket) {
-        showMyTicketMode();
-    }
-});
 
 function showMyTicketMode() {
     takeTicketView.style.display = "none";
@@ -340,7 +381,8 @@ function speakText(text, rate) {
     if (!ttsEnabled || !('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel(); 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'zh-TW';
+    // Force Chinese for broadcast/numbers, or dynamic if you want
+    utterance.lang = 'zh-TW'; 
     utterance.rate = rate || 0.9;
     window.speechSynthesis.speak(utterance);
 }
@@ -388,7 +430,7 @@ function renderPassed(numbers) {
 function renderFeatured(contents) {
     featuredContainerEl.innerHTML = "";
     if (!contents || contents.length === 0) {
-        featuredContainerEl.innerHTML = '<p class="empty-state-message">暫無精選連結</p>';
+        featuredContainerEl.innerHTML = `<p class="empty-state-message" data-i18n="featured_empty">${t["featured_empty"]}</p>`;
         featuredContainerEl.classList.add("is-empty");
         return;
     }
@@ -406,23 +448,26 @@ function renderFeatured(contents) {
 function updateTimeText() {
     if (!lastUpdateTime) return;
     const diff = Math.floor((new Date() - lastUpdateTime) / 1000);
-    lastUpdatedEl.textContent = diff < 60 ? `剛剛更新` : `最後更新於 ${Math.floor(diff/60)} 分鐘前`;
+    const timeStr = diff < 60 ? `Recently updated` : `Updated ${Math.floor(diff/60)}m ago`;
+    // Simple update without i18n complex logic for now, or add to dictionary
+    lastUpdatedEl.textContent = timeStr; 
 }
 setInterval(updateTimeText, 10000);
 
-// --- 8. 按鈕事件 ---
+// --- 9. Interaction Events ---
 
 if(btnTakeTicket) {
     btnTakeTicket.addEventListener("click", async () => {
         if ("Notification" in window && Notification.permission !== "granted") {
             const p = await Notification.requestPermission();
             if (p !== "granted") {
-                if(!confirm("如果不開啟通知，您必須保持網頁開啟才能看到進度。\n確定要繼續嗎？")) return;
+                // Use browser confirm for blocking interaction
+                if(!confirm("Without notifications, you must keep this tab open. Continue?")) return;
             }
         }
 
         btnTakeTicket.disabled = true;
-        btnTakeTicket.textContent = t["taking_ticket"]; // i18n
+        btnTakeTicket.textContent = t["taking_ticket"];
         
         try {
             const res = await fetch("/api/ticket/take", { method: "POST" });
@@ -434,9 +479,9 @@ if(btnTakeTicket) {
                 showMyTicketMode();
                 const curr = parseInt(numberEl.textContent) || 0;
                 updateTicketUI(curr);
-                showToast(t["take_success"], "success"); // Toast
+                showToast(t["take_success"], "success");
             } else {
-                showToast(data.error || t["take_fail"], "error"); // Toast
+                showToast(data.error || t["take_fail"], "error");
             }
         } catch (e) {
             showToast(t["error_network"], "error");
@@ -450,11 +495,11 @@ if(btnTakeTicket) {
 if(btnTrackTicket) {
     btnTrackTicket.addEventListener("click", async () => {
         const val = manualTicketInput.value;
-        if (!val) return showToast(t["input_empty"], "error"); // Toast
+        if (!val) return showToast(t["input_empty"], "error");
         
         if ("Notification" in window && Notification.permission !== "granted") {
             const p = await Notification.requestPermission();
-            if (p !== "granted" && !confirm("如果不開啟通知，您必須保持網頁開啟才能看到進度。\n確定要繼續嗎？")) return;
+            if (p !== "granted" && !confirm("Continue without notifications?")) return;
         }
 
         myTicket = parseInt(val);
@@ -496,12 +541,15 @@ if (soundPrompt) {
 }
 if (copyLinkPrompt) {
     copyLinkPrompt.addEventListener("click", () => {
-        if (!navigator.clipboard) return alert("無法複製 (需 HTTPS)");
+        if (!navigator.clipboard) return alert("Use HTTPS to copy");
         navigator.clipboard.writeText(window.location.href).then(() => {
             const original = copyLinkPrompt.innerHTML;
             copyLinkPrompt.innerHTML = t["copy_success"];
             copyLinkPrompt.classList.add("is-copied");
-            setTimeout(() => { copyLinkPrompt.innerHTML = original; copyLinkPrompt.classList.remove("is-copied"); }, 2000);
+            setTimeout(() => { 
+                copyLinkPrompt.innerHTML = `<span class="emoji">🔗</span> ${t["copy_link"]}`; 
+                copyLinkPrompt.classList.remove("is-copied"); 
+            }, 2000);
         });
     });
 }
@@ -509,3 +557,11 @@ try {
     const qrEl = document.getElementById("qr-code-placeholder");
     if (qrEl) { new QRCode(qrEl, { text: window.location.href, width: 120, height: 120 }); }
 } catch (e) {}
+
+// --- Initialization ---
+document.addEventListener("DOMContentLoaded", () => {
+    applyI18n();
+    if (myTicket) {
+        showMyTicketMode();
+    }
+});
