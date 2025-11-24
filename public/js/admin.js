@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 後台邏輯 (admin.js) - v18.6 Sidebar Layout & Missed Number
+ * 後台邏輯 (admin.js) - v18.7 Fixed Listeners & Logic
  * ==========================================
  */
 
@@ -642,9 +642,6 @@ if (modeRadios) {
     });
 }
 
-// Stats & Users Functions (簡略化，請確保 loadAdminUsers, loadStats, renderHourlyChart, adjustStat, downloadCSV 等邏輯存在)
-// ... (與 v18.5 相同，包含 loadStats, downloadCSV, loadAdminUsers, loadLineSettings 等函式) ...
-
 async function loadAdminUsers() {
     const ui = document.getElementById("user-list-ui");
     if (!ui) return;
@@ -684,9 +681,6 @@ if (addUserBtn) addUserBtn.onclick = async () => {
     addUserBtn.disabled = false;
 };
 
-// ... 其餘統計與 LINE 設定邏輯同上，為保持篇幅請參考 v18.5 內容 ...
-// 重要：務必保留 loadStats, renderHourlyChart, openEditModal, closeEditModal, adjustStat, downloadCSV, loadLineSettings 等函式定義。
-// 為了完整性，這裡列出 loadStats 的實作
 const statsListUI = document.getElementById("stats-list-ui");
 const hourlyChartEl = document.getElementById("hourly-chart");
 const statsTodayCount = document.getElementById("stats-today-count");
@@ -778,3 +772,70 @@ if (btnSaveUnlockPwd) btnSaveUnlockPwd.onclick = async () => {
     if (await apiRequest("/api/admin/line-settings/set-unlock-pass", { password: pwd })) { showToast(at["toast_pwd_saved"], "success"); }
     btnSaveUnlockPwd.disabled = false;
 };
+
+// [修復] 補上遺漏的按鈕監聽 (Fix Missing Listeners)
+
+// 1. 修改暱稱按鈕邏輯
+const btnSetNickname = document.getElementById("set-nickname-btn");
+if (btnSetNickname) {
+    btnSetNickname.onclick = async () => {
+        const targetUsername = document.getElementById("set-nick-username").value.trim();
+        const nickname = document.getElementById("set-nick-nickname").value.trim();
+        
+        if (!targetUsername || !nickname) return alert("請輸入帳號與新暱稱");
+        
+        btnSetNickname.disabled = true;
+        if (await apiRequest("/api/admin/set-nickname", { targetUsername, nickname })) {
+            showToast(`✅ 暱稱已更新`, "success");
+            document.getElementById("set-nick-username").value = "";
+            document.getElementById("set-nick-nickname").value = "";
+            await loadAdminUsers();
+        }
+        btnSetNickname.disabled = false;
+    };
+}
+
+// 2. 數據報表：重整按鈕
+const btnRefreshStats = document.getElementById("btn-refresh-stats");
+if (btnRefreshStats) {
+    btnRefreshStats.onclick = async () => {
+        showToast(at["list_loading"] || "載入中...", "info");
+        await loadStats();
+        showToast("✅ 數據已更新", "success");
+    };
+}
+
+// 3. 數據報表：清空統計按鈕 (CSV 下載按鈕已在 loadAdminUsers 區塊判斷權限，但按鈕邏輯需綁定)
+const btnExportCsv = document.getElementById("btn-export-csv");
+if (btnExportCsv) {
+    btnExportCsv.onclick = async () => {
+        btnExportCsv.disabled = true;
+        const data = await apiRequest("/api/admin/export-csv", {}, true);
+        if (data && data.success) {
+            // 觸發下載
+            const blob = new Blob(["\uFEFF" + data.csvData], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = data.fileName || "stats.csv";
+            link.style.display = "none";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast(at["toast_report_downloaded"], "success");
+        } else {
+            showToast(at["toast_download_fail"], "error");
+        }
+        btnExportCsv.disabled = false;
+    };
+}
+
+// 4. 數據報表：清空按鈕邏輯
+const btnClearStats = document.getElementById("btn-clear-stats");
+if (btnClearStats) {
+    setupConfirmationButton(btnClearStats, "btn_clear_log", "btn_confirm_clear", async () => {
+        if (await apiRequest("/api/admin/stats/clear", {})) {
+            showToast(at["toast_stats_cleared"], "success");
+            await loadStats();
+        }
+    });
+}
