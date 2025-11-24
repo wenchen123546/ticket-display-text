@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/admin.css?v=72"> 
+<link rel="stylesheet" href="/css/admin.css?v=73"> 
 </head>
 <body>
 
@@ -116,6 +116,28 @@
                         </div>
                     </div>
 
+                    <div class="card-wrapper full-width-card" id="card-ticketing">
+                        <div class="admin-card accent-green">
+                            <h3><span class="card-icon">🎟️</span> <span data-i18n="card_title_ticketing">發號機設定</span></h3>
+                            <div class="big-action-row">
+                                <button id="btn-issue-prev" type="button" class="btn-glass btn-big">
+                                    <span class="icon">➖</span> <span data-i18n="btn_issue_prev">收回</span>
+                                </button>
+                                <button id="btn-issue-next" type="button" class="btn-success btn-big">
+                                    <span data-i18n="btn_issue_next">發號</span> <span class="icon">➕</span>
+                                </button>
+                            </div>
+                            <div class="control-divider"></div>
+                            <div class="control-group">
+                                <label>修正已發放總數</label>
+                                <div class="input-group">
+                                    <input type="number" id="manualIssuedNumber" placeholder="輸入號碼" />
+                                    <button id="setIssuedNumber" type="button" class="btn-secondary" data-i18n="btn_set">修正</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="card-wrapper" id="card-editor">
                         <div class="admin-card">
                             <h3><span class="card-icon">📝</span> <span data-i18n="card_title_editor">過號與公告</span></h3>
@@ -184,28 +206,6 @@
             <div id="section-settings" class="section-group">
                 <div class="card-container">
                     
-                    <div class="card-wrapper" id="card-ticketing">
-                        <div class="admin-card accent-green">
-                            <h3><span class="card-icon">🎟️</span> <span data-i18n="card_title_ticketing">發號機設定</span></h3>
-                            <div class="big-action-row">
-                                <button id="btn-issue-prev" type="button" class="btn-glass btn-big">
-                                    <span class="icon">➖</span> <span data-i18n="btn_issue_prev">收回</span>
-                                </button>
-                                <button id="btn-issue-next" type="button" class="btn-success btn-big">
-                                    <span data-i18n="btn_issue_next">發號</span> <span class="icon">➕</span>
-                                </button>
-                            </div>
-                            <div class="control-divider"></div>
-                            <div class="control-group">
-                                <label>修正已發放總數</label>
-                                <div class="input-group">
-                                    <input type="number" id="manualIssuedNumber" placeholder="輸入號碼" />
-                                    <button id="setIssuedNumber" type="button" class="btn-secondary" data-i18n="btn_set">修正</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <div class="card-wrapper" id="card-broadcast">
                         <div class="admin-card">
                             <h3><span class="card-icon">🔊</span> <span data-i18n="card_title_broadcast">廣播與音效</span></h3>
@@ -341,6 +341,6 @@
 
 <div id="toast-notification"></div>
 
-<script src="/js/admin.js?v=72"></script> 
+<script src="/js/admin.js?v=73"></script> 
 </body>
 </html>
