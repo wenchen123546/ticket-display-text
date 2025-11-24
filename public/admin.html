@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/admin.css?v=61"> 
+<link rel="stylesheet" href="/css/admin.css?v=62"> 
 </head>
 <body>
 
@@ -38,21 +38,18 @@
     
     <div class="dashboard-header">
         <div class="dashboard-item">
-            <span class="label">CURRENT</span>
+            <span class="label" data-i18n="admin_label_current" style="font-size: 1rem; margin-bottom: 10px;">目前叫號</span>
             <span class="value big-number" id="number">0</span>
-            <span class="sub-label" data-i18n="admin_label_current">目前叫號</span>
         </div>
         <div class="dashboard-divider"></div>
         <div class="dashboard-item">
-            <span class="label">ISSUED</span>
+            <span class="label" data-i18n="admin_label_issued" style="font-size: 1rem; margin-bottom: 10px;">已發號至</span>
             <span class="value sub-number" id="issued-number">0</span>
-            <span class="sub-label" data-i18n="admin_label_issued">已發號至</span>
         </div>
         <div class="dashboard-divider"></div>
         <div class="dashboard-item">
-            <span class="label">WAITING</span>
+            <span class="label" data-i18n="admin_label_waiting" style="font-size: 1rem; margin-bottom: 10px;">等待組數</span>
             <span class="value sub-number" id="waiting-count" style="color: #f59e0b;">0</span>
-            <span class="sub-label" data-i18n="admin_label_waiting">等待組數</span>
         </div>
     </div>
 
@@ -60,7 +57,7 @@
         
         <div class="card-wrapper" id="card-calling">
             <div class="admin-card accent-blue">
-                <h3><span class="card-icon">📢</span> <span data-i18n="card_title_calling">叫號控制 (Current)</span></h3>
+                <h3><span class="card-icon">📢</span> <span data-i18n="card_title_calling">叫號控制</span></h3>
                 
                 <div class="big-action-row">
                     <button id="btn-call-prev" type="button" class="btn-glass btn-big">
@@ -90,7 +87,7 @@
 
         <div class="card-wrapper" id="card-ticketing">
             <div class="admin-card accent-green">
-                <h3><span class="card-icon">🎟️</span> <span data-i18n="card_title_ticketing">發號機設定 (Issued)</span></h3>
+                <h3><span class="card-icon">🎟️</span> <span data-i18n="card_title_ticketing">發號機設定</span></h3>
                 
                 <div class="big-action-row">
                     <button id="btn-issue-prev" type="button" class="btn-glass btn-big">
@@ -325,6 +322,6 @@
 
 <div id="toast-notification"></div>
 
-<script src="/js/admin.js?v=61"></script> 
+<script src="/js/admin.js?v=62"></script> 
 </body>
 </html>
