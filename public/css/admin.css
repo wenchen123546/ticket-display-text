@@ -195,7 +195,46 @@ button:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(1); }
 .card-icon { margin-right: 12px; font-size: 1.3rem; filter: grayscale(0.2); }
 
 /* =========================================
-   5. 表單元件 (Forms)
+   5. [重要] 控制區塊樣式 (Control Sections)
+   ========================================= */
+.control-section {
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-md);
+    padding: 15px; margin-bottom: 20px;
+    position: relative;
+}
+
+/* 區塊標題 */
+.section-header {
+    display: flex; align-items: center;
+    margin-bottom: 12px; padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(0,0,0,0.1);
+}
+.section-header .icon { font-size: 1.2rem; margin-right: 8px; }
+.section-header .text { font-weight: 800; font-size: 0.95rem; }
+
+/* 🔵 藍色區塊 (目前叫號) */
+.section-blue { background-color: #eff6ff; border-color: #bfdbfe; }
+.section-blue .section-header .text { color: #1e40af; }
+.section-blue input { border-color: #93c5fd; }
+.section-blue input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+
+/* 🟢 綠色區塊 (已發號碼) */
+.section-green { background-color: #f0fdf4; border-color: #bbf7d0; }
+.section-green .section-header .text { color: #166534; }
+.section-green input { border-color: #86efac; }
+.section-green input:focus { border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,0.1); }
+
+/* ⚪ 灰色區塊 (其他設定) */
+.section-gray { background-color: #f8fafc; border-color: #e2e8f0; }
+
+.control-section .control-group { margin-bottom: 0; }
+.control-section label {
+    display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.9rem; color: #475569;
+}
+
+/* =========================================
+   6. 表單元件與輸入框 (Forms)
    ========================================= */
 .control-group { margin-bottom: 20px; }
 
@@ -209,7 +248,6 @@ button:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(1); }
     display: block; font-weight: 700; font-size: 0.95rem;
     color: var(--text-main); margin-bottom: 10px;
 }
-/* 變數說明文字 */
 .form-group-boxed p {
     font-size: 0.85rem; color: var(--text-sub);
     background: rgba(255,255,255,0.8);
@@ -217,7 +255,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(1); }
     margin: 0 0 12px 0; border: 1px dashed #cbd5e1;
 }
 
-/* --- [統一寬度修正] 輸入框與按鈕組 --- */
+/* --- [統一寬度] 輸入框與按鈕組 --- */
 .input-group { display: flex; gap: 10px; width: 100%; }
 .input-group input {
     flex: 1; padding: 10px 14px;
@@ -227,16 +265,15 @@ button:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(1); }
 }
 .input-group input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
 
-/* 統一輸入區右側按鈕的最小寬度 */
+/* [修改] 統一輸入區右側按鈕的最小寬度 */
 .input-group button {
     padding: 0 12px;
     border-radius: var(--radius-md);
-    white-space: nowrap;
-    font-weight: 600;
+    white-space: nowrap; font-weight: 600;
     min-width: 70px; /* 強制統一寬度 */
     justify-content: center;
 }
-.btn-add { font-size: 1.2rem; } /* "+" 號按鈕樣式 */
+.btn-add { font-size: 1.2rem; }
 
 /* Textarea 優化 */
 textarea {
@@ -244,18 +281,18 @@ textarea {
     background: white; border: 1px solid #cbd5e1;
     border-radius: var(--radius-md); font-family: inherit;
     font-size: 0.95rem; line-height: 1.5; resize: vertical;
-    min-height: 120px;
-    transition: all 0.2s;
+    min-height: 120px; transition: all 0.2s;
 }
 textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
 
-/* --- 修正：按鈕列排版 (Fix Button Row in Cards) --- */
+/* [修改] 卡片底部按鈕列排版 */
 .admin-card .control-group.button-row {
     display: flex; gap: 12px; margin-top: 20px; margin-bottom: 0;
 }
 .admin-card .control-group.button-row button {
     flex: 1; width: auto; margin: 0; height: 44px;
 }
+/* 卡片內的重置按鈕樣式 */
 .admin-card .control-group.button-row .btn-reset-single {
     border: 1px solid #e2e8f0; background: white; color: var(--text-sub);
     border-radius: var(--radius-md); border-style: solid;
@@ -280,7 +317,7 @@ input[type="checkbox"], input[type="radio"] {
 }
 
 /* =========================================
-   6. 列表與圖表 (Lists & Charts)
+   7. 列表與圖表 (Lists & Charts)
    ========================================= */
 ul { padding: 0; margin: 0; list-style: none; }
 
@@ -292,34 +329,27 @@ ul { padding: 0; margin: 0; list-style: none; }
 }
 .admin-log-container ul { font-family: monospace; font-size: 0.85rem; background: #1e293b; color: #e2e8f0; border: none; }
 
-/* --- [統一對齊修正] 清單項目 --- */
 li {
     padding: 10px 14px; border-bottom: 1px solid #e2e8f0;
     display: flex; justify-content: space-between; align-items: center;
-    font-size: 0.9rem;
-    gap: 10px; /* 項目與刪除鈕之間的間距 */
+    font-size: 0.9rem; gap: 10px;
 }
 li:last-child { border-bottom: none; }
 .admin-log-container li { border-bottom: 1px solid #334155; }
 
-/* 強制讓文字區域佔滿剩餘空間，確保刪除鈕靠右對齊 */
-li > span, li > div {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
+/* 強制文字佔滿，讓刪除鈕靠右 */
+li > span, li > div { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 
-/* 刪除小按鈕 (固定寬度) */
+/* 刪除小按鈕 */
 .delete-item-btn {
     width: 28px; height: 28px; border-radius: 6px;
     background: #fee2e2; color: #ef4444;
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; /* 防止被擠壓 */
-    margin-left: auto; /* 確保推到最右 */
+    flex-shrink: 0; margin-left: auto;
 }
 .delete-item-btn:hover { background: #ef4444; color: white; }
 
-/* 圖表容器 */
+/* 圖表 */
 .chart-container {
     height: 150px; background: white;
     border: 1px solid #e2e8f0; border-radius: var(--radius-md);
@@ -341,12 +371,12 @@ li > span, li > div {
 .chart-col.current .chart-bar { background: var(--warning); opacity: 1; }
 .chart-val { font-size: 0.7rem; color: var(--text-sub); margin-bottom: 4px; height: 14px; }
 
-/* 統計按鈕列 */
+/* 統計按鈕 */
 .stats-actions-row { display: flex; gap: 8px; margin-top: 15px; }
 .stats-actions-row button { flex: 1; padding: 8px; border-radius: 6px; font-size: 0.9rem; }
 
 /* =========================================
-   7. 彈窗與全域設定 (Modals & Misc)
+   8. 彈窗與雜項
    ========================================= */
 #edit-stats-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -374,7 +404,6 @@ li > span, li > div {
 #toast-notification.success { background: var(--success); }
 #toast-notification.error { background: var(--danger); }
 
-/* 全域重置區塊 */
 .reset-zone {
     margin-top: 40px; padding-top: 30px;
     border-top: 2px dashed #cbd5e1;
@@ -382,7 +411,7 @@ li > span, li > div {
 .reset-zone button { width: 100%; padding: 14px; font-size: 1rem; border-radius: var(--radius-md); }
 
 /* =========================================
-   8. 手機版適配 (RWD)
+   9. RWD 手機版適配
    ========================================= */
 @media (max-width: 768px) {
     body { padding: 15px; }
