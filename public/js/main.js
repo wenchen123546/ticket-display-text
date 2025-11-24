@@ -1,11 +1,96 @@
 /*
  * ==========================================
- * 前端邏輯 (main.js) - v18.15 Optimized
+ * 前端邏輯 (main.js) - v18.15 Optimized (Reconnection UX)
  * ==========================================
  */
 
 // --- 0. i18n 字典與設定 (國際化) ---
-const i18nData = { /* ... (保留不變) ... */ };
+const i18nData = {
+    "zh-TW": {
+        "app_title": "💉熱血不宜攔！🩸",
+        "current_number": "目前叫號",
+        "issued_number": "已發號碼",
+        "online_ticket_title": "線上取號",
+        "online_ticket_desc": "免排隊、免等待！線上領取號碼牌，到號自動通知您。",
+        "take_ticket": "🎫 立即取號",
+        "taking_ticket": "取號中...",
+        "manual_track_title": "手動輸入追蹤",
+        "manual_track_desc": "請輸入您手上的號碼牌號碼，我們將在到號時通知您。",
+        "set_reminder": "🔔 設定提醒",
+        "btn_give_up": "🗑️ 放棄",
+        "my_number": "您的號碼",
+        "ticket_current_label": "目前叫號",
+        "wait_count": "前方等待",
+        "unit_group": "組",
+        "status_wait": "⏳ 請稍候，還有 %s 組",
+        "status_arrival": "🎉 輪到您了！請前往櫃台",
+        "status_passed": "⚠️ 您可能已過號",
+        "passed_list_title": "已過號",
+        "passed_empty": "目前尚無過號",
+        "copy_link": "複製連結",
+        "sound_enable": "啟用音效",
+        "sound_on": "音效開啟",
+        "sound_mute": "啟用音效",
+        "featured_empty": "暫無精選連結",
+        "scan_qr": "掃描查看進度",
+        "error_network": "連線中斷",
+        "manual_input_placeholder": "輸入號碼",
+        "take_success": "取號成功！",
+        "take_fail": "取號失敗",
+        "input_empty": "請輸入號碼",
+        "cancel_confirm": "確定要放棄/清除目前的追蹤嗎？",
+        "copy_success": "✅ 已複製",
+        "public_announcement": "📢 店家公告：",
+        "queue_notification": "再 %s 組就輪到您囉！",
+        "arrival_notification": "輪到您了！請前往櫃台",
+        "estimated_wait": "預估等待：約 %s 分鐘",
+        "time_just_now": "剛剛更新",
+        "time_min_ago": "最後更新於 %s 分鐘前",
+        "status_connected": "✅ 已連線"
+    },
+    "en": {
+        "app_title": "Waiting Queue",
+        "current_number": "Current Number",
+        "issued_number": "Issued Number",
+        "online_ticket_title": "Get Ticket Online",
+        "online_ticket_desc": "Skip the line! Get your ticket online and we'll notify you.",
+        "take_ticket": "🎫 Get Ticket",
+        "taking_ticket": "Processing...",
+        "manual_track_title": "Track My Ticket",
+        "manual_track_desc": "Enter your physical ticket number to get notified.",
+        "set_reminder": "🔔 Set Reminder",
+        "btn_give_up": "🗑️ Cancel",
+        "my_number": "Your Number",
+        "ticket_current_label": "Now Serving",
+        "wait_count": "Waiting",
+        "unit_group": "groups",
+        "status_wait": "⏳ Waiting: %s groups ahead",
+        "status_arrival": "🎉 It's your turn!",
+        "status_passed": "⚠️ Number passed",
+        "passed_list_title": "Passed Numbers",
+        "passed_empty": "No passed numbers",
+        "copy_link": "Copy Link",
+        "sound_enable": "Enable Sound",
+        "sound_on": "Sound On",
+        "sound_mute": "Enable Sound",
+        "featured_empty": "No featured links",
+        "scan_qr": "Scan to track",
+        "error_network": "Connection Lost",
+        "manual_input_placeholder": "Enter Number",
+        "take_success": "Success!",
+        "take_fail": "Failed",
+        "input_empty": "Please enter a number",
+        "cancel_confirm": "Are you sure you want to stop tracking?",
+        "copy_success": "✅ Copied",
+        "public_announcement": "📢 Announcement: ",
+        "queue_notification": "%s groups to go!",
+        "arrival_notification": "It's your turn!",
+        "estimated_wait": "Est. wait: %s mins",
+        "time_just_now": "Updated just now",
+        "time_min_ago": "Updated %s min ago",
+        "status_connected": "✅ Connected"
+    }
+};
 
 const langSelector = document.getElementById('language-selector');
 let currentLang = localStorage.getItem('callsys_lang') || ((navigator.language || navigator.userLanguage).startsWith('zh') ? 'zh-TW' : 'en');
@@ -46,13 +131,84 @@ let lastUpdateTime = null;
 let currentSystemMode = 'ticketing'; 
 let avgServiceTime = 0;
 let reconnectTimer = null; 
+let audioPermissionGranted = false;
+let ttsEnabled = false;
+let wakeLock = null;
 let myTicket = localStorage.getItem('callsys_ticket') ? parseInt(localStorage.getItem('callsys_ticket')) : null;
 
-function showToast(msg, type = 'info') { /* ... (保留不變) ... */ }
-function vibratePattern(pattern) { if (navigator.vibrate) navigator.vibrate(pattern); }
-function speakText(text, rate) { /* ... (保留不變) ... */ }
-async function requestWakeLock() { /* ... (保留不變) ... */ }
-document.addEventListener('visibilitychange', async () => { /* ... (保留不變) ... */ });
+function showToast(msg, type = 'info') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+    const el = document.createElement('div');
+    el.className = `toast-message ${type}`;
+    el.textContent = msg;
+    container.appendChild(el);
+    
+    requestAnimationFrame(() => el.classList.add('show'));
+    
+    if (navigator.vibrate) navigator.vibrate(50); 
+
+    setTimeout(() => {
+        el.classList.remove('show');
+        setTimeout(() => el.remove(), 300);
+    }, 3000);
+}
+
+function vibratePattern(pattern) {
+    if (navigator.vibrate) navigator.vibrate(pattern);
+}
+
+function speakText(text, rate) {
+    if (!ttsEnabled || !('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel(); 
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'zh-TW'; 
+    utterance.rate = rate || 0.9;
+    window.speechSynthesis.speak(utterance);
+}
+
+async function requestWakeLock() {
+    if ('wakeLock' in navigator) {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => {});
+        } catch (err) { console.error(err); }
+    }
+}
+document.addEventListener('visibilitychange', async () => {
+    if (wakeLock !== null && document.visibilityState === 'visible') { await requestWakeLock(); }
+});
+
+function playNotificationSound() {
+    if (!DOM.notifySound) return;
+    DOM.notifySound.play().then(() => {
+        audioPermissionGranted = true;
+        ttsEnabled = true; 
+        updateMuteUI(false);
+        if (!isSoundEnabled || isLocallyMuted) {
+            DOM.notifySound.pause(); DOM.notifySound.currentTime = 0;
+        }
+    }).catch(() => {
+        console.warn("Autoplay blocked");
+        audioPermissionGranted = false;
+        updateMuteUI(true, true); 
+    });
+}
+
+function triggerConfetti() {
+    if (typeof confetti === 'undefined') return;
+    const duration = 3000;
+    const end = Date.now() + duration;
+    (function frame() {
+        confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 } });
+        confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 } });
+        if (Date.now() < end) requestAnimationFrame(frame);
+    })();
+}
 
 // --- 3. i18n & Time Logic ---
 function applyI18n() {
@@ -81,6 +237,13 @@ if(langSelector) {
         updateTicketUI(parseInt(DOM.number.textContent) || 0);
         updateMuteUI(isLocallyMuted);
         updateTimeText();
+    });
+}
+
+// --- PWA Service Worker ---
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW fail', err));
     });
 }
 
@@ -212,10 +375,36 @@ function showTakeTicketMode() {
     DOM.inputModeView.style.display = (currentSystemMode === 'input') ? "block" : "none";
 }
 
-function playNotificationSound() { /* ... (保留不變) ... */ }
-function triggerConfetti() { /* ... (保留不變) ... */ }
-function renderPassed(numbers) { /* ... (保留不變) ... */ }
-function renderFeatured(contents) { /* ... (保留不變) ... */ }
+function renderPassed(numbers) {
+    DOM.passedList.innerHTML = "";
+    const isEmpty = !numbers || numbers.length === 0;
+    DOM.passedContainer.classList.toggle("is-empty", isEmpty);
+    if (!isEmpty) {
+        const frag = document.createDocumentFragment();
+        numbers.forEach(n => {
+            const li = document.createElement("li"); li.textContent = n; frag.appendChild(li);
+        });
+        DOM.passedList.appendChild(frag);
+    }
+}
+
+function renderFeatured(contents) {
+    DOM.featuredContainer.innerHTML = "";
+    if (!contents || contents.length === 0) {
+        DOM.featuredContainer.innerHTML = `<p class="empty-state-message" data-i18n="featured_empty">${T["featured_empty"]}</p>`;
+        DOM.featuredContainer.classList.add("is-empty");
+        return;
+    }
+    DOM.featuredContainer.classList.remove("is-empty");
+    const frag = document.createDocumentFragment();
+    contents.forEach(c => {
+        const a = document.createElement("a");
+        a.className = "featured-link";
+        a.href = c.linkUrl; a.target = "_blank"; a.textContent = c.linkText;
+        frag.appendChild(a);
+    });
+    DOM.featuredContainer.appendChild(frag);
+}
 
 // --- 6. Interaction Events ---
 
@@ -305,93 +494,3 @@ document.addEventListener("DOMContentLoaded", () => {
     if (myTicket) showMyTicketMode(); else showTakeTicketMode();
     socket.connect();
 });
-
-// /* ... (i18nData 字典請手動貼回此處以維持完整性) ... */
-const i18nData = {
-    "zh-TW": {
-        "app_title": "💉熱血不宜攔！🩸",
-        "current_number": "目前叫號",
-        "issued_number": "已發號碼",
-        "online_ticket_title": "線上取號",
-        "online_ticket_desc": "免排隊、免等待！線上領取號碼牌，到號自動通知您。",
-        "take_ticket": "🎫 立即取號",
-        "taking_ticket": "取號中...",
-        "manual_track_title": "手動輸入追蹤",
-        "manual_track_desc": "請輸入您手上的號碼牌號碼，我們將在到號時通知您。",
-        "set_reminder": "🔔 設定提醒",
-        "btn_give_up": "🗑️ 放棄",
-        "my_number": "您的號碼",
-        "ticket_current_label": "目前叫號",
-        "wait_count": "前方等待",
-        "unit_group": "組",
-        "status_wait": "⏳ 請稍候，還有 %s 組",
-        "status_arrival": "🎉 輪到您了！請前往櫃台",
-        "status_passed": "⚠️ 您可能已過號",
-        "passed_list_title": "已過號",
-        "passed_empty": "目前尚無過號",
-        "copy_link": "複製連結",
-        "sound_enable": "啟用音效",
-        "sound_on": "音效開啟",
-        "sound_mute": "啟用音效",
-        "featured_empty": "暫無精選連結",
-        "scan_qr": "掃描查看進度",
-        "error_network": "連線中斷",
-        "manual_input_placeholder": "輸入號碼",
-        "take_success": "取號成功！",
-        "take_fail": "取號失敗",
-        "input_empty": "請輸入號碼",
-        "cancel_confirm": "確定要放棄/清除目前的追蹤嗎？",
-        "copy_success": "✅ 已複製",
-        "public_announcement": "📢 店家公告：",
-        "queue_notification": "再 %s 組就輪到您囉！",
-        "arrival_notification": "輪到您了！請前往櫃台",
-        "estimated_wait": "預估等待：約 %s 分鐘",
-        "time_just_now": "剛剛更新",
-        "time_min_ago": "最後更新於 %s 分鐘前",
-        "status_connected": "✅ 已連線"
-    },
-    "en": {
-        "app_title": "Waiting Queue",
-        "current_number": "Current Number",
-        "issued_number": "Issued Number",
-        "online_ticket_title": "Get Ticket Online",
-        "online_ticket_desc": "Skip the line! Get your ticket online and we'll notify you.",
-        "take_ticket": "🎫 Get Ticket",
-        "taking_ticket": "Processing...",
-        "manual_track_title": "Track My Ticket",
-        "manual_track_desc": "Enter your physical ticket number to get notified.",
-        "set_reminder": "🔔 Set Reminder",
-        "btn_give_up": "🗑️ Cancel",
-        "my_number": "Your Number",
-        "ticket_current_label": "Now Serving",
-        "wait_count": "Waiting",
-        "unit_group": "groups",
-        "status_wait": "⏳ Waiting: %s groups ahead",
-        "status_arrival": "🎉 It's your turn!",
-        "status_passed": "⚠️ Number passed",
-        "passed_list_title": "Passed Numbers",
-        "passed_empty": "No passed numbers",
-        "copy_link": "Copy Link",
-        "sound_enable": "Enable Sound",
-        "sound_on": "Sound On",
-        "sound_mute": "Enable Sound",
-        "featured_empty": "No featured links",
-        "scan_qr": "Scan to track",
-        "error_network": "Connection Lost",
-        "manual_input_placeholder": "Enter Number",
-        "take_success": "Success!",
-        "take_fail": "Failed",
-        "input_empty": "Please enter a number",
-        "cancel_confirm": "Are you sure you want to stop tracking?",
-        "copy_success": "✅ Copied",
-        "public_announcement": "📢 Announcement: ",
-        "queue_notification": "%s groups to go!",
-        "arrival_notification": "It's your turn!",
-        "estimated_wait": "Est. wait: %s mins",
-        "time_just_now": "Updated just now",
-        "time_min_ago": "Updated %s min ago",
-        "status_connected": "✅ Connected"
-    }
-};
-
-/* ... (將 i18nData 字典貼回 main.js 開頭，並移除此註釋) ... */
