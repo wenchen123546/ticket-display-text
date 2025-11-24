@@ -215,6 +215,42 @@ body.is-closed #maintenance-overlay { display: flex; }
 #copy-link-prompt { color: var(--color-text-light); }
 #copy-link-prompt.is-copied { background-color: var(--color-success); color: white; }
 
+/* --- New: Toast Notification (優雅的錯誤/成功提示) --- */
+#toast-container {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast-message {
+    background: rgba(30, 41, 59, 0.9);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 50px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+    pointer-events: auto;
+    text-align: center;
+}
+
+.toast-message.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+.toast-message.error { background: rgba(220, 38, 38, 0.9); } /* 紅色錯誤 */
+.toast-message.success { background: rgba(16, 185, 129, 0.9); } /* 綠色成功 */
+
+
 /* --- RWD --- */
 @media (max-width: 768px) {
     #qr-code-container { display: none; }
