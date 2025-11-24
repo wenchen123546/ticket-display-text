@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 前端邏輯 (main.js) - v18.2 with i18n & UX
+ * 前端邏輯 (main.js) - v18.3 i18n Fix & UX
  * ==========================================
  */
 
@@ -43,7 +43,9 @@ const i18nData = {
         "public_announcement": "📢 店家公告：",
         "queue_notification": "再 %s 組就輪到您囉！",
         "arrival_notification": "輪到您了！請前往櫃台",
-        "estimated_wait": "預估等待：約 %s 分鐘"
+        "estimated_wait": "預估等待：約 %s 分鐘",
+        "time_just_now": "剛剛更新",
+        "time_min_ago": "最後更新於 %s 分鐘前"
     },
     "en": {
         "app_title": "Waiting Queue",
@@ -82,7 +84,9 @@ const i18nData = {
         "public_announcement": "📢 Announcement: ",
         "queue_notification": "%s groups to go!",
         "arrival_notification": "It's your turn!",
-        "estimated_wait": "Est. wait: %s mins"
+        "estimated_wait": "Est. wait: %s mins",
+        "time_just_now": "Updated just now",
+        "time_min_ago": "Updated %s min ago"
     }
 };
 
@@ -204,6 +208,18 @@ function applyI18n() {
     }
 }
 
+// [Updated] updateTimeText to support i18n
+function updateTimeText() {
+    if (!lastUpdateTime) return;
+    const diff = Math.floor((new Date() - lastUpdateTime) / 1000);
+    if (diff < 60) {
+        lastUpdatedEl.textContent = t["time_just_now"];
+    } else {
+        lastUpdatedEl.textContent = t["time_min_ago"].replace("%s", Math.floor(diff/60));
+    }
+}
+setInterval(updateTimeText, 10000);
+
 if(langSelector) {
     langSelector.value = currentLang;
     langSelector.addEventListener('change', (e) => {
@@ -215,6 +231,7 @@ if(langSelector) {
         const curr = parseInt(numberEl.textContent) || 0;
         updateTicketUI(curr);
         updateMuteUI(isLocallyMuted);
+        updateTimeText(); // Refresh time immediately
     });
 }
 
@@ -298,7 +315,7 @@ function handleNewNumber(num) {
         playNotificationSound();
         setTimeout(() => {
             if (numberEl.textContent !== String(num) && isSoundEnabled && !isLocallyMuted) {
-                // Determine language for TTS? Usually system default, or hardcode zh-TW for now
+                // Force Chinese for broadcast numbers
                 speakText(`現在號碼，${num}號`, 0.9);
             }
         }, 800);
@@ -381,7 +398,6 @@ function speakText(text, rate) {
     if (!ttsEnabled || !('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel(); 
     const utterance = new SpeechSynthesisUtterance(text);
-    // Force Chinese for broadcast/numbers, or dynamic if you want
     utterance.lang = 'zh-TW'; 
     utterance.rate = rate || 0.9;
     window.speechSynthesis.speak(utterance);
@@ -445,15 +461,6 @@ function renderFeatured(contents) {
     featuredContainerEl.appendChild(frag);
 }
 
-function updateTimeText() {
-    if (!lastUpdateTime) return;
-    const diff = Math.floor((new Date() - lastUpdateTime) / 1000);
-    const timeStr = diff < 60 ? `Recently updated` : `Updated ${Math.floor(diff/60)}m ago`;
-    // Simple update without i18n complex logic for now, or add to dictionary
-    lastUpdatedEl.textContent = timeStr; 
-}
-setInterval(updateTimeText, 10000);
-
 // --- 9. Interaction Events ---
 
 if(btnTakeTicket) {
@@ -461,7 +468,6 @@ if(btnTakeTicket) {
         if ("Notification" in window && Notification.permission !== "granted") {
             const p = await Notification.requestPermission();
             if (p !== "granted") {
-                // Use browser confirm for blocking interaction
                 if(!confirm("Without notifications, you must keep this tab open. Continue?")) return;
             }
         }
