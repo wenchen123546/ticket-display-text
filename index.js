@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v18.14 Fully Configurable LINE Msgs
+ * 伺服器 (index.js) - v18.15 Simplified Line Input
  * ==========================================
  */
 
@@ -22,7 +22,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 const app = express();
 
-// 設定 Trust Proxy (針對 Render/Heroku 等平台)
+// 設定 Trust Proxy
 app.set('trust proxy', 1);
 
 const server = http.createServer(app);
@@ -33,7 +33,7 @@ const REDIS_URL = process.env.UPSTASH_REDIS_URL;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN; 
 
 const SALT_ROUNDS = 10; 
-const REMIND_BUFFER = 5; // 提醒緩衝區 (前5號通知)
+const REMIND_BUFFER = 5; // 提醒緩衝區
 const MAX_HISTORY_FOR_PREDICTION = 15; 
 const MAX_VALID_SERVICE_MINUTES = 20;  
 
@@ -43,9 +43,8 @@ const lineConfig = {
     channelSecret: process.env.LINE_CHANNEL_SECRET
 };
 
-// 檢查必要變數
 if (!ADMIN_TOKEN || !REDIS_URL) {
-    console.error("❌ 錯誤：核心環境變數未設定 (ADMIN_TOKEN 或 UPSTASH_REDIS_URL)");
+    console.error("❌ 錯誤：核心環境變數未設定");
     process.exit(1);
 }
 
@@ -60,7 +59,7 @@ const redis = new Redis(REDIS_URL, {
     retryStrategy: (times) => Math.min(times * 50, 2000)
 });
 
-// [新增] 定義 Lua Script 以解決競態條件 (Race Condition)
+// [Lua Script] 解決競態條件
 redis.defineCommand("safeNextNumber", {
     numberOfKeys: 2,
     lua: `
@@ -103,17 +102,16 @@ const KEY_LINE_UNLOCK_PWD = 'callsys:line:unlock_pwd';
 const KEY_LINE_ADMIN_UNLOCK = 'callsys:line:admin_session:';
 
 // --- LINE 文案 Keys ---
-const KEY_LINE_MSG_APPROACH   = 'callsys:line:msg:approach';   // 快到了
-const KEY_LINE_MSG_ARRIVAL    = 'callsys:line:msg:arrival';    // 到號了
-const KEY_LINE_MSG_STATUS     = 'callsys:line:msg:status';     // 查詢進度(通用)
-const KEY_LINE_MSG_PERSONAL   = 'callsys:line:msg:personal';   // 查詢進度(個人追蹤中)
-const KEY_LINE_MSG_PASSED     = 'callsys:line:msg:passed';     // 過號名單
-const KEY_LINE_MSG_SET_OK     = 'callsys:line:msg:set_ok';     // 設定提醒成功
-const KEY_LINE_MSG_CANCEL     = 'callsys:line:msg:cancel';     // 取消提醒
-const KEY_LINE_MSG_LOGIN_HINT = 'callsys:line:msg:login_hint'; // 登入提示
+const KEY_LINE_MSG_APPROACH   = 'callsys:line:msg:approach';
+const KEY_LINE_MSG_ARRIVAL    = 'callsys:line:msg:arrival';
+const KEY_LINE_MSG_STATUS     = 'callsys:line:msg:status';
+const KEY_LINE_MSG_PERSONAL   = 'callsys:line:msg:personal';
+const KEY_LINE_MSG_PASSED     = 'callsys:line:msg:passed';
+const KEY_LINE_MSG_SET_OK     = 'callsys:line:msg:set_ok';
+const KEY_LINE_MSG_CANCEL     = 'callsys:line:msg:cancel';
+const KEY_LINE_MSG_LOGIN_HINT = 'callsys:line:msg:login_hint';
 
-// [新增] 錯誤與提示訊息 Keys
-const KEY_LINE_MSG_ERR_FORMAT = 'callsys:line:msg:err_format'; // 格式錯誤(設定提醒教學)
+// [修改] 移除 ERR_FORMAT，只保留必要的錯誤提示 Key
 const KEY_LINE_MSG_ERR_PASSED = 'callsys:line:msg:err_passed'; // 設定失敗(已過號)
 const KEY_LINE_MSG_ERR_NO_SUB = 'callsys:line:msg:err_no_sub'; // 取消失敗(無追蹤中)
 
@@ -127,14 +125,12 @@ const DEFAULT_MSG_SET_OK     = "✅ 提醒設定成功！\n\n目標號碼：{tar
 const DEFAULT_MSG_CANCEL     = "🗑️ 已取消對 {target} 號的提醒通知。";
 const DEFAULT_MSG_LOGIN_HINT = "🔒 請輸入「解鎖密碼」以驗證身份。";
 
-// [新增] 錯誤訊息預設值
-const DEFAULT_MSG_ERR_FORMAT = "💡 設定失敗\n請輸入「設定提醒 號碼」，例如：\n設定提醒 105";
+// [修改] 移除 ERR_FORMAT 的預設值
 const DEFAULT_MSG_ERR_PASSED = "⚠️ 設定失敗\n{target} 號已經過號或正在叫號 (目前 {current} 號)。";
 const DEFAULT_MSG_ERR_NO_SUB = "ℹ️ 您目前沒有設定任何叫號提醒。";
 
 const onlineAdmins = new Map();
 
-// 安全設定
 app.use(helmet({
     contentSecurityPolicy: {
       directives: {
@@ -147,7 +143,6 @@ app.use(helmet({
     },
 }));
 
-// LINE Webhook 入口
 if (lineClient) {
     app.post('/callback', line.middleware(lineConfig), (req, res) => {
         Promise.all(req.body.events.map(handleLineEvent))
@@ -162,12 +157,10 @@ if (lineClient) {
 app.use(express.static("public"));
 app.use(express.json()); 
 
-// Rate Limiters
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 });
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
 const ticketLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, message: "操作過於頻繁" });
 
-// Middleware
 const authMiddleware = async (req, res, next) => {
     try {
         const { token } = req.body; 
@@ -186,7 +179,6 @@ const superAdminAuthMiddleware = (req, res, next) => {
     else res.status(403).json({ error: "權限不足" });
 };
 
-// 每日重置排程 (凌晨 4 點)
 cron.schedule('0 4 * * *', async () => {
     try {
         const multi = redis.multi();
@@ -208,7 +200,6 @@ cron.schedule('0 4 * * *', async () => {
     } catch (e) { console.error("❌ 自動重置失敗:", e); }
 }, { timezone: "Asia/Taipei" });
 
-// --- Helper Functions ---
 function sanitize(str) {
     if (typeof str !== 'string') return '';
     return str.replace(/<[^>]*>?/gm, '');
@@ -365,12 +356,12 @@ async function handleLineEvent(event) {
     const userId = event.source.userId;
     const replyToken = event.replyToken;
 
-    // 1. 讀取所有設定文案 (包含新增的錯誤訊息 Key)
+    // 1. 讀取設定 (移除 err_format)
     const keys = [
         KEY_LINE_MSG_STATUS, KEY_LINE_MSG_PERSONAL, 
         KEY_LINE_MSG_PASSED, KEY_LINE_MSG_SET_OK, KEY_LINE_MSG_CANCEL,
         KEY_LINE_MSG_LOGIN_HINT,
-        KEY_LINE_MSG_ERR_FORMAT, KEY_LINE_MSG_ERR_PASSED, KEY_LINE_MSG_ERR_NO_SUB
+        KEY_LINE_MSG_ERR_PASSED, KEY_LINE_MSG_ERR_NO_SUB
     ];
     const results = await redis.mget(keys);
     
@@ -381,10 +372,8 @@ async function handleLineEvent(event) {
     const MSG_CANCEL     = results[4] || DEFAULT_MSG_CANCEL;
     const MSG_LOGIN_HINT = results[5] || DEFAULT_MSG_LOGIN_HINT;
     
-    // [新增] 錯誤訊息變數
-    const MSG_ERR_FORMAT = results[6] || DEFAULT_MSG_ERR_FORMAT;
-    const MSG_ERR_PASSED = results[7] || DEFAULT_MSG_ERR_PASSED;
-    const MSG_ERR_NO_SUB = results[8] || DEFAULT_MSG_ERR_NO_SUB;
+    const MSG_ERR_PASSED = results[6] || DEFAULT_MSG_ERR_PASSED;
+    const MSG_ERR_NO_SUB = results[7] || DEFAULT_MSG_ERR_NO_SUB;
 
     // 2. 後台解鎖功能
     if (text === '後台登入') {
@@ -447,16 +436,15 @@ async function handleLineEvent(event) {
         return lineClient.replyMessage(replyToken, { type: "text", text: finalMsg });
     }
 
-    // 5. 設定提醒
-    if (text.startsWith('設定提醒')) {
-        const inputNumStr = text.replace('設定提醒', '').trim();
-        const targetNum = parseInt(inputNumStr);
+    // 5. [修改] 設定提醒：直接判斷輸入是否為「純數字」
+    if (/^\d+$/.test(text)) {
+        const targetNum = parseInt(text);
 
-        if (isNaN(targetNum)) {
-            return lineClient.replyMessage(replyToken, { type: "text", text: MSG_ERR_FORMAT });
-        }
+        if (isNaN(targetNum)) return Promise.resolve(null);
 
         const currentNum = parseInt(await redis.get(KEY_CURRENT_NUMBER)) || 0;
+        
+        // 檢查是否已過號
         if (targetNum <= currentNum) {
             const errorMsg = MSG_ERR_PASSED
                 .replace(/{target}/g, targetNum)
@@ -464,6 +452,7 @@ async function handleLineEvent(event) {
             return lineClient.replyMessage(replyToken, { type: "text", text: errorMsg });
         }
 
+        // 移除舊的追蹤，設定新的
         const oldTarget = await redis.get(`${KEY_LINE_USER_STATUS}${userId}`);
         if (oldTarget) await redis.srem(`${KEY_LINE_SUB_PREFIX}${oldTarget}`, userId);
 
@@ -523,7 +512,6 @@ app.post("/login", loginLimiter, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 保護的 API 路由清單
 const protectedAPIs = [
     "/change-number", "/change-issued-number", "/set-number", "/set-system-mode", "/set-issued-number",
     "/api/passed/add", "/api/passed/remove", "/api/passed/clear",
@@ -539,7 +527,7 @@ app.use(protectedAPIs, apiLimiter, authMiddleware);
 
 // --- API: LINE Settings ---
 
-// [修改] /api/admin/line-settings/get: 加入錯誤訊息欄位
+// [修改] 移除 err_format
 app.post("/api/admin/line-settings/get", async (req, res) => {
     try {
         const keys = [
@@ -547,7 +535,7 @@ app.post("/api/admin/line-settings/get", async (req, res) => {
             KEY_LINE_MSG_STATUS, KEY_LINE_MSG_PERSONAL, 
             KEY_LINE_MSG_PASSED, KEY_LINE_MSG_SET_OK, KEY_LINE_MSG_CANCEL,
             KEY_LINE_MSG_LOGIN_HINT,
-            KEY_LINE_MSG_ERR_FORMAT, KEY_LINE_MSG_ERR_PASSED, KEY_LINE_MSG_ERR_NO_SUB
+            KEY_LINE_MSG_ERR_PASSED, KEY_LINE_MSG_ERR_NO_SUB
         ];
         const results = await redis.mget(keys);
         res.json({ 
@@ -560,19 +548,18 @@ app.post("/api/admin/line-settings/get", async (req, res) => {
             set_ok:     results[5] || DEFAULT_MSG_SET_OK,
             cancel:     results[6] || DEFAULT_MSG_CANCEL,
             login_hint: results[7] || DEFAULT_MSG_LOGIN_HINT,
-            err_format: results[8] || DEFAULT_MSG_ERR_FORMAT,
-            err_passed: results[9] || DEFAULT_MSG_ERR_PASSED,
-            err_no_sub: results[10] || DEFAULT_MSG_ERR_NO_SUB
+            err_passed: results[8] || DEFAULT_MSG_ERR_PASSED,
+            err_no_sub: results[9] || DEFAULT_MSG_ERR_NO_SUB
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// [修改] /api/admin/line-settings/save: 加入錯誤訊息欄位儲存
+// [修改] 移除 err_format
 app.post("/api/admin/line-settings/save", async (req, res) => {
     try {
         const { 
             approach, arrival, status, personal, passed, set_ok, cancel, login_hint,
-            err_format, err_passed, err_no_sub 
+            err_passed, err_no_sub 
         } = req.body;
         
         if (!approach || !arrival || !status) return res.status(400).json({ error: "主要文案不可為空" });
@@ -587,8 +574,6 @@ app.post("/api/admin/line-settings/save", async (req, res) => {
         pipeline.set(KEY_LINE_MSG_CANCEL, sanitize(cancel));
         pipeline.set(KEY_LINE_MSG_LOGIN_HINT, sanitize(login_hint));
         
-        // 儲存錯誤訊息
-        pipeline.set(KEY_LINE_MSG_ERR_FORMAT, sanitize(err_format));
         pipeline.set(KEY_LINE_MSG_ERR_PASSED, sanitize(err_passed));
         pipeline.set(KEY_LINE_MSG_ERR_NO_SUB, sanitize(err_no_sub));
         
@@ -598,7 +583,7 @@ app.post("/api/admin/line-settings/save", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// [修改] /api/admin/line-settings/reset: 加入錯誤訊息欄位重置
+// [修改] 移除 err_format
 app.post("/api/admin/line-settings/reset", async (req, res) => {
     try {
         const keys = [
@@ -606,7 +591,7 @@ app.post("/api/admin/line-settings/reset", async (req, res) => {
             KEY_LINE_MSG_STATUS, KEY_LINE_MSG_PERSONAL, 
             KEY_LINE_MSG_PASSED, KEY_LINE_MSG_SET_OK, KEY_LINE_MSG_CANCEL,
             KEY_LINE_MSG_LOGIN_HINT,
-            KEY_LINE_MSG_ERR_FORMAT, KEY_LINE_MSG_ERR_PASSED, KEY_LINE_MSG_ERR_NO_SUB
+            KEY_LINE_MSG_ERR_PASSED, KEY_LINE_MSG_ERR_NO_SUB
         ];
         await redis.del(keys);
         addAdminLog(req.user.nickname, "↺ 重置了 LINE 自動回覆文案");
@@ -620,7 +605,6 @@ app.post("/api/admin/line-settings/reset", async (req, res) => {
             set_ok:     DEFAULT_MSG_SET_OK,
             cancel:     DEFAULT_MSG_CANCEL,
             login_hint: DEFAULT_MSG_LOGIN_HINT,
-            err_format: DEFAULT_MSG_ERR_FORMAT,
             err_passed: DEFAULT_MSG_ERR_PASSED,
             err_no_sub: DEFAULT_MSG_ERR_NO_SUB
         });
@@ -646,7 +630,6 @@ app.post("/api/admin/line-settings/get-unlock-pass", superAdminAuthMiddleware, a
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// CSV 匯出 (檔名時間戳記優化)
 app.post("/api/admin/export-csv", superAdminAuthMiddleware, async (req, res) => {
     try {
         const historyRaw = await redis.lrange(KEY_HISTORY_STATS, 0, -1);
@@ -704,7 +687,6 @@ app.post("/set-system-mode", superAdminAuthMiddleware, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Lua Script 應用於 /change-number
 app.post("/change-number", async (req, res) => {
     try {
         const { direction } = req.body;
@@ -1035,5 +1017,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v18.14 (Line Msgs Configurable) ready on port ${PORT}`);
+    console.log(`🚀 Server v18.15 (Simplified Line Input) ready on port ${PORT}`);
 });
