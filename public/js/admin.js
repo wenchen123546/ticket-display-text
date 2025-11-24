@@ -1,8 +1,17 @@
 /*
  * ==========================================
- * 後台邏輯 (admin.js) - v18.12 Final Logic
+ * 後台邏輯 (admin.js) - v18.13 Optimized
  * ==========================================
  */
+
+// [新增] 防抖動工具函式
+function debounce(func, delay) {
+    let timer;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => func.apply(this, args), delay);
+    };
+}
 
 const adminI18n = {
     "zh-TW": {
@@ -283,7 +292,12 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 loginButton.addEventListener("click", () => { attemptLogin(usernameInput.value, passwordInput.value); });
-usernameInput.addEventListener("keyup", (event) => { if (event.key === "Enter") { passwordInput.focus(); } });
+
+// [修改] 登入輸入框應用防抖動，減少頻繁觸發
+usernameInput.addEventListener("keyup", debounce((event) => { 
+    if (event.key === "Enter") { passwordInput.focus(); } 
+}, 300));
+
 passwordInput.addEventListener("keyup", (event) => { if (event.key === "Enter") { attemptLogin(usernameInput.value, passwordInput.value); } });
 
 function showToast(message, type = 'info') {
@@ -325,18 +339,33 @@ socket.on("updateSystemMode", (mode) => {
     for(let r of radios) { if(r.value === mode) r.checked = true; }
 });
 
+// [修改] renderLogs (XSS 防護 + 效能優化)
 function renderLogs(logs, isInit) {
     const ui = document.getElementById("admin-log-ui");
-    if(isInit) ui.innerHTML = "";
+    
+    // 使用 replaceChildren 優化清空
+    if(isInit) ui.replaceChildren();
+
     if(!logs || logs.length === 0) return;
-    if(ui.querySelector("li")?.textContent.includes("尚無")) ui.innerHTML = "";
+    
+    // 檢查是否需要移除 "尚無數據" 提示
+    if(ui.firstElementChild && ui.firstElementChild.textContent.includes("尚無")) {
+        ui.replaceChildren();
+    }
+    
     const fragment = document.createDocumentFragment();
-    logs.forEach(log => {
+    logs.forEach(logMsg => {
         const li = document.createElement("li");
-        li.textContent = log;
-        isInit ? fragment.appendChild(li) : ui.appendChild(li); 
+        li.textContent = logMsg; // 安全賦值，自動轉義
+        fragment.appendChild(li);
     });
-    if(isInit) ui.appendChild(fragment);
+
+    if(isInit) {
+        ui.appendChild(fragment);
+    } else {
+        // 新日誌從上方插入或下方視需求，這裡維持原樣
+        ui.appendChild(fragment); 
+    }
     ui.scrollTop = ui.scrollHeight;
 }
 
@@ -391,18 +420,25 @@ function setupConfirmationButton(buttonEl, originalTextKey, confirmTextKey, acti
     });
 }
 
+// [修改] renderPassedListUI (XSS 防護 + 效能優化)
 function renderPassedListUI(numbers) {
     const ui = document.getElementById("passed-list-ui");
-    ui.innerHTML = "";
+    ui.replaceChildren(); // 清空
+
     if (!Array.isArray(numbers)) return;
     const fragment = document.createDocumentFragment();
+    
     numbers.forEach((number) => {
         const li = document.createElement("li");
         li.style.display = "flex"; li.style.justifyContent = "space-between"; li.style.alignItems = "center";
+        
         const leftDiv = document.createElement("div"); 
         leftDiv.style.display = "flex"; leftDiv.style.gap = "10px"; leftDiv.style.alignItems = "center";
+        
         const numSpan = document.createElement("span"); 
-        numSpan.textContent = number; numSpan.style.fontWeight = "bold";
+        numSpan.textContent = number; 
+        numSpan.style.fontWeight = "bold";
+        
         const recallBtn = document.createElement("button");
         recallBtn.className = "btn-secondary"; 
         recallBtn.style.padding = "2px 8px"; recallBtn.style.fontSize = "0.8rem";
@@ -413,48 +449,80 @@ function renderPassedListUI(numbers) {
                 showToast(at["toast_recalled"], "success"); 
             } 
         };
+        
         leftDiv.appendChild(numSpan); leftDiv.appendChild(recallBtn); li.appendChild(leftDiv);
+        
         const deleteBtn = document.createElement("button");
-        deleteBtn.className = "delete-item-btn"; deleteBtn.innerHTML = "✕";
+        deleteBtn.className = "delete-item-btn"; 
+        deleteBtn.textContent = "✕";
+        
         setupConfirmationButton(deleteBtn, "✕", "⚠️", async () => { 
             deleteBtn.disabled = true; 
             await apiRequest("/api/passed/remove", { number }); 
         });
+        
         li.appendChild(deleteBtn);
         fragment.appendChild(li);
     });
     ui.appendChild(fragment);
 }
 
+// [修改] renderFeaturedListUI (XSS 防護 + 效能優化)
 function renderFeaturedListUI(contents) {
     const ui = document.getElementById("featured-list-ui");
-    ui.innerHTML = "";
+    ui.replaceChildren();
+
     if (!Array.isArray(contents)) return;
     const fragment = document.createDocumentFragment();
+    
     contents.forEach((item) => {
         const li = document.createElement("li");
+        
         const span = document.createElement("span");
         span.style.wordBreak = "break-all"; 
         span.style.whiteSpace = "normal";
-        span.innerHTML = `${item.linkText}<br><small style="color:#666">${item.linkUrl}</small>`;
+        
+        // 安全構建 DOM，不使用 innerHTML
+        const textNode = document.createTextNode(item.linkText);
+        const br = document.createElement("br");
+        const small = document.createElement("small");
+        small.style.color = "#666";
+        small.textContent = item.linkUrl;
+        
+        span.appendChild(textNode);
+        span.appendChild(br);
+        span.appendChild(small);
+        
         li.appendChild(span);
+        
         const deleteBtn = document.createElement("button");
-        deleteBtn.className = "delete-item-btn"; deleteBtn.innerHTML = "✕";
+        deleteBtn.className = "delete-item-btn"; 
+        deleteBtn.textContent = "✕";
+        
         setupConfirmationButton(deleteBtn, "✕", "⚠️", async () => { 
             deleteBtn.disabled = true; 
             await apiRequest("/api/featured/remove", { linkText: item.linkText, linkUrl: item.linkUrl }); 
         });
+        
         li.appendChild(deleteBtn);
         fragment.appendChild(li);
     });
     ui.appendChild(fragment);
 }
 
+// [修改] renderOnlineAdmins (XSS 防護 + 效能優化)
 function renderOnlineAdmins(admins) {
     const ui = document.getElementById("online-users-list");
     if (!ui) return;
-    ui.innerHTML = "";
-    if (!admins || admins.length === 0) { ui.innerHTML = `<li>${at["list_no_online"]}</li>`; return; }
+    ui.replaceChildren();
+
+    if (!admins || admins.length === 0) { 
+        const li = document.createElement("li");
+        li.textContent = at["list_no_online"];
+        ui.appendChild(li);
+        return; 
+    }
+    
     admins.sort((a, b) => {
         if (a.username === uniqueUsername) return -1;
         if (b.username === uniqueUsername) return 1;
@@ -462,12 +530,24 @@ function renderOnlineAdmins(admins) {
         if (a.role !== 'super' && b.role === 'super') return 1;
         return a.nickname.localeCompare(b.nickname);
     });
+    
     const fragment = document.createDocumentFragment();
     admins.forEach(admin => {
         const li = document.createElement("li");
         const icon = admin.role === 'super' ? '👑' : '👤';
-        const selfClass = (admin.username === uniqueUsername) ? 'is-self' : '';
-        li.innerHTML = `<span class="role-icon">${icon}</span> <span class="username ${selfClass}">${admin.nickname}</span>`;
+        
+        const iconSpan = document.createElement("span");
+        iconSpan.className = "role-icon";
+        iconSpan.textContent = icon;
+        
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "username";
+        if(admin.username === uniqueUsername) nameSpan.classList.add("is-self");
+        nameSpan.textContent = ` ${admin.nickname}`;
+        
+        li.appendChild(iconSpan);
+        li.appendChild(nameSpan);
+        
         fragment.appendChild(li);
     });
     ui.appendChild(fragment);
@@ -613,20 +693,34 @@ if (modeRadios) {
     });
 }
 
+// [修改] loadAdminUsers (XSS 防護 + 效能優化)
 async function loadAdminUsers() {
     const ui = document.getElementById("user-list-ui");
     if (!ui) return;
+    
     const data = await apiRequest("/api/admin/users", {}, true);
     if (data && data.users) {
-        ui.innerHTML = "";
+        ui.replaceChildren(); // 清空
+
         data.users.sort((a, b) => { if (a.role === 'super' && b.role !== 'super') return -1; if (a.role !== 'super' && b.role === 'super') return 1; return a.username.localeCompare(b.username); });
+        
+        const fragment = document.createDocumentFragment();
         data.users.forEach(user => {
             const li = document.createElement("li");
             const icon = user.role === 'super' ? '👑' : '👤';
-            li.innerHTML = `<span>${icon} <strong>${user.nickname}</strong> (${user.username})</span>`;
+            
+            const span = document.createElement("span");
+            const strong = document.createElement("strong");
+            strong.textContent = user.nickname;
+            
+            span.append(`${icon} `, strong, ` (${user.username})`);
+            li.appendChild(span);
+            
             if (user.role !== 'super') {
                 const deleteBtn = document.createElement("button");
-                deleteBtn.className = "delete-item-btn"; deleteBtn.innerHTML = "✕";
+                deleteBtn.className = "delete-item-btn"; 
+                deleteBtn.textContent = "✕";
+                
                 setupConfirmationButton(deleteBtn, "✕", "⚠️", async () => { 
                     deleteBtn.disabled = true; 
                     if (await apiRequest("/api/admin/del-user", { delUsername: user.username })) { 
@@ -635,8 +729,9 @@ async function loadAdminUsers() {
                 });
                 li.appendChild(deleteBtn);
             }
-            ui.appendChild(li);
+            fragment.appendChild(li);
         });
+        ui.appendChild(fragment);
     }
 }
 
@@ -656,40 +751,88 @@ const statsListUI = document.getElementById("stats-list-ui");
 const hourlyChartEl = document.getElementById("hourly-chart");
 const statsTodayCount = document.getElementById("stats-today-count");
 
+// [修改] loadStats (效能優化 + XSS 防護)
 async function loadStats() {
     if (!statsListUI) return;
-    if (statsListUI.children.length === 0) statsListUI.innerHTML = `<li>${at["list_loading"]}</li>`;
+    
+    // 檢查是否有子元素，若無則顯示 loading
+    if (statsListUI.children.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = at["list_loading"];
+        statsListUI.replaceChildren(li);
+    }
+
     const data = await apiRequest("/api/admin/stats", {}, true);
     if (data && data.success) {
         statsTodayCount.textContent = data.todayCount;
         renderHourlyChart(data.hourlyCounts, data.serverHour);
-        statsListUI.innerHTML = "";
-        if (!data.history || data.history.length === 0) { statsListUI.innerHTML = `<li>${at["list_no_data"]}</li>`; return; }
+        
+        statsListUI.replaceChildren(); // 清空
+
+        if (!data.history || data.history.length === 0) { 
+            const li = document.createElement("li");
+            li.textContent = at["list_no_data"];
+            statsListUI.appendChild(li);
+            return; 
+        }
+        
         const fragment = document.createDocumentFragment();
         data.history.forEach(item => {
             const li = document.createElement("li");
             const time = new Date(item.time).toLocaleTimeString('zh-TW', { hour12: false });
-            li.innerHTML = `<span>${time} - 號碼 ${item.num} <small style="color:#666">(${item.operator})</small></span>`;
+            
+            const span = document.createElement("span");
+            span.textContent = `${time} - 號碼 ${item.num} `;
+            
+            const small = document.createElement("small");
+            small.style.color = "#666";
+            small.textContent = `(${item.operator})`;
+            
+            span.appendChild(small);
+            li.appendChild(span);
             fragment.appendChild(li);
         });
         statsListUI.appendChild(fragment);
-    } else { statsListUI.innerHTML = `<li>${at["list_load_fail"]}</li>`; }
+    } else { 
+        const li = document.createElement("li");
+        li.textContent = at["list_load_fail"];
+        statsListUI.replaceChildren(li);
+    }
 }
+
+// [修改] renderHourlyChart (DOM 優化)
 function renderHourlyChart(counts, serverHour) {
     if (!hourlyChartEl || !Array.isArray(counts)) return;
-    hourlyChartEl.innerHTML = "";
+    hourlyChartEl.replaceChildren();
+
     const maxVal = Math.max(...counts, 1);
     const currentHour = (typeof serverHour === 'number') ? serverHour : new Date().getHours();
+    
     const fragment = document.createDocumentFragment();
     for (let i = 0; i < 24; i++) {
-        const val = counts[i]; const percent = (val / maxVal) * 100;
-        const col = document.createElement("div"); col.className = "chart-col";
+        const val = counts[i]; 
+        const percent = (val / maxVal) * 100;
+        
+        const col = document.createElement("div"); 
+        col.className = "chart-col";
         if (i === currentHour) col.classList.add("current");
         col.onclick = () => openEditModal(i, val);
-        const valDiv = document.createElement("div"); valDiv.className = "chart-val"; valDiv.textContent = val > 0 ? val : "";
-        const barDiv = document.createElement("div"); barDiv.className = "chart-bar"; barDiv.style.height = `${Math.max(percent, 2)}%`; if (val === 0) barDiv.style.backgroundColor = "#e5e7eb";
-        const labelDiv = document.createElement("div"); labelDiv.className = "chart-label"; labelDiv.textContent = i.toString().padStart(2, '0');
-        col.appendChild(valDiv); col.appendChild(barDiv); col.appendChild(labelDiv); fragment.appendChild(col);
+        
+        const valDiv = document.createElement("div"); 
+        valDiv.className = "chart-val"; 
+        valDiv.textContent = val > 0 ? val : "";
+        
+        const barDiv = document.createElement("div"); 
+        barDiv.className = "chart-bar"; 
+        barDiv.style.height = `${Math.max(percent, 2)}%`; 
+        if (val === 0) barDiv.style.backgroundColor = "#e5e7eb";
+        
+        const labelDiv = document.createElement("div"); 
+        labelDiv.className = "chart-label"; 
+        labelDiv.textContent = i.toString().padStart(2, '0');
+        
+        col.appendChild(valDiv); col.appendChild(barDiv); col.appendChild(labelDiv); 
+        fragment.appendChild(col);
     }
     hourlyChartEl.appendChild(fragment);
 }
@@ -706,7 +849,7 @@ async function adjustStat(delta) { if (editingHour === null) return; let current
 if(btnModalClose) btnModalClose.onclick = closeEditModal; if(btnStatsMinus) btnStatsMinus.onclick = () => adjustStat(-1); if(btnStatsPlus) btnStatsPlus.onclick = () => adjustStat(1);
 if(modalOverlay) modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeEditModal(); }
 
-// --- LINE 設定邏輯 (Updated with Login Hint) ---
+// --- LINE 設定邏輯 ---
 const domIds = {
     approach:  "line-msg-approach",
     arrival:   "line-msg-arrival",
