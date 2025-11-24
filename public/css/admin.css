@@ -29,7 +29,21 @@ body {
     min-height: 100vh;
 }
 
-/* --- 2. 狀態列與登入頁 --- */
+/* --- 2. 輔助類別 (Utility Classes) --- */
+/* 【補】隱藏螢幕閱讀器專用標籤，修正登入框版面 */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* --- 3. 狀態列與登入頁 --- */
 #status-bar {
     position: fixed; top: 0; left: 0; width: 100%;
     background: var(--danger); color: white;
@@ -49,7 +63,7 @@ body {
     display: none; /* JS 控制顯示 */
 }
 
-#login-container h1 { color: var(--primary); margin-bottom: 25px; }
+#login-container h1 { color: var(--primary); margin-bottom: 25px; margin-top: 0; }
 #login-container input {
     width: 100%; padding: 12px; margin-bottom: 15px;
     border: 1px solid var(--border); border-radius: 8px;
@@ -65,7 +79,7 @@ body {
 #login-button:hover { background: var(--primary-hover); }
 #login-error { color: var(--danger); margin-top: 10px; font-size: 0.9rem; }
 
-/* --- 3. 後台主面板 --- */
+/* --- 4. 後台主面板 --- */
 #admin-panel {
     width: 100%; max-width: 1200px;
     padding: 20px;
@@ -110,10 +124,12 @@ body {
 /* Grid 排版系統 */
 .card-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); /* RWD 自動排版 */
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 20px;
     align-items: start;
 }
+
+.card-wrapper { width: 100%; height: 100%; } /* 【補】確保卡片撐滿 */
 
 .admin-card {
     background: var(--bg-card);
@@ -122,6 +138,8 @@ body {
     box-shadow: var(--shadow);
     border: 1px solid var(--border);
     height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .admin-card h3 {
@@ -129,6 +147,9 @@ body {
     color: var(--text-main); border-bottom: 2px solid #f3f4f6;
     padding-bottom: 10px; display: flex; align-items: center; gap: 8px;
 }
+
+/* 【補】標題圖示微調 */
+.card-icon { font-size: 1.4rem; margin-right: 5px; }
 
 /* 表單控制項 */
 .control-group { margin-bottom: 15px; }
@@ -142,17 +163,33 @@ body {
 }
 
 .input-group { display: flex; gap: 10px; }
-.input-group input {
+.input-group input, .input-group textarea {
     flex: 1; padding: 10px; border: 1px solid var(--border);
-    border-radius: 6px; outline: none;
+    border-radius: 6px; outline: none; font-family: inherit;
 }
-.input-group input:focus { border-color: var(--primary); }
+.input-group input:focus, .input-group textarea:focus { border-color: var(--primary); }
 .input-group button {
     padding: 0 20px; border: none; border-radius: 6px;
     cursor: pointer; color: white; font-weight: bold;
     background: var(--primary);
 }
-.btn-add { background: var(--success) !important; font-size: 1.2rem; }
+.btn-add { background: var(--success) !important; font-size: 1.2rem; min-width: 45px; }
+
+/* 【補】Textarea 樣式 (LINE 設定用) */
+textarea {
+    width: 100%; padding: 10px; border: 1px solid var(--border);
+    border-radius: 6px; resize: vertical; font-family: inherit;
+    min-height: 80px; margin-bottom: 10px;
+}
+
+/* 【補】統計動作按鈕列 (Stats Actions) */
+.stats-actions-row {
+    display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;
+}
+.stats-actions-row button {
+    flex: 1; padding: 8px; border: none; border-radius: 6px;
+    cursor: pointer; color: white; font-size: 0.9rem;
+}
 
 /* 重置/危險操作按鈕 */
 .btn-reset-single {
@@ -163,39 +200,51 @@ body {
 }
 .btn-reset-single:hover { background: #fef2f2; }
 
+/* 【補】全域重置區塊間距 */
+.reset-zone { margin-top: auto; padding-top: 20px; border-top: 2px dashed #eee; }
+
 /* 列表樣式 (Log, 過號, 連結) */
 ul { list-style: none; padding: 0; margin: 0; }
-.list-editor ul, .admin-log-container ul, .stats-list-ui, .online-users-ui {
+.list-editor ul, .admin-log-container ul, #stats-list-ui, .online-users-ui {
     border: 1px solid var(--border); border-radius: 6px;
     background: #fff; max-height: 180px; overflow-y: auto;
     margin-bottom: 10px;
 }
-.list-editor li, .admin-log-container li, .online-users-ui li {
+.list-editor li, .admin-log-container li, .online-users-ui li, #stats-list-ui li {
     padding: 8px 12px; border-bottom: 1px solid #f3f4f6;
     display: flex; justify-content: space-between; align-items: center;
-    font-size: 0.9rem;
+    font-size: 0.9rem; word-break: break-all;
 }
+.admin-log-container ul { height: 150px; background: #f8fafc; }
+
 .delete-item-btn {
     background: #fee2e2; color: var(--danger); border: none;
     border-radius: 4px; width: 24px; height: 24px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-left: 10px;
 }
 .role-icon { margin-right: 5px; }
 .is-self { color: var(--primary); font-weight: bold; }
 
-/* Toggle 開關美化 */
+/* Toggle 開關與選項美化 */
 .sound-toggle-group, .system-toggle-group {
     display: flex; justify-content: space-between; align-items: center;
     padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0;
     border-radius: 8px; margin-bottom: 15px; cursor: pointer;
 }
 .system-toggle-group { background: #eff6ff; border-color: #bfdbfe; }
-.radio-option { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+/* 【補】Radio 選項樣式 */
+.radio-option { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 5px; }
+input[type="checkbox"], input[type="radio"] {
+    transform: scale(1.2); cursor: pointer;
+}
 
 /* 圖表 */
 .chart-container {
     height: 120px; background: #f8fafc; border-radius: 8px;
     display: flex; align-items: flex-end; padding: 10px 5px 0; gap: 2px;
-    overflow-x: auto; margin: 15px 0;
+    overflow-x: auto; margin: 15px 0; border: 1px solid #f1f5f9;
 }
 .chart-col { flex: 1; min-width: 15px; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
 .chart-bar { width: 80%; background: var(--primary); border-radius: 3px 3px 0 0; min-height: 2px; transition: height 0.3s; }
@@ -225,6 +274,7 @@ ul { list-style: none; padding: 0; margin: 0; }
 #toast-notification.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 #toast-notification.success { background: var(--success); }
 #toast-notification.error { background: var(--danger); }
+#toast-notification.info { background: var(--text-main); }
 
 /* RWD 響應式 */
 @media (max-width: 768px) {
