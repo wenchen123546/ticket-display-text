@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 後台邏輯 (admin.js) - v18.8 Fix Featured & Mobile Overflow
+ * 後台邏輯 (admin.js) - v18.11 Full Fixes
  * ==========================================
  */
 
@@ -63,8 +63,8 @@ const adminI18n = {
         "toast_line_reset": "↺ 已恢復預設文案",
         "toast_pwd_saved": "✅ 解鎖密碼已設定",
         "alert_pwd_empty": "密碼不可為空",
-        "btn_confirm_clear": "⚠️ Confirm Clear",
-        "btn_confirm_reset": "⚠️ Confirm Reset",
+        "btn_confirm_clear": "⚠️ 點此確認清除",
+        "btn_confirm_reset": "⚠️ 點此確認重置",
         "list_loading": "載入中...",
         "list_no_data": "尚無數據",
         "list_load_fail": "載入失敗",
@@ -313,7 +313,6 @@ socket.on("updateQueue", (data) => {
 });
 socket.on("update", (num) => { document.getElementById("number").textContent = num; loadStats(); });
 socket.on("updatePassed", (numbers) => renderPassedListUI(numbers));
-// [Fix] 恢復精選連結的更新監聽
 socket.on("updateFeaturedContents", (contents) => renderFeaturedListUI(contents));
 
 socket.on("initAdminLogs", (logs) => renderLogs(logs, true));
@@ -435,7 +434,6 @@ function renderFeaturedListUI(contents) {
     contents.forEach((item) => {
         const li = document.createElement("li");
         const span = document.createElement("span");
-        // [Fix] 強制換行，防止連結太長撐開
         span.style.wordBreak = "break-all"; 
         span.style.whiteSpace = "normal";
         span.innerHTML = `${item.linkText}<br><small style="color:#666">${item.linkUrl}</small>`;
@@ -671,7 +669,6 @@ async function loadStats() {
         data.history.forEach(item => {
             const li = document.createElement("li");
             const time = new Date(item.time).toLocaleTimeString('zh-TW', { hour12: false });
-            // [Fix] 長文字可能會破版，已在 CSS 設定 word-break
             li.innerHTML = `<span>${time} - 號碼 ${item.num} <small style="color:#666">(${item.operator})</small></span>`;
             fragment.appendChild(li);
         });
@@ -709,40 +706,85 @@ async function adjustStat(delta) { if (editingHour === null) return; let current
 if(btnModalClose) btnModalClose.onclick = closeEditModal; if(btnStatsMinus) btnStatsMinus.onclick = () => adjustStat(-1); if(btnStatsPlus) btnStatsPlus.onclick = () => adjustStat(1);
 if(modalOverlay) modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeEditModal(); }
 
-const lineMsgApproachInput = document.getElementById("line-msg-approach");
-const lineMsgArrivalInput = document.getElementById("line-msg-arrival");
+// --- LINE 設定邏輯 ---
+const domIds = {
+    approach: "line-msg-approach",
+    arrival:  "line-msg-arrival",
+    status:   "line-msg-status",
+    personal: "line-msg-personal",
+    passed:   "line-msg-passed",
+    setOk:    "line-msg-set-ok",
+    cancel:   "line-msg-cancel",
+    unlock:   "line-unlock-pwd"
+};
+
 const btnSaveLineMsg = document.getElementById("btn-save-line-msg");
 const btnResetLineMsg = document.getElementById("btn-reset-line-msg");
-const lineUnlockPwdInput = document.getElementById("line-unlock-pwd");
 const btnSaveUnlockPwd = document.getElementById("btn-save-unlock-pwd");
 
 async function loadLineSettings() {
-    if (!lineMsgApproachInput) return;
+    if (!document.getElementById(domIds.approach)) return;
+    
     const data = await apiRequest("/api/admin/line-settings/get", {}, true);
     if (data && data.success) {
-        lineMsgApproachInput.value = data.approach;
-        lineMsgArrivalInput.value = data.arrival;
+        document.getElementById(domIds.approach).value = data.approach;
+        document.getElementById(domIds.arrival).value  = data.arrival;
+        document.getElementById(domIds.status).value   = data.status;
+        document.getElementById(domIds.personal).value = data.personal;
+        document.getElementById(domIds.passed).value   = data.passed;
+        document.getElementById(domIds.setOk).value    = data.set_ok;
+        document.getElementById(domIds.cancel).value   = data.cancel;
     }
+    
     if (userRole === 'super') {
         const pwdData = await apiRequest("/api/admin/line-settings/get-unlock-pass", {}, true);
-        if(pwdData && pwdData.success && lineUnlockPwdInput) {
-            lineUnlockPwdInput.value = pwdData.password;
+        if(pwdData && pwdData.success && document.getElementById(domIds.unlock)) {
+            document.getElementById(domIds.unlock).value = pwdData.password;
         }
     }
 }
+
 if (btnSaveLineMsg) btnSaveLineMsg.onclick = async () => { 
-    const approach = lineMsgApproachInput.value.trim(); const arrival = lineMsgArrivalInput.value.trim(); 
-    if(!approach || !arrival) return alert("內容不可為空"); 
+    const payload = {
+        approach: document.getElementById(domIds.approach).value.trim(),
+        arrival:  document.getElementById(domIds.arrival).value.trim(),
+        status:   document.getElementById(domIds.status).value.trim(),
+        personal: document.getElementById(domIds.personal).value.trim(),
+        passed:   document.getElementById(domIds.passed).value.trim(),
+        set_ok:   document.getElementById(domIds.setOk).value.trim(),
+        cancel:   document.getElementById(domIds.cancel).value.trim()
+    };
+
+    if(!payload.approach || !payload.status) return alert("主要文案不可為空"); 
+    
     btnSaveLineMsg.disabled = true; 
-    if (await apiRequest("/api/admin/line-settings/save", { approach, arrival })) { showToast(at["toast_line_updated"], "success"); } 
+    if (await apiRequest("/api/admin/line-settings/save", payload)) { 
+        showToast("✅ LINE 文案已全數更新", "success"); 
+    } 
     btnSaveLineMsg.disabled = false; 
 };
-if (btnResetLineMsg) setupConfirmationButton(btnResetLineMsg, "恢復預設值", "btn_confirm_reset", async () => { const data = await apiRequest("/api/admin/line-settings/reset", {}, true); if (data && data.success) { lineMsgApproachInput.value = data.approach; lineMsgArrivalInput.value = data.arrival; showToast(at["toast_line_reset"], "success"); } });
+
+if (btnResetLineMsg) setupConfirmationButton(btnResetLineMsg, "恢復預設值", "btn_confirm_reset", async () => { 
+    const data = await apiRequest("/api/admin/line-settings/reset", {}, true); 
+    if (data && data.success) { 
+        document.getElementById(domIds.approach).value = data.approach;
+        document.getElementById(domIds.arrival).value  = data.arrival;
+        document.getElementById(domIds.status).value   = data.status;
+        document.getElementById(domIds.personal).value = data.personal;
+        document.getElementById(domIds.passed).value   = data.passed;
+        document.getElementById(domIds.setOk).value    = data.set_ok;
+        document.getElementById(domIds.cancel).value   = data.cancel;
+        showToast("↺ 已恢復預設文案", "success"); 
+    } 
+});
+
 if (btnSaveUnlockPwd) btnSaveUnlockPwd.onclick = async () => {
-    const pwd = lineUnlockPwdInput.value.trim();
-    if(!pwd) return alert(at["alert_pwd_empty"]);
+    const pwd = document.getElementById(domIds.unlock).value.trim();
+    if(!pwd) return alert("密碼不可為空");
     btnSaveUnlockPwd.disabled = true;
-    if (await apiRequest("/api/admin/line-settings/set-unlock-pass", { password: pwd })) { showToast(at["toast_pwd_saved"], "success"); }
+    if (await apiRequest("/api/admin/line-settings/set-unlock-pass", { password: pwd })) { 
+        showToast("✅ 解鎖密碼已設定", "success"); 
+    }
     btnSaveUnlockPwd.disabled = false;
 };
 
