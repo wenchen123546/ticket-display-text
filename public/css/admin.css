@@ -217,20 +217,26 @@ button:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(1); }
     margin: 0 0 12px 0; border: 1px dashed #cbd5e1;
 }
 
-/* 輸入框與按鈕組 */
+/* --- [統一寬度修正] 輸入框與按鈕組 --- */
 .input-group { display: flex; gap: 10px; width: 100%; }
 .input-group input {
     flex: 1; padding: 10px 14px;
     background: white; border: 1px solid #cbd5e1;
     border-radius: var(--radius-md); font-size: 0.95rem;
-    transition: all 0.2s; min-width: 0; /* 防止溢出 */
+    transition: all 0.2s; min-width: 0;
 }
 .input-group input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+
+/* 統一輸入區右側按鈕的最小寬度 */
 .input-group button {
-    padding: 0 18px; border-radius: var(--radius-md);
-    white-space: nowrap; font-weight: 600;
+    padding: 0 12px;
+    border-radius: var(--radius-md);
+    white-space: nowrap;
+    font-weight: 600;
+    min-width: 70px; /* 強制統一寬度 */
+    justify-content: center;
 }
-.btn-add { font-size: 1.2rem; min-width: 48px; }
+.btn-add { font-size: 1.2rem; } /* "+" 號按鈕樣式 */
 
 /* Textarea 優化 */
 textarea {
@@ -238,7 +244,7 @@ textarea {
     background: white; border: 1px solid #cbd5e1;
     border-radius: var(--radius-md); font-family: inherit;
     font-size: 0.95rem; line-height: 1.5; resize: vertical;
-    min-height: 120px; /* 修正：高度加高 */
+    min-height: 120px;
     transition: all 0.2s;
 }
 textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
@@ -247,11 +253,9 @@ textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70
 .admin-card .control-group.button-row {
     display: flex; gap: 12px; margin-top: 20px; margin-bottom: 0;
 }
-/* 讓 Save 和 Reset 按鈕等寬並排 */
 .admin-card .control-group.button-row button {
     flex: 1; width: auto; margin: 0; height: 44px;
 }
-/* 卡片內的重置按鈕改為實線淡色，與主按鈕搭配 */
 .admin-card .control-group.button-row .btn-reset-single {
     border: 1px solid #e2e8f0; background: white; color: var(--text-sub);
     border-radius: var(--radius-md); border-style: solid;
@@ -288,20 +292,30 @@ ul { padding: 0; margin: 0; list-style: none; }
 }
 .admin-log-container ul { font-family: monospace; font-size: 0.85rem; background: #1e293b; color: #e2e8f0; border: none; }
 
+/* --- [統一對齊修正] 清單項目 --- */
 li {
     padding: 10px 14px; border-bottom: 1px solid #e2e8f0;
     display: flex; justify-content: space-between; align-items: center;
     font-size: 0.9rem;
+    gap: 10px; /* 項目與刪除鈕之間的間距 */
 }
 li:last-child { border-bottom: none; }
 .admin-log-container li { border-bottom: 1px solid #334155; }
 
-/* 刪除小按鈕 */
+/* 強制讓文字區域佔滿剩餘空間，確保刪除鈕靠右對齊 */
+li > span, li > div {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 刪除小按鈕 (固定寬度) */
 .delete-item-btn {
     width: 28px; height: 28px; border-radius: 6px;
     background: #fee2e2; color: #ef4444;
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; margin-left: 10px;
+    flex-shrink: 0; /* 防止被擠壓 */
+    margin-left: auto; /* 確保推到最右 */
 }
 .delete-item-btn:hover { background: #ef4444; color: white; }
 
