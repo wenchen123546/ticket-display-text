@@ -59,28 +59,24 @@
         <div class="card" id="ticket-section">
             
             <div id="ticketing-mode-container">
-                <div id="take-ticket-view" style="padding: 15px;">
-                    <h3 data-i18n="online_ticket_title" style="margin-top:0; color:#555;">線上取號</h3>
-                    <p data-i18n="online_ticket_desc" style="color:#666; font-size: 0.9rem; margin-bottom: 20px;">
-                        免排隊、免等待！線上領取號碼牌，<br>到號自動通知您。
-                    </p>
-                    <div style="display:flex; justify-content:center; align-items:center; gap:15px;">
-                        <button id="btn-take-ticket" class="btn-primary-action" data-i18n="take_ticket">
-                            🎫 立即取號
-                        </button>
+                <div id="take-ticket-view" class="compact-view">
+                    <div class="compact-info">
+                        <h3 data-i18n="online_ticket_title">線上取號</h3>
+                        <span data-i18n="online_ticket_desc" class="compact-desc">免排隊、到號通知</span>
                     </div>
+                    <button id="btn-take-ticket" class="btn-compact-action" data-i18n="take_ticket">
+                        🎫 取號
+                    </button>
                 </div>
             </div>
 
             <div id="input-mode-container" style="display: none;">
-                <div id="input-mode-view" style="padding: 15px; width: 100%; box-sizing: border-box;">
-                    <h3 data-i18n="manual_track_title" style="margin-top:0; color:#555; margin-bottom: 15px;">手動輸入追蹤</h3>
-                    
-                    <div style="display:flex; justify-content:center; align-items:center; gap:10px; flex-direction:column; width: 100%;">
-                        <input type="number" id="manual-ticket-input" placeholder="請輸入您手上的號碼牌號碼" style="font-size: 1.2rem; padding: 12px; width: 85%; text-align: center; border: 2px solid #ccc; border-radius: 8px; background: #f9f9f9;">
-                        
-                        <button id="btn-track-ticket" class="btn-primary-action" style="background-color: #0ea5e9; width: 85%; margin-top: 5px;" data-i18n="set_reminder">
-                            🔔 設定提醒
+                <div id="input-mode-view" class="compact-view">
+                    <span class="compact-label" data-i18n="manual_track_title">手動追蹤</span>
+                    <div class="compact-input-group">
+                        <input type="number" id="manual-ticket-input" placeholder="輸入號碼">
+                        <button id="btn-track-ticket" class="btn-compact-action" data-i18n="set_reminder">
+                            設定
                         </button>
                     </div>
                 </div>
@@ -89,7 +85,7 @@
             <div id="my-ticket-view" class="my-ticket-card" style="display: none;">
                 
                 <button id="btn-cancel-ticket" type="button" class="btn-cancel-ticket">
-                    <span data-i18n="btn_give_up">🗑️ 放棄</span>
+                    <span data-i18n="btn_give_up">🗑️</span>
                 </button>
                 
                 <h3 data-i18n="my_number">您的號碼</h3>
@@ -106,16 +102,11 @@
                     <div class="info-item">
                         <span data-i18n="wait_count" class="info-label">前方等待</span>
                         <span id="ticket-waiting-count" class="info-value">0</span> 
-                        <span data-i18n="unit_group" class="info-unit">組</span>
                     </div>
                 </div>
 
-                <p id="ticket-status-text" style="margin: 15px 0 0 0; font-weight: bold; font-size: 1.1rem;">
-                    ⏳ ...
-                </p>
-                <p id="ticket-wait-time" style="margin: 5px 0 0 0; font-size: 0.9rem; opacity: 0.8; display:none;">
-                    Calculating...
-                </p>
+                <p id="ticket-status-text">⏳ ...</p>
+                <p id="ticket-wait-time" style="display:none;">Calculating...</p>
             </div>
         </div>
 
