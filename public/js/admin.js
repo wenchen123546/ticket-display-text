@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 後台邏輯 (admin.js) - v18.35 Optimized (Anti-Double-Submit & Efficient Render)
+ * 後台邏輯 (admin.js) - v19.0 (Editable Links)
  * ==========================================
  */
 
@@ -83,7 +83,9 @@ const adminI18n = {
         "btn_reset_passed": "清空過號列表",
         "btn_reset_links": "清空連結",
         "toast_passed_marked": "⏩ 已標記過號，跳至下一號",
-        "toast_recalled": "↩️ 已重呼過號"
+        "toast_recalled": "↩️ 已重呼過號",
+        "toast_link_updated": "✅ 連結已更新",
+        "btn_save_edit": "✓"
     },
     "en": {
         "status_disconnected": "Disconnected, reconnecting...",
@@ -154,7 +156,9 @@ const adminI18n = {
         "btn_reset_passed": "Clear List",
         "btn_reset_links": "Clear Links",
         "toast_passed_marked": "⏩ Skipped to next",
-        "toast_recalled": "↩️ Number recalled"
+        "toast_recalled": "↩️ Number recalled",
+        "toast_link_updated": "✅ Link updated",
+        "btn_save_edit": "✓"
     }
 };
 
@@ -187,6 +191,7 @@ let uniqueUsername = "";
 let toastTimer = null;
 let publicToggleConfirmTimer = null;
 let editingHour = null;
+let editingLinkItem = null; // 用於追蹤正在編輯的連結
 
 // --- Socket ---
 const socket = io({ autoConnect: false, auth: { token: "" } });
@@ -360,11 +365,8 @@ socket.on("updateSystemMode", (mode) => {
     for(let r of radios) { if(r.value === mode) r.checked = true; }
 });
 
-// [優化] 高效日誌渲染，使用 prepend 而非清空重繪
 function renderLogs(logs, isInit) {
     const ui = document.getElementById("admin-log-ui");
-    
-    // 初始化時，清空列表
     if(isInit) ui.replaceChildren();
 
     if(!logs || logs.length === 0) {
@@ -376,7 +378,6 @@ function renderLogs(logs, isInit) {
         return;
     }
     
-    // 如果是新日誌，且列表目前顯示"載入中"，則先清空
     if(!isInit && ui.firstElementChild && (ui.firstElementChild.textContent.includes("載入中") || ui.firstElementChild.textContent.includes("尚無"))) {
         ui.replaceChildren();
     }
@@ -391,15 +392,11 @@ function renderLogs(logs, isInit) {
     if(isInit) {
         ui.appendChild(fragment);
     } else {
-        // 新日誌插入到最上方 (prepend)
         ui.insertBefore(fragment, ui.firstChild); 
     }
 }
 
-// --- API Wrapper [優化：增加防連點鎖] ---
 async function apiRequest(endpoint, body, a_returnResponse = false) {
-    // 檢查是否有正在進行的請求 (簡易版：透過 disabled 按鈕狀態)
-    // 這裡實作一個通用的錯誤處理，防連點由按鈕點擊事件層控制
     try {
         const res = await fetch(endpoint, {
             method: "POST",
@@ -427,17 +424,13 @@ async function apiRequest(endpoint, body, a_returnResponse = false) {
     }
 }
 
-// 通用按鈕鎖定邏輯
 async function handleLockedAction(btn, action) {
     if (!btn || btn.disabled) return;
     btn.disabled = true;
-    const originalText = btn.innerHTML; // 保存原始按鈕內容 (可能包含 icon)
-    // 可選：btn.innerHTML = '...'; 
-    
+    const originalText = btn.innerHTML;
     try {
         await action();
     } finally {
-        // 延遲一點點再解鎖，避免極快連點
         setTimeout(() => {
             btn.disabled = false;
             btn.innerHTML = originalText;
@@ -525,6 +518,7 @@ function renderPassedListUI(numbers) {
     ui.appendChild(fragment);
 }
 
+// [修改] 編輯連結邏輯整合
 function renderFeaturedListUI(contents) {
     const ui = document.getElementById("featured-list-ui");
     ui.replaceChildren();
@@ -535,35 +529,101 @@ function renderFeaturedListUI(contents) {
     contents.forEach((item) => {
         const li = document.createElement("li");
         
+        // --- 顯示區塊 ---
+        const viewDiv = document.createElement("div");
+        viewDiv.style.flex = "1";
+        viewDiv.style.display = "flex";
+        viewDiv.style.flexDirection = "column";
+
         const span = document.createElement("span");
         span.style.wordBreak = "break-all"; 
         span.style.whiteSpace = "normal";
+        span.style.fontWeight = "600";
+        span.textContent = item.linkText;
         
-        const textNode = document.createTextNode(item.linkText);
-        const br = document.createElement("br");
         const small = document.createElement("small");
         small.style.color = "#666";
         small.textContent = item.linkUrl;
         
-        span.appendChild(textNode);
-        span.appendChild(br);
-        span.appendChild(small);
+        viewDiv.appendChild(span);
+        viewDiv.appendChild(small);
         
-        li.appendChild(span);
-        
+        // --- 按鈕區塊 ---
+        const btnGroup = document.createElement("div");
+        btnGroup.style.display = "flex";
+        btnGroup.style.gap = "6px";
+        btnGroup.style.marginLeft = "8px";
+
+        // 編輯按鈕
+        const editBtn = document.createElement("button");
+        editBtn.className = "btn-secondary";
+        editBtn.textContent = "✎";
+        editBtn.style.padding = "2px 8px";
+        editBtn.onclick = () => {
+            startEditingLink(item);
+        };
+
+        // 刪除按鈕
         const deleteBtn = document.createElement("button");
         deleteBtn.className = "delete-item-btn"; 
         deleteBtn.textContent = "✕";
-        
         setupConfirmationButton(deleteBtn, "✕", "⚠️", async () => { 
             deleteBtn.disabled = true; 
+            // 如果正在編輯此項目，先取消編輯
+            if(editingLinkItem && editingLinkItem.linkText === item.linkText) {
+                cancelEditingLink();
+            }
             await apiRequest("/api/featured/remove", { linkText: item.linkText, linkUrl: item.linkUrl }); 
         });
         
-        li.appendChild(deleteBtn);
+        btnGroup.appendChild(editBtn);
+        btnGroup.appendChild(deleteBtn);
+        
+        li.appendChild(viewDiv);
+        li.appendChild(btnGroup);
         fragment.appendChild(li);
     });
     ui.appendChild(fragment);
+}
+
+// 進入編輯模式
+function startEditingLink(item) {
+    editingLinkItem = item;
+    
+    const textInput = document.getElementById("new-link-text");
+    const urlInput = document.getElementById("new-link-url");
+    const btn = document.getElementById("add-featured-btn");
+    
+    textInput.value = item.linkText;
+    urlInput.value = item.linkUrl;
+    
+    // UI 變更提示
+    textInput.style.backgroundColor = "#fffbeb"; // 淺黃底
+    urlInput.style.backgroundColor = "#fffbeb";
+    btn.textContent = at["btn_save_edit"] || "✓";
+    btn.classList.remove("btn-add");
+    btn.classList.add("btn-success");
+    
+    textInput.focus();
+}
+
+// 取消編輯模式
+function cancelEditingLink() {
+    editingLinkItem = null;
+    
+    const textInput = document.getElementById("new-link-text");
+    const urlInput = document.getElementById("new-link-url");
+    const btn = document.getElementById("add-featured-btn");
+    
+    textInput.value = "";
+    urlInput.value = "";
+    
+    // UI 還原
+    textInput.style.backgroundColor = "";
+    urlInput.style.backgroundColor = "";
+    btn.textContent = "+";
+    btn.classList.remove("btn-success");
+    btn.classList.add("btn-add");
 }
 
 function renderOnlineAdmins(admins) {
@@ -614,7 +674,6 @@ const btnMarkPassed = document.getElementById("btn-mark-passed");
 const btnIssuePrev = document.getElementById("btn-issue-prev");
 const btnIssueNext = document.getElementById("btn-issue-next");
 
-// [優化] 使用 handleLockedAction 防止連點
 if(btnCallPrev) btnCallPrev.onclick = () => handleLockedAction(btnCallPrev, () => apiRequest("/api/control/call", { direction: "prev" }));
 if(btnCallNext) btnCallNext.onclick = () => handleLockedAction(btnCallNext, () => apiRequest("/api/control/call", { direction: "next" }));
 
@@ -625,7 +684,6 @@ if(btnMarkPassed) btnMarkPassed.onclick = () => handleLockedAction(btnMarkPassed
 if(btnIssuePrev) btnIssuePrev.onclick = () => handleLockedAction(btnIssuePrev, () => apiRequest("/api/control/issue", { direction: "prev" }));
 if(btnIssueNext) btnIssueNext.onclick = () => handleLockedAction(btnIssueNext, () => apiRequest("/api/control/issue", { direction: "next" }));
 
-// 快速輸入按鈕邏輯
 const btnQuickAdd1 = document.getElementById("quick-add-1");
 const btnQuickAdd5 = document.getElementById("quick-add-5");
 const btnQuickClear = document.getElementById("quick-clear");
@@ -661,7 +719,6 @@ const setIssuedBtn = document.getElementById("setIssuedNumber");
 if(setIssuedBtn) setIssuedBtn.onclick = async () => {
     const num = document.getElementById("manualIssuedNumber").value;
     const n = Number(num);
-    // 允許輸入 0 (配合後端修正)
     if (num === "" || n < 0 || !Number.isInteger(n)) return showToast(at["alert_positive_int"], "error");
     
     if (await apiRequest("/api/control/set-issue", { number: n })) {
@@ -670,10 +727,8 @@ if(setIssuedBtn) setIssuedBtn.onclick = async () => {
     }
 };
 
-// 重置叫號
 setupConfirmationButton(document.getElementById("resetNumber"), "btn_reset_call", "btn_confirm_reset", async () => { if (await apiRequest("/api/control/set-call", { number: 0 })) { document.getElementById("manualNumber").value = ""; showToast(at["toast_reset_zero"], "success"); } });
 
-// 重置發號
 setupConfirmationButton(
     document.getElementById("resetIssued"), 
     "↺ 重置發號歸零", 
@@ -713,16 +768,55 @@ if(newPassedNumberInput) newPassedNumberInput.addEventListener("keyup", (event) 
 const newLinkTextInput = document.getElementById("new-link-text");
 const newLinkUrlInput = document.getElementById("new-link-url");
 const addFeaturedBtn = document.getElementById("add-featured-btn");
+
+// [修改] 新增或編輯連結按鈕邏輯
 if(addFeaturedBtn) addFeaturedBtn.onclick = async () => {
     const text = newLinkTextInput.value.trim();
     const url = newLinkUrlInput.value.trim();
     if (!text || !url) return showToast(at["alert_link_required"], "error");
     if (!url.startsWith('http://') && !url.startsWith('https://')) return showToast(at["alert_url_invalid"], "error");
+    
     addFeaturedBtn.disabled = true;
-    if (await apiRequest("/api/featured/add", { linkText: text, linkUrl: url })) { newLinkTextInput.value = ""; newLinkUrlInput.value = ""; }
+    
+    // 判斷是新增還是編輯
+    if(editingLinkItem) {
+        // 編輯模式
+        const payload = {
+            oldLinkText: editingLinkItem.linkText,
+            oldLinkUrl: editingLinkItem.linkUrl,
+            newLinkText: text,
+            newLinkUrl: url
+        };
+        const success = await apiRequest("/api/featured/edit", payload);
+        if (success) {
+            showToast(at["toast_link_updated"], "success");
+            cancelEditingLink(); // 成功後退出編輯模式
+        }
+    } else {
+        // 新增模式
+        const success = await apiRequest("/api/featured/add", { linkText: text, linkUrl: url });
+        if (success) {
+            newLinkTextInput.value = ""; 
+            newLinkUrlInput.value = ""; 
+        }
+    }
+    
     addFeaturedBtn.disabled = false;
 };
-if(newLinkTextInput) newLinkTextInput.addEventListener("keyup", (event) => { if (event.key === "Enter") newLinkUrlInput.focus(); });
+
+// 鍵盤監聽取消編輯
+document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && editingLinkItem) {
+        cancelEditingLink();
+    }
+});
+if(newLinkTextInput) newLinkTextInput.addEventListener("keyup", (e) => { 
+    if (e.key === "Enter") newLinkUrlInput.focus();
+    // 如果清空，也視為想取消編輯(僅限編輯模式)
+    if (editingLinkItem && newLinkTextInput.value === "" && newLinkUrlInput.value === "") {
+        // cancelEditingLink(); // 可選：自動取消
+    }
+});
 if(newLinkUrlInput) newLinkUrlInput.addEventListener("keyup", (event) => { if (event.key === "Enter") addFeaturedBtn.click(); });
 
 const broadcastBtn = document.getElementById("btn-broadcast");
