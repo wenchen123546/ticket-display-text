@@ -1,10 +1,10 @@
 /*
  * ==========================================
- * 前台樣式 (style.css) - v18.36 Single Screen Layout
+ * 前台樣式 (style.css) - v18.37 Fixed Layout
+ * 修復跑版問題：強制單一螢幕、內層獨立捲動
  * ==========================================
  */
 
-/* --- 1. 全局設定與變數 --- */
 :root {
     --color-text: #333;
     --color-text-light: #555;
@@ -19,382 +19,258 @@
     --color-secondary-light: #f5f3ff; 
     --color-warning: #d97706; 
     
-    /* 使用 vh/vmin 確保字體隨畫面高度調整 */
-    --font-h1: clamp(1.2rem, 4vh, 2.2rem); 
-    --font-h2: clamp(1rem, 3vh, 1.8rem); 
-    --font-h3: clamp(1rem, 2.5vh, 1.5rem); 
+    /* 字體大小調整：縮小最小值以適應小手機 */
+    --font-h1: clamp(1.2rem, 3vh, 1.8rem); 
+    --font-h2: clamp(0.9rem, 2.5vh, 1.5rem); 
+    --font-h3: clamp(0.9rem, 2.2vh, 1.3rem); 
     
-    --font-number-big: clamp(4rem, 15vh, 10rem); 
-    --font-number-sub: clamp(2rem, 8vh, 4rem);
+    /* 核心數字：允許在空間不足時縮小 */
+    --font-number-big: clamp(3rem, 12vh, 8rem); 
+    --font-number-sub: clamp(1.5rem, 6vh, 3rem);
     
-    --font-passed: clamp(1rem, 2.5vh, 2rem);
-    --font-featured: clamp(0.8rem, 2vh, 1.2rem); 
+    --font-passed: clamp(0.8rem, 2vh, 1.5rem);
+    --font-featured: clamp(0.8rem, 1.8vh, 1rem); 
+    
+    --gap-base: 1vh; /* 統一間距 */
 }
 
+/* --- 1. 全局強制設定 --- */
 html, body { 
     height: 100%; 
     width: 100%;
     margin: 0; 
     padding: 0; 
-    overflow: hidden; /* 強制禁止頁面捲動 */
+    overflow: hidden; /* 禁止網頁層級捲動 */
+    position: fixed; /* 鎖定在視窗上，防止 iOS 橡皮筋效果 */
 }
 
 body { 
     font-family: "Microsoft JhengHei", system-ui, -apple-system, sans-serif; 
     text-align: center; 
     background: var(--color-bg); 
+    color: var(--color-text);
+    
+    /* 使用 Flex Column 佈局 */
     display: flex; 
     flex-direction: column; 
     align-items: center; 
-    justify-content: flex-start;
-    padding: 2vh 3vw; /* 使用相對單位 */
+    
+    /* 安全區域設定 (針對 iPhone瀏海) */
+    padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
     box-sizing: border-box; 
-    overscroll-behavior: none; /* 禁止橡皮筋效果 */
 }
 
-/* [iOS 優化] 防止輸入框自動縮放 */
-input, select, textarea {
-    font-size: 16px !important; 
-}
+/* --- 2. 佈局結構 (由上而下) --- */
 
-/* --- 2. 頁面結構 Flex 設定 --- */
-
-/* 頂部標題區：固定高度，不縮放 */
+/* (A) 頂部標題：高度固定 (auto) */
 .top-header { 
-    flex: 0 0 auto; 
+    flex: 0 0 auto; /* 不伸縮 */
     width: 100%; 
-    margin-bottom: 1vh; 
+    margin-bottom: var(--gap-base); 
     position: relative;
     z-index: 10;
 }
+h1 { margin: 0; line-height: 1.2; font-weight: 900; color: var(--color-danger); }
+#last-updated { margin: 2px 0 0 0; font-size: 0.75rem; color: var(--color-text-light); }
 
-h1 { 
-    font-size: var(--font-h1); 
-    color: var(--color-danger); 
-    margin: 0; 
-    line-height: 1.2;
-    font-weight: 900;
-}
-
-#last-updated { 
-    font-size: 0.8rem; 
-    color: var(--color-text-light); 
-    margin: 0.5vh 0 0 0; 
-}
-
-/* 主內容區：佔據剩餘空間，自動伸縮 */
+/* (B) 中間主要內容區：佔滿剩餘空間 */
 .content-wrapper {
-    flex: 1 1 auto; /* 自動填滿剩餘高度 */
+    flex: 1 1 auto; /* 自動填滿 */
     width: 100%; 
-    max-width: 800px; /* 限制最大寬度以免在大螢幕太寬 */
+    max-width: 600px; /* 限制最大寬度，避免在大螢幕太寬難看 */
     display: flex; 
     flex-direction: column; 
-    gap: 1.5vh; /* 卡片間距 */
-    min-height: 0; /* 關鍵：允許 flex item 縮小至內容以下 */
-    margin-bottom: 1vh;
+    gap: var(--gap-base);
+    
+    /* 關鍵：允許 Flex 子元素縮小至內容以下，防止破版 */
+    min-height: 0; 
+    overflow: hidden; 
 }
 
-/* 卡片通用樣式 */
+/* 卡片通用設定 */
 .card {
     background: var(--color-bg-light); 
-    border-radius: 16px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
-    padding: 1.5vh 2vw;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+    padding: 1vh 3vw;
     width: 100%; 
     box-sizing: border-box;
-    transition: transform 0.2s;
-    
-    /* 讓卡片內容置中 */
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
 }
 
-/* --- 3. 各區塊權重分配 --- */
+/* --- 3. 各區塊權重與細節 --- */
 
-/* 狀態看板 (權重高，優先保留高度) */
+/* [看板區] */
 #status-board {
-    flex: 2 1 auto; 
-    display: flex;
-    flex-direction: row; /* 水平排列 */
+    flex: 0 0 auto; /* 高度由內容決定，適度伸縮 */
+    min-height: 15vh; /* 給予最小高度 */
+    flex-direction: row; 
     justify-content: space-around;
-    min-height: 15vh; /* 最小高度保護 */
+    padding: 1vh 0;
 }
+.status-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.status-item h2 { margin: 0; color: var(--color-text-light); white-space: nowrap; }
+#number { font-size: var(--font-number-big); color: var(--color-primary); font-weight: 800; line-height: 1; margin: 0; }
+#issued-number-main { font-size: var(--font-number-sub); font-weight: bold; line-height: 1; margin: 0; }
+.status-divider { width: 1px; height: 70%; background-color: #eee; margin: 0 10px; }
 
-/* 取號/我的號碼區 (權重最高，最重要) */
+/* [取號/我的號碼區] - 這是畫面主角，權重最高 */
 #ticket-section { 
-    flex: 2 1 auto;
-    padding: 0; 
-    overflow: hidden; 
-    min-height: 15vh;
-}
-
-/* 過號區 (權重低，空間不足時可縮小) */
-#passed-container { 
-    flex: 1 1 auto; 
-    min-height: 8vh;
-    justify-content: flex-start; /* 內容靠上 */
-    overflow: hidden; /* 防止撐開 */
-}
-
-/* 精選連結區 (權重最低) */
-#featured-container {
-    flex: 0 1 auto;
-    background: transparent;
-    box-shadow: none;
+    flex: 1 1 auto; /* 佔據最多空間 */
+    min-height: 0; /* 允許縮小 */
     padding: 0;
-    margin: 0;
-    min-height: 0;
+    overflow: hidden; /* 防止內部內容撐開 */
 }
 
-/* --- 4. 內容樣式細節 --- */
-
-.status-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-}
-
-.status-item h2 {
-    font-size: var(--font-h2);
-    color: var(--color-text-light);
-    margin: 0;
-    white-space: nowrap;
-}
-
-/* 數字顯示 */
-#number { 
-    font-size: var(--font-number-big); 
-    color: var(--color-primary); 
-    margin: 0; 
-    font-weight: 800; 
-    line-height: 1.1; 
-}
-
-#issued-number-main { 
-    font-size: var(--font-number-sub); 
-    color: var(--color-text); 
-    margin: 0; 
-    font-weight: bold; 
-    line-height: 1.1; 
-}
-
-.status-divider {
-    width: 2px;
-    height: 60%;
-    background-color: #eee;
-    margin: 0 15px;
-}
-
-/* 取號/我的號碼視圖 */
+/* 內部容器設定 */
 #ticketing-mode-container, #input-mode-container, #my-ticket-view {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column; 
+    justify-content: center; align-items: center;
+    overflow-y: auto; /* 只有這裡內容太多時才卷動 */
 }
 
-#take-ticket-view, #input-mode-view {
-    padding: 2vh 2vw;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    height: 100%;
-}
-
-#take-ticket-view h3, #input-mode-view h3 {
-    font-size: var(--font-h3);
-    margin-bottom: 1vh;
-}
-
-#take-ticket-view p, #input-mode-view p {
-    font-size: clamp(0.8rem, 2vh, 1rem);
-    margin-bottom: 2vh;
-}
-
-/* 我的號碼卡片樣式調整 */
-.my-ticket-card {
-    background: linear-gradient(135deg, var(--color-primary) 0%, #1e40af 100%); 
-    color: white; 
-    padding: 2vh 3vw; 
-    position: relative;
-    border-radius: 16px;
-    width: 100%;
-    height: 100%;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-.my-ticket-card h3 { 
-    font-size: 1rem; opacity:0.9; margin: 0;
-}
-
-.my-ticket-number-display {
-    font-size: clamp(3rem, 10vh, 6rem); 
-    font-weight: bold; 
-    line-height: 1; 
-    margin: 1vh 0;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.my-ticket-info-block {
-    background: rgba(255,255,255,0.15); border-radius: 12px; 
-    padding: 1vh 2vw; 
-    margin-top: 1vh; 
-    display: flex; justify-content: space-around; align-items: center;
-    backdrop-filter: blur(5px);
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.info-label { font-size:0.8rem; opacity:0.85; margin-bottom: 0; }
-.info-value { font-size: clamp(1.2rem, 3vh, 1.8rem); font-weight:bold; }
+/* 取號介面 */
+#take-ticket-view, #input-mode-view { padding: 10px; }
+#take-ticket-view h3, #input-mode-view h3 { margin: 0 0 1vh 0; font-size: var(--font-h3); }
+#take-ticket-view p, #input-mode-view p { margin: 0 0 2vh 0; font-size: 0.9rem; line-height: 1.4; color: #666; }
 
 .btn-primary-action {
-    padding: 1.5vh 5vw; 
-    font-size: clamp(1rem, 2.5vh, 1.4rem); 
+    padding: 1.5vh 6vw; 
+    font-size: clamp(1rem, 2.5vh, 1.3rem); 
     border-radius: 50px; 
-    background: var(--color-primary); 
-    color: white; border: none; font-weight: 700;
-    box-shadow: 0 4px 15px rgba(37,99,235,0.4); 
+    background: var(--color-primary); color: white; border: none; font-weight: 700;
+    box-shadow: 0 4px 12px rgba(37,99,235,0.3); white-space: nowrap;
 }
 
-/* 過號名單：內部捲動 */
-#passed-container h3 { 
-    font-size: var(--font-h3); 
-    color: var(--color-text-lighter); 
-    margin: 0 0 1vh 0; 
+/* 我的號碼卡片 */
+.my-ticket-card {
+    background: linear-gradient(135deg, var(--color-primary) 0%, #1e40af 100%); 
+    color: white; width: 100%; height: 100%;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    padding: 1vh 2vw; box-sizing: border-box; position: relative;
 }
+.btn-cancel-ticket {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);
+    padding: 4px 10px; border-radius: 15px; font-size: 0.8rem; color: white;
+}
+.my-ticket-number-display { font-size: clamp(3rem, 10vh, 6rem); font-weight: bold; line-height: 1; margin: 1vh 0; }
+.my-ticket-info-block {
+    background: rgba(255,255,255,0.15); border-radius: 10px; padding: 1vh 2vw; width: 90%;
+    display: flex; justify-content: space-around; backdrop-filter: blur(5px);
+}
+.info-label { font-size: 0.75rem; opacity: 0.9; margin-bottom: 2px; display: block; }
+.info-value { font-size: 1.4rem; font-weight: bold; }
+#ticket-status-text { margin: 1.5vh 0 0 0; font-weight: bold; font-size: 1rem; }
 
+/* [過號區] */
+#passed-container { 
+    flex: 0 1 auto; /* 空間不足時優先縮小 */
+    min-height: 0;
+    max-height: 20vh; /* 限制最大高度 */
+    justify-content: flex-start;
+    padding: 1vh 2vw;
+    display: flex; flex-direction: column;
+}
+#passed-container h3 { margin: 0 0 0.5vh 0; font-size: 0.9rem; color: #888; }
 #passedList { 
     list-style: none; padding: 0; margin: 0; 
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; 
-    width: 100%;
-    
-    /* 關鍵：內部捲動設定 */
-    max-height: 100%; 
-    overflow-y: auto; 
-    padding-bottom: 5px;
+    display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 6px; 
+    width: 100%; overflow-y: auto; /* 內部捲動 */
 }
-
 #passedList li { 
-    font-size: var(--font-passed); color: var(--color-text-lightest); 
-    background: #e5e7eb; padding: 0.5vh 1.5vw; border-radius: 8px; 
-    min-width: 40px; 
-    font-weight: 700;
+    font-size: var(--font-passed); color: #888; background: #e5e7eb; 
+    padding: 2px 10px; border-radius: 6px; font-weight: 700;
 }
 
-/* 精選連結：內部捲動 */
+/* [精選連結區] */
 #featured-container {
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
-    max-height: 15vh;
+    flex: 0 1 auto;
+    max-height: 12vh; /* 限制高度 */
     overflow-y: auto;
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+    margin-bottom: 0.5vh;
 }
-
 .featured-link { 
-    font-size: var(--font-featured); 
-    padding: 1vh 3vw; 
-    border-radius: 50px; 
-    background: var(--color-secondary-light); 
-    color: var(--color-secondary); font-weight: bold; 
-    text-decoration: none; border: 1px solid transparent;
+    font-size: 0.85rem; padding: 6px 14px; border-radius: 20px; 
+    background: var(--color-secondary-light); color: var(--color-secondary); 
+    text-decoration: none; font-weight: bold; display: inline-block;
 }
 
-/* 工具按鈕區 (最底部，不縮放) */
+/* (C) 底部工具列：固定高度 */
 .utility-buttons {
     flex: 0 0 auto;
-    display: flex; 
-    justify-content: center;
-    gap: 10px; 
-    width: 100%; 
-    padding-bottom: 1vh;
+    display: flex; justify-content: center; gap: 10px; 
+    width: 100%; padding-top: 0.5vh;
 }
-
 #sound-prompt, #copy-link-prompt {
-    background: #fff; padding: 1vh 4vw; border-radius: 50px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06); cursor: pointer;
-    font-weight: 600; font-size: 0.9rem; 
-    color: var(--color-text-light);
+    background: #fff; padding: 8px 16px; border-radius: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer;
+    font-size: 0.85rem; color: var(--color-text-light); border: 1px solid #eee;
 }
 
-/* --- 5. RWD 與特殊元件 --- */
+/* --- 4. 輔助樣式與 RWD --- */
 
 /* 隱藏元素 */
-.empty-state-message { display: none; font-size: 0.9rem; color: #9ca3af; margin: 5px 0; }
+.empty-state-message { display: none; font-size: 0.8rem; color: #bbb; margin: 2px 0; }
 #passed-container.is-empty .empty-state-message { display: block; }
 #passed-container.is-empty #passedList { display: none; }
-#featured-container.is-empty { display: none; } /* 空間不足時直接隱藏 */
-
-/* QR Code (僅在大螢幕顯示，避免佔位) */
-#qr-code-container { 
-    position: fixed; bottom: 20px; right: 20px; 
-    background: white; padding: 10px; border-radius: 12px; 
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15); z-index: 100; 
-    display: none; /* 預設隱藏，空間夠大才顯示 */
-}
-
-@media (min-width: 1024px) and (min-height: 700px) {
-    #qr-code-container { display: block; }
-}
+#featured-container.is-empty { display: none; }
 
 /* 狀態列 */
 #status-bar { 
-    position: absolute; top: 0; left: 0; width: 100%; 
-    background-color: var(--color-danger); color: white; 
-    padding: 5px; font-weight: bold; text-align: center; z-index: 2000; 
+    position: absolute; top: 0; left: 0; width: 100%; height: 40px;
+    background-color: var(--color-danger); color: white; line-height: 40px;
+    font-weight: bold; text-align: center; z-index: 2000; font-size: 0.9rem;
     transform: translateY(-100%); transition: transform 0.3s ease; 
-    font-size: 0.8rem;
 }
 #status-bar.visible { transform: translateY(0); }
+
+/* QR Code (僅在空間足夠時顯示) */
+#qr-code-container { display: none; } 
+@media (min-width: 1024px) and (min-height: 700px) {
+    #qr-code-container { 
+        position: fixed; bottom: 20px; right: 20px; display: block;
+        background: white; padding: 10px; border-radius: 12px; 
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15); z-index: 100; 
+    }
+}
 
 /* 維護模式遮罩 */
 #maintenance-overlay {
     display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: #f3f4f6; z-index: 9999; 
     flex-direction: column; justify-content: center; align-items: center;
-    text-align: center;
 }
 body.is-closed #maintenance-overlay { display: flex; }
 
-/* Toast */
+/* Toast 提示 */
 #toast-container {
-    position: fixed; bottom: 10vh; left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: 10%; left: 50%; transform: translateX(-50%);
     z-index: 9999; display: flex; flex-direction: column; gap: 5px;
     pointer-events: none; width: max-content; max-width: 90%;
-    align-items: center;
 }
 .toast-message {
     background: rgba(31, 41, 55, 0.95); color: white;
-    padding: 10px 20px; border-radius: 50px;
-    font-size: 0.9rem;
-    opacity: 0; transform: translateY(20px);
-    transition: all 0.3s;
+    padding: 8px 16px; border-radius: 50px; font-size: 0.85rem;
+    opacity: 0; transform: translateY(10px); transition: all 0.3s;
 }
 .toast-message.show { opacity: 1; transform: translateY(0); }
-.toast-message.error { background: rgba(220, 38, 38, 0.95); } 
-.toast-message.success { background: rgba(16, 185, 129, 0.95); }
 
-/* 動畫 */
-@keyframes flash { 
-    0% { transform: scale(1); opacity: 1; } 
-    30% { transform: scale(1.1); color: var(--color-warning); }
-    100% { transform: scale(1); opacity: 1; color: var(--color-primary); } 
-}
-#number.updated { animation: flash 0.6s ease-out; }
+/* 輸入框優化 */
+input, select { font-size: 16px !important; } /* 防止 iOS 放大 */
 
-/* 手機版特別優化 */
+/* 極小螢幕 (如 iPhone SE) 額外優化 */
 @media (max-height: 600px) {
-    .content-wrapper { gap: 1vh; }
-    .card { padding: 1vh 2vw; }
-    #passed-container { min-height: 0; flex-shrink: 1; }
-    #featured-container { display: none; } /* 高度不足時隱藏連結 */
-    h1 { font-size: 1.2rem; }
-    #number { font-size: 4rem; }
+    :root { --gap-base: 0.5vh; }
+    .top-header { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 5px; }
+    h1 { font-size: 1rem; }
+    #last-updated { display: none; } /* 空間不足隱藏更新時間 */
+    #featured-container { display: none; } /* 空間不足隱藏連結 */
+    #status-board { min-height: 10vh; padding: 0; }
+    .card { padding: 0.5vh 2vw; }
 }
