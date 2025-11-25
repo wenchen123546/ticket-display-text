@@ -1,92 +1,92 @@
 /*
  * ==========================================
- * 前端邏輯 (main.js) - v18.41
+ * 前端邏輯 (main.js) - v20.0
  * ==========================================
  */
 
 const i18nData = {
     "zh-TW": {
-        "app_title": "💉熱血不宜攔！🩸",
+        "app_title": "Queue System",
         "current_number": "目前叫號",
         "issued_number": "已發號碼",
         "online_ticket_title": "線上取號",
-        "online_ticket_desc": "免排隊、到號通知",
-        "take_ticket": "取號",
-        "taking_ticket": "...",
+        "online_ticket_desc": "免排隊，到號通知",
+        "take_ticket": "立即取號",
+        "taking_ticket": "處理中...",
         "manual_track_title": "手動追蹤",
-        "manual_input_placeholder": "輸入號碼", 
-        "set_reminder": "設定",
+        "manual_input_placeholder": "輸入號碼",
+        "set_reminder": "追蹤",
         "btn_give_up": "🗑️",
         "my_number": "您的號碼",
         "ticket_current_label": "目前叫號",
         "wait_count": "前方等待",
         "unit_group": "組",
-        "status_wait": "⏳ 請稍候，還有 %s 組",
+        "status_wait": "⏳ 還需等待 %s 組",
         "status_arrival": "🎉 輪到您了！請前往櫃台",
         "status_passed": "⚠️ 您可能已過號",
         "passed_list_title": "已過號",
-        "passed_empty": "目前尚無過號",
+        "passed_empty": "目前無過號",
         "copy_link": "複製連結",
         "sound_enable": "啟用音效",
         "sound_on": "音效開啟",
         "sound_mute": "啟用音效",
-        "featured_empty": "暫無精選連結",
-        "scan_qr": "掃描查看進度",
+        "featured_empty": "",
+        "scan_qr": "掃描追蹤",
         "error_network": "連線中斷",
         "take_success": "取號成功！",
         "take_fail": "取號失敗",
         "input_empty": "請輸入號碼",
-        "cancel_confirm": "確定要放棄/清除目前的追蹤嗎？",
-        "copy_success": "✅ 已複製",
-        "public_announcement": "📢 店家公告：",
+        "cancel_confirm": "確定要取消追蹤嗎？",
+        "copy_success": "已複製",
+        "public_announcement": "📢 公告：",
         "queue_notification": "再 %s 組就輪到您囉！",
-        "arrival_notification": "輪到您了！請前往櫃台",
+        "arrival_notification": "輪到您了！",
         "estimated_wait": "預估等待：約 %s 分鐘",
-        "time_just_now": "剛剛更新",
-        "time_min_ago": "最後更新於 %s 分鐘前",
-        "status_connected": "✅ 已連線",
-        "status_reconnecting": "連線中斷，嘗試重連 (%s)..."
+        "time_just_now": "剛剛",
+        "time_min_ago": "%s 分鐘前",
+        "status_connected": "已連線",
+        "status_reconnecting": "連線中斷 (%s)..."
     },
     "en": {
-        "app_title": "Waiting Queue",
-        "current_number": "Current",
+        "app_title": "Queue System",
+        "current_number": "Now Serving",
         "issued_number": "Issued",
         "online_ticket_title": "Online Ticket",
-        "online_ticket_desc": "Skip the line!",
-        "take_ticket": "Get",
+        "online_ticket_desc": "Skip the line",
+        "take_ticket": "Get Ticket",
         "taking_ticket": "...",
-        "manual_track_title": "Track Ticket",
+        "manual_track_title": "Track",
         "manual_input_placeholder": "Ticket #",
-        "set_reminder": "Set",
+        "set_reminder": "Track",
         "btn_give_up": "✕",
         "my_number": "Your #",
-        "ticket_current_label": "Now",
-        "wait_count": "Waiting",
-        "unit_group": "groups",
-        "status_wait": "⏳ Waiting: %s groups",
-        "status_arrival": "🎉 Your turn!",
+        "ticket_current_label": "Current",
+        "wait_count": "Ahead",
+        "unit_group": "",
+        "status_wait": "⏳ %s groups ahead",
+        "status_arrival": "🎉 It's your turn!",
         "status_passed": "⚠️ Passed",
         "passed_list_title": "Passed",
-        "passed_empty": "No passed numbers",
+        "passed_empty": "None",
         "copy_link": "Copy Link",
         "sound_enable": "Sound",
         "sound_on": "On",
         "sound_mute": "Sound",
-        "featured_empty": "No links",
+        "featured_empty": "",
         "scan_qr": "Scan to track",
-        "error_network": "Connection Lost",
-        "take_success": "Success!",
+        "error_network": "Offline",
+        "take_success": "Success",
         "take_fail": "Failed",
-        "input_empty": "Enter a number",
+        "input_empty": "Enter number",
         "cancel_confirm": "Stop tracking?",
-        "copy_success": "✅ Copied",
+        "copy_success": "Copied",
         "public_announcement": "📢: ",
         "queue_notification": "%s groups to go!",
         "arrival_notification": "It's your turn!",
         "estimated_wait": "~%s mins",
         "time_just_now": "Now",
         "time_min_ago": "%s min ago",
-        "status_connected": "✅ Connected",
+        "status_connected": "Online",
         "status_reconnecting": "Reconnecting (%s)..."
     }
 };
@@ -99,6 +99,8 @@ const DOM = {
     number: document.getElementById("number"),
     issuedNumberMain: document.getElementById("issued-number-main"),
     passedList: document.getElementById("passedList"),
+    passedCount: document.getElementById("passed-count"),
+    passedEmptyMsg: document.getElementById("passed-empty-msg"),
     featuredContainer: document.getElementById("featured-container"),
     statusBar: document.getElementById("status-bar"),
     notifySound: document.getElementById("notify-sound"),
@@ -195,7 +197,7 @@ function triggerConfetti() {
 
 function applyI18n() {
     document.querySelectorAll('[data-i18n]').forEach(el => { const key = el.getAttribute('data-i18n'); if(T[key]) el.textContent = T[key]; });
-    if(DOM.manualTicketInput) DOM.manualTicketInput.placeholder = T["manual_input_placeholder"];
+    // Label updates are handled by CSS/HTML structure in this version
     if(DOM.btnTakeTicket && !DOM.btnTakeTicket.disabled) { DOM.btnTakeTicket.textContent = T["take_ticket"]; }
 }
 
@@ -240,36 +242,43 @@ function handleNewNumber(num) {
         playNotificationSound();
         setTimeout(() => { if (DOM.number.textContent !== String(num) && isSoundEnabled && !isLocallyMuted) speakText(`現在號碼，${num}號`, 0.9); }, 800);
         DOM.number.textContent = num; document.title = `${num} - ${T["app_title"]}`;
-        DOM.number.classList.add("updated"); setTimeout(() => DOM.number.classList.remove("updated"), 500);
     }
 }
 
 function updateTicketUI(currentNum) {
     if (!myTicket) return;
+    // Note: Ticket background color is handled by CSS class .my-ticket-active in this version
     DOM.ticketCurrentDisplay.textContent = currentNum; const diff = myTicket - currentNum;
-    let background = "linear-gradient(135deg, #2563eb 0%, #1e40af 100%)"; let statusText = T["status_wait"].replace("%s", diff); let waitTimeDisplay = "none";
+    let statusText = T["status_wait"].replace("%s", diff); let waitTimeDisplay = "none";
+    
     if (diff > 0) {
         DOM.ticketWaitingCount.textContent = diff;
         if (avgServiceTime > 0) { const min = Math.ceil(diff * avgServiceTime); DOM.ticketWaitTime.textContent = T["estimated_wait"].replace("%s", min); waitTimeDisplay = "block"; }
         if (diff <= 3) { vibratePattern([100]); if (document.hidden && Notification.permission === "granted") new Notification(T["app_title"], { body: T["queue_notification"].replace("%s", diff), tag: 'approach' }); }
     } else if (diff === 0) {
-        DOM.ticketWaitingCount.textContent = "0"; statusText = T["status_arrival"]; background = "linear-gradient(135deg, #059669 0%, #10b981 100%)";
+        DOM.ticketWaitingCount.textContent = "0"; statusText = T["status_arrival"];
         triggerConfetti(); vibratePattern([200, 100, 200, 100, 200]); if (isSoundEnabled && !isLocallyMuted) speakText("恭喜，輪到您了，請前往櫃台", 1.0);
-    } else { DOM.ticketWaitingCount.textContent = "-"; statusText = T["status_passed"]; background = "linear-gradient(135deg, #d97706 0%, #b45309 100%)"; }
-    DOM.ticketStatusText.textContent = statusText; DOM.myTicketView.style.background = background; DOM.ticketWaitTime.style.display = waitTimeDisplay;
+    } else { DOM.ticketWaitingCount.textContent = "-"; statusText = T["status_passed"]; }
+    DOM.ticketStatusText.textContent = statusText; DOM.ticketWaitTime.style.display = waitTimeDisplay;
 }
 
 function showMyTicketMode() { DOM.takeTicketView.style.display = "none"; DOM.inputModeView.style.display = "none"; DOM.myTicketView.style.display = "block"; DOM.myTicketNum.textContent = myTicket; if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }
 function showTakeTicketMode() { DOM.myTicketView.style.display = "none"; DOM.takeTicketView.style.display = (currentSystemMode === 'ticketing') ? "block" : "none"; DOM.inputModeView.style.display = (currentSystemMode === 'input') ? "block" : "none"; }
 
 function renderPassed(numbers) {
-    DOM.passedList.innerHTML = ""; const isEmpty = !numbers || numbers.length === 0; DOM.passedContainer.classList.toggle("is-empty", isEmpty);
-    if (!isEmpty) { const frag = document.createDocumentFragment(); numbers.forEach(n => { const li = document.createElement("li"); li.textContent = n; frag.appendChild(li); }); DOM.passedList.appendChild(frag); }
+    DOM.passedList.innerHTML = ""; const isEmpty = !numbers || numbers.length === 0;
+    DOM.passedCount.textContent = numbers ? numbers.length : 0;
+    if (isEmpty) {
+        DOM.passedEmptyMsg.style.display = 'flex'; DOM.passedList.style.display = 'none';
+    } else {
+        DOM.passedEmptyMsg.style.display = 'none'; DOM.passedList.style.display = 'flex';
+        const frag = document.createDocumentFragment(); numbers.forEach(n => { const li = document.createElement("li"); li.textContent = n; frag.appendChild(li); }); DOM.passedList.appendChild(frag);
+    }
 }
 
 function renderFeatured(contents) {
-    DOM.featuredContainer.innerHTML = ""; if (!contents || contents.length === 0) { DOM.featuredContainer.innerHTML = `<p class="empty-state-message" data-i18n="featured_empty">${T["featured_empty"]}</p>`; DOM.featuredContainer.classList.add("is-empty"); return; }
-    DOM.featuredContainer.classList.remove("is-empty"); const frag = document.createDocumentFragment();
+    DOM.featuredContainer.innerHTML = ""; if (!contents || contents.length === 0) { return; }
+    const frag = document.createDocumentFragment();
     contents.forEach(c => { const a = document.createElement("a"); a.className = "featured-link"; a.href = c.linkUrl; a.target = "_blank"; a.textContent = c.linkText; frag.appendChild(a); }); DOM.featuredContainer.appendChild(frag);
 }
 
@@ -286,9 +295,9 @@ if(DOM.btnTrackTicket) DOM.btnTrackTicket.addEventListener("click", () => handle
 }));
 if(DOM.btnCancelTicket) DOM.btnCancelTicket.addEventListener("click", () => { if(confirm(T["cancel_confirm"])) { localStorage.removeItem('callsys_ticket'); myTicket = null; showTakeTicketMode(); } });
 
-function updateMuteUI(isMuted, needsPermission = false) { isLocallyMuted = isMuted; if (!DOM.soundPrompt) return; const text = needsPermission || isMuted ? T["sound_mute"] : T["sound_on"]; DOM.soundPrompt.innerHTML = `<span class="emoji">${needsPermission || isMuted ? '🔇' : '🔊'}</span> ${text}`; DOM.soundPrompt.classList.toggle("is-active", !needsPermission && !isMuted); }
+function updateMuteUI(isMuted, needsPermission = false) { isLocallyMuted = isMuted; if (!DOM.soundPrompt) return; const text = needsPermission || isMuted ? T["sound_mute"] : T["sound_on"]; DOM.soundPrompt.innerHTML = `<i class="icon-sound">${needsPermission || isMuted ? '🔇' : '🔊'}</i> ${text}`; DOM.soundPrompt.classList.toggle("is-active", !needsPermission && !isMuted); }
 if (DOM.soundPrompt) DOM.soundPrompt.addEventListener("click", () => handleUserInteraction(() => { if (!audioPermissionGranted) playNotificationSound(); else updateMuteUI(!isLocallyMuted); }));
-if (DOM.copyLinkPrompt) DOM.copyLinkPrompt.addEventListener("click", () => { if (!navigator.clipboard) return alert("Use HTTPS"); navigator.clipboard.writeText(window.location.href).then(() => { DOM.copyLinkPrompt.innerHTML = T["copy_success"]; DOM.copyLinkPrompt.classList.add("is-copied"); setTimeout(() => { DOM.copyLinkPrompt.innerHTML = `<span class="emoji">🔗</span> ${T["copy_link"]}`; DOM.copyLinkPrompt.classList.remove("is-copied"); }, 2000); }); });
+if (DOM.copyLinkPrompt) DOM.copyLinkPrompt.addEventListener("click", () => { if (!navigator.clipboard) return alert("Use HTTPS"); navigator.clipboard.writeText(window.location.href).then(() => { DOM.copyLinkPrompt.innerHTML = `<span data-i18n="copy_success">${T["copy_success"]}</span>`; DOM.copyLinkPrompt.classList.add("is-active"); setTimeout(() => { DOM.copyLinkPrompt.innerHTML = `<i class="icon-link">🔗</i> ${T["copy_link"]}`; DOM.copyLinkPrompt.classList.remove("is-active"); }, 2000); }); });
 try { const qrEl = document.getElementById("qr-code-placeholder"); if (qrEl) new QRCode(qrEl, { text: window.location.href, width: 120, height: 120 }); } catch (e) {}
 
 document.addEventListener("DOMContentLoaded", () => { applyI18n(); if (myTicket) showMyTicketMode(); else showTakeTicketMode(); socket.connect(); document.body.addEventListener('click', unlockAudioContext, { once: true }); });
