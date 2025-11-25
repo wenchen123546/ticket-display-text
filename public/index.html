@@ -71,10 +71,10 @@
             </div>
 
             <div id="input-mode-container" style="display: none;">
-                <div id="input-mode-view" class="compact-view">
-                    <span class="compact-label" data-i18n="manual_track_title">手動追蹤</span>
+                <div id="input-mode-view">
+                    <h3 class="input-section-title" data-i18n="manual_track_title">手動追蹤</h3>
                     <div class="compact-input-group">
-                        <input type="number" id="manual-ticket-input" placeholder="輸入號碼">
+                        <input type="number" id="manual-ticket-input" placeholder="輸入號碼" inputmode="numeric">
                         <button id="btn-track-ticket" class="btn-compact-action" data-i18n="set_reminder">
                             設定
                         </button>
@@ -83,7 +83,6 @@
             </div>
 
             <div id="my-ticket-view" class="my-ticket-card" style="display: none;">
-                
                 <button id="btn-cancel-ticket" type="button" class="btn-cancel-ticket">
                     <span data-i18n="btn_give_up">🗑️</span>
                 </button>
@@ -104,7 +103,6 @@
                         <span id="ticket-waiting-count" class="info-value">0</span> 
                     </div>
                 </div>
-
                 <p id="ticket-status-text">⏳ ...</p>
                 <p id="ticket-wait-time" style="display:none;">Calculating...</p>
             </div>
