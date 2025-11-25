@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 後台邏輯 (admin.js) - v18.15 Optimized + LINE Set Hint
+ * 後台邏輯 (admin.js) - v18.16 Optimized + Consistent User Deletion
  * ==========================================
  */
 
@@ -228,14 +228,15 @@ async function showPanel() {
     // 權限檢查和 UI 顯示
     const isSuper = userRole === 'super';
     const elementsToToggle = [
-        "card-user-management", "clear-log-btn", "btn-export-csv", 
+        "card-user-management", "btn-export-csv", 
         "mode-switcher-group", "unlock-pwd-group"
     ];
     elementsToToggle.forEach(id => {
         const el = document.getElementById(id);
-        // 清除日誌按鈕 (clear-log-btn) 對所有登入者顯示
-        if(el) el.style.display = (isSuper || id === 'clear-log-btn') ? "block" : "none";
+        if(el) el.style.display = isSuper ? "block" : "none";
     });
+    
+    // clear-log-btn 預設就顯示 (admin.html 內沒有這個 id，這裡忽略)
 
     if (isSuper) await loadAdminUsers();
     
@@ -340,9 +341,17 @@ function renderLogs(logs, isInit) {
     
     if(isInit) ui.replaceChildren();
 
-    if(!logs || logs.length === 0) return;
+    if(!logs || logs.length === 0) {
+        if(isInit) {
+            const li = document.createElement("li");
+            li.textContent = at["log_no_data"];
+            ui.appendChild(li);
+        }
+        return;
+    }
     
-    if(ui.firstElementChild && ui.firstElementChild.textContent.includes("尚無")) {
+    // 如果初始狀態是 (載入中...) 或 [目前尚無日誌]，則清空
+    if(isInit && ui.firstElementChild && (ui.firstElementChild.textContent.includes("載入中") || ui.firstElementChild.textContent.includes("尚無"))) {
         ui.replaceChildren();
     }
     
@@ -395,16 +404,25 @@ function setupConfirmationButton(buttonEl, originalTextKey, confirmTextKey, acti
     if (!buttonEl) return;
     let timer = null; let isConfirming = false; let countdown = 5;
     const getTxt = (key) => at[key] || key;
-    // 使用硬編碼的確認文案
-    const confirmTxtBase = confirmTextKey === "btn_confirm_clear" ? (at["zh-TW"] ? "⚠️ 確認清除" : "⚠️ Confirm Clear") : 
-                           confirmTextKey === "btn_confirm_reset" ? (at["zh-TW"] ? "⚠️ 確認重置" : "⚠️ Confirm Reset") : 
-                           "⚠️";
+    
+    // 根據 confirmTextKey 決定確認文案
+    let confirmTxtBase;
+    if (confirmTextKey === "btn_confirm_clear") {
+        confirmTxtBase = at["zh-TW"] ? "⚠️ 確認清除" : "⚠️ Confirm Clear";
+    } else if (confirmTextKey === "btn_confirm_reset") {
+        confirmTxtBase = at["zh-TW"] ? "⚠️ 確認重置" : "⚠️ Confirm Reset";
+    } else {
+        // 適用於 list 元素的刪除按鈕 (✕ -> ⚠️)
+        confirmTxtBase = "⚠️"; 
+    }
 
     const resetBtn = () => {
         clearInterval(timer); isConfirming = false; countdown = 5;
-        buttonEl.textContent = getTxt(originalTextKey);
+        // 如果是刪除按鈕，originalTextKey 可能是 "✕"
+        buttonEl.textContent = originalTextKey; 
         buttonEl.classList.remove("is-confirming");
     };
+    
     buttonEl.addEventListener("click", () => {
         if (isConfirming) { actionCallback(); resetBtn(); } else {
             isConfirming = true; countdown = 5;
@@ -454,6 +472,7 @@ function renderPassedListUI(numbers) {
         deleteBtn.className = "delete-item-btn"; 
         deleteBtn.textContent = "✕";
         
+        // 統一使用 setupConfirmationButton
         setupConfirmationButton(deleteBtn, "✕", "⚠️", async () => { 
             deleteBtn.disabled = true; 
             await apiRequest("/api/passed/remove", { number }); 
@@ -495,6 +514,7 @@ function renderFeaturedListUI(contents) {
         deleteBtn.className = "delete-item-btn"; 
         deleteBtn.textContent = "✕";
         
+        // 統一使用 setupConfirmationButton
         setupConfirmationButton(deleteBtn, "✕", "⚠️", async () => { 
             deleteBtn.disabled = true; 
             await apiRequest("/api/featured/remove", { linkText: item.linkText, linkUrl: item.linkUrl }); 
@@ -588,7 +608,9 @@ if(setIssuedBtn) setIssuedBtn.onclick = async () => {
     }
 };
 
-setupConfirmationButton(document.getElementById("clear-log-btn"), "btn_clear_log", "btn_confirm_clear", async () => { showToast(at["toast_log_clearing"], "info"); await apiRequest("/api/logs/clear", {}); });
+// 由於 admin.html 沒有 clear-log-btn，這裡註釋掉
+// setupConfirmationButton(document.getElementById("clear-log-btn"), "btn_clear_log", "btn_confirm_clear", async () => { showToast(at["toast_log_clearing"], "info"); await apiRequest("/api/logs/clear", {}); });
+
 setupConfirmationButton(document.getElementById("resetNumber"), "btn_reset_call", "btn_confirm_reset", async () => { if (await apiRequest("/api/control/set-call", { number: 0 })) { document.getElementById("manualNumber").value = ""; showToast(at["toast_reset_zero"], "success"); } });
 setupConfirmationButton(document.getElementById("resetPassed"), "btn_reset_passed", "btn_confirm_reset", async () => { if (await apiRequest("/api/passed/clear", {})) showToast(at["toast_passed_cleared"], "success"); });
 setupConfirmationButton(document.getElementById("resetFeaturedContents"), "btn_reset_links", "btn_confirm_reset", async () => { if (await apiRequest("/api/featured/clear", {})) showToast(at["toast_featured_cleared"], "success"); });
@@ -635,25 +657,30 @@ if (broadcastBtn) {
 
 const soundToggle = document.getElementById("sound-toggle");
 const publicToggle = document.getElementById("public-toggle");
-const publicToggleLabel = document.getElementById("public-toggle-label");
+// admin.html 中沒有 public-toggle-label，這裡使用 publicToggle 的父層元素
+const publicToggleLabel = publicToggle ? publicToggle.closest('.system-toggle-group').querySelector('label[for="public-toggle"]') : null; 
 
 if(soundToggle) soundToggle.addEventListener("change", () => { apiRequest("/set-sound-enabled", { enabled: soundToggle.checked }); });
-if(publicToggle) publicToggle.addEventListener("change", () => {
+if(publicToggle && publicToggleLabel) publicToggle.addEventListener("change", () => {
     const isPublic = publicToggle.checked;
+    const originalText = publicToggleLabel.getAttribute('data-i18n') ? at[publicToggleLabel.getAttribute('data-i18n')] : '🌐 對外開放前台頁面';
+    
     if (isPublic) {
         if (publicToggleConfirmTimer) { 
             clearInterval(publicToggleConfirmTimer.interval); clearTimeout(publicToggleConfirmTimer.timer); 
             publicToggleConfirmTimer = null; 
-            publicToggleLabel.textContent = at["label_public_toggle"]; publicToggleLabel.classList.remove("is-confirming-label"); 
+            publicToggleLabel.textContent = originalText; publicToggleLabel.classList.remove("is-confirming-label"); 
         }
         apiRequest("/set-public-status", { isPublic: true });
     } else {
         if (publicToggleConfirmTimer) { 
+            // 如果點擊第二次，則確認關閉
             clearInterval(publicToggleConfirmTimer.interval); clearTimeout(publicToggleConfirmTimer.timer); 
             publicToggleConfirmTimer = null; 
-            publicToggleLabel.textContent = at["label_public_toggle"]; publicToggleLabel.classList.remove("is-confirming-label"); 
+            publicToggleLabel.classList.remove("is-confirming-label"); 
             apiRequest("/set-public-status", { isPublic: false }); 
         } else {
+            // 第一次點擊，進入確認模式
             publicToggle.checked = true; let countdown = 5;
             const closeTxt = at["label_confirm_close"];
             publicToggleLabel.textContent = `${closeTxt} (${countdown}s)`;
@@ -661,11 +688,19 @@ if(publicToggle) publicToggle.addEventListener("change", () => {
             const interval = setInterval(() => { 
                 countdown--; 
                 if (countdown > 0) publicToggleLabel.textContent = `${closeTxt} (${countdown}s)`; 
-                else clearInterval(interval); 
+                else {
+                    // 超時自動取消
+                    clearInterval(interval); 
+                    publicToggleLabel.textContent = originalText; 
+                    publicToggleLabel.classList.remove("is-confirming-label"); 
+                    publicToggleConfirmTimer = null; 
+                }
             }, 1000);
             const timer = setTimeout(() => { 
+                // 超時自動取消 (確保)
                 clearInterval(interval); 
-                publicToggleLabel.textContent = at["label_public_toggle"]; publicToggleLabel.classList.remove("is-confirming-label"); 
+                publicToggleLabel.textContent = originalText; 
+                publicToggleLabel.classList.remove("is-confirming-label"); 
                 publicToggleConfirmTimer = null; 
             }, 5000);
             publicToggleConfirmTimer = { timer, interval };
@@ -684,6 +719,7 @@ if (modeRadios) {
                 if(await apiRequest("/set-system-mode", { mode: val })) { showToast(at["toast_mode_switched"], "success"); } 
                 else { socket.emit("requestUpdate"); }
             } else {
+                // 如果取消，將狀態改回舊的模式
                 const other = val === 'ticketing' ? 'input' : 'ticketing';
                 document.querySelector(`input[name="systemMode"][value="${other}"]`).checked = true;
             }
@@ -699,7 +735,11 @@ async function loadAdminUsers() {
     if (data && data.users) {
         ui.replaceChildren(); 
 
-        data.users.sort((a, b) => { if (a.role === 'super' && b.role !== 'super') return -1; if (a.role !== 'super' && b.role === 'super') return 1; return a.username.localeCompare(b.username); });
+        data.users.sort((a, b) => { 
+            if (a.role === 'super' && b.role !== 'super') return -1; 
+            if (a.role !== 'super' && b.role === 'super') return 1; 
+            return a.username.localeCompare(b.username); 
+        });
         
         const fragment = document.createDocumentFragment();
         data.users.forEach(user => {
@@ -718,11 +758,15 @@ async function loadAdminUsers() {
                 deleteBtn.className = "delete-item-btn"; 
                 deleteBtn.textContent = "✕";
                 
+                // 統一使用 setupConfirmationButton
                 setupConfirmationButton(deleteBtn, "✕", "⚠️", async () => { 
                     deleteBtn.disabled = true; 
                     if (await apiRequest("/api/admin/del-user", { delUsername: user.username })) { 
-                        showToast(`✅ 已刪除: ${user.username}`, "success"); await loadAdminUsers(); 
-                    } else { deleteBtn.disabled = false; } 
+                        showToast(`✅ 已刪除: ${user.username}`, "success"); 
+                        await loadAdminUsers(); // 重新載入列表
+                    } else { 
+                        deleteBtn.disabled = false; 
+                    } 
                 });
                 li.appendChild(deleteBtn);
             }
@@ -792,6 +836,7 @@ async function loadStats() {
             fragment.appendChild(li);
         });
         statsListUI.appendChild(fragment);
+        statsListUI.scrollTop = 0; // 捲到頂部看最新
     } else { 
         const li = document.createElement("li");
         li.textContent = at["list_load_fail"];
@@ -860,8 +905,7 @@ if(modalOverlay) modalOverlay.onclick = (e) => { if (e.target === modalOverlay) 
 // --- LINE 設定邏輯 ---
 const domKeys = [
     "approach", "arrival", "status", "personal", "passed", 
-    "set_ok", "cancel", "login_hint", "err_passed", "err_no_sub",
-    "set_hint" // [新增]
+    "set_ok", "cancel", "login_hint", "err_passed", "err_no_sub", "set_hint" 
 ];
 
 async function loadLineSettings() {
@@ -903,7 +947,7 @@ if (btnSaveLineMsg) btnSaveLineMsg.onclick = async () => {
     btnSaveLineMsg.disabled = false; 
 };
 
-if (btnResetLineMsg) setupConfirmationButton(btnResetLineMsg, at["zh-TW"] ? "重置為預設值" : "Reset to default", "btn_confirm_reset", async () => { 
+if (btnResetLineMsg) setupConfirmationButton(btnResetLineMsg, at["zh-TW"] ? "恢復預設" : "Reset to default", "btn_confirm_reset", async () => { 
     const data = await apiRequest("/api/admin/line-settings/reset", {}, true); 
     if (data && data.success) { 
         domKeys.forEach(key => {
@@ -925,6 +969,8 @@ if (btnSaveUnlockPwd) btnSaveUnlockPwd.onclick = async () => {
     btnSaveUnlockPwd.disabled = false;
 };
 
+// admin.html 中沒有 set-nickname 相關 UI，這裡註釋掉
+/*
 const btnSetNickname = document.getElementById("set-nickname-btn");
 if (btnSetNickname) {
     btnSetNickname.onclick = async () => {
@@ -941,6 +987,7 @@ if (btnSetNickname) {
         btnSetNickname.disabled = false;
     };
 }
+*/
 
 const btnRefreshStats = document.getElementById("btn-refresh-stats");
 if (btnRefreshStats) {
@@ -975,7 +1022,8 @@ if (btnExportCsv) {
 
 const btnClearStats = document.getElementById("btn-clear-stats");
 if (btnClearStats) {
-    setupConfirmationButton(btnClearStats, "btn_clear_log", "btn_confirm_clear", async () => {
+    // 修正 originalTextKey 的錯誤
+    setupConfirmationButton(btnClearStats, at["zh-TW"] ? "⚠ 清空統計資料" : "⚠ Clear Stats", "btn_confirm_clear", async () => {
         if (await apiRequest("/api/admin/stats/clear", {})) {
             showToast(at["toast_stats_cleared"], "success");
             await loadStats();
