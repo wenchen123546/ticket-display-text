@@ -1,86 +1,82 @@
 /*
  * ==========================================
- * 前端邏輯 (main.js) - v25.0
- * 包含：新增的說明文字翻譯
+ * 前端邏輯 (main.js) - v27.0
+ * 包含：精簡的中文文案以配合極限排版
  * ==========================================
  */
 
 const i18nData = {
     "zh-TW": {
         "current_number": "目前叫號",
-        "issued_number": "已發號碼",
+        "issued_number": "已發至",
         "online_ticket_title": "線上取號",
-        "help_take_ticket": "無需現場排隊，手機直接領取號碼牌，即時通知。",
+        "help_take_ticket": "手機領號，即時通知",
         "manual_input_title": "手動追蹤",
-        "help_track_ticket": "若您已有實體號碼牌，輸入號碼即可開啟到號提醒。",
-        "online_ticket_desc": "免排隊，到號通知",
+        "help_track_ticket": "輸入手上的號碼牌",
         "take_ticket": "立即取號",
-        "taking_ticket": "處理中...",
-        "manual_input_placeholder": "輸入號碼",
+        "manual_input_placeholder": "號碼",
         "set_reminder": "追蹤",
-        "my_number": "您的號碼",
-        "wait_count": "前方等待",
-        "status_wait": "⏳ 還需等待 %s 組",
-        "status_arrival": "🎉 輪到您了！請前往櫃台",
-        "status_passed": "⚠️ 您可能已過號",
-        "passed_list_title": "已過號",
-        "passed_empty": "目前無過號",
-        "copy_link": "複製連結",
-        "sound_enable": "啟用音效",
-        "sound_on": "音效開啟",
-        "sound_mute": "啟用音效",
+        "my_number": "我的號碼",
+        "wait_count": "前方",
+        "status_wait": "⏳ 剩 %s 組",
+        "status_arrival": "🎉 輪到您了！",
+        "status_passed": "⚠️ 已過號",
+        "passed_list_title": "過號",
+        "passed_empty": "無",
+        "copy_link": "複製",
+        "sound_enable": "音效",
+        "sound_on": "開啟",
+        "sound_mute": "靜音",
         "scan_qr": "掃描追蹤",
         "error_network": "連線中斷",
-        "take_success": "取號成功！",
-        "take_fail": "取號失敗",
+        "take_success": "取號成功",
+        "take_fail": "失敗",
         "input_empty": "請輸入號碼",
-        "cancel_confirm": "確定要取消追蹤嗎？",
+        "cancel_confirm": "取消追蹤？",
         "copy_success": "已複製",
-        "public_announcement": "📢 公告：",
-        "queue_notification": "再 %s 組就輪到您囉！",
-        "estimated_wait": "約 %s 分鐘",
+        "public_announcement": "📢 ",
+        "queue_notification": "還剩 %s 組！",
+        "estimated_wait": "約 %s 分",
         "time_just_now": "剛剛",
-        "time_min_ago": "%s 分鐘前",
+        "time_min_ago": "%s 分前",
         "status_connected": "已連線",
-        "status_reconnecting": "連線中斷 (%s)..."
+        "status_reconnecting": "連線中 (%s)..."
     },
     "en": {
         "current_number": "Now Serving",
         "issued_number": "Issued",
-        "online_ticket_title": "Online Ticket",
-        "help_take_ticket": "Get a digital ticket directly on your phone. No queueing needed.",
-        "manual_input_title": "Manual Track",
-        "help_track_ticket": "Already have a paper ticket? Enter the number to get notified.",
-        "online_ticket_desc": "Skip the line",
+        "online_ticket_title": "Get Ticket",
+        "help_take_ticket": "Digital ticket & notify",
+        "manual_input_title": "Track #",
+        "help_track_ticket": "Enter paper ticket #",
         "take_ticket": "Get Ticket",
-        "taking_ticket": "...",
-        "manual_input_placeholder": "Ticket #",
+        "manual_input_placeholder": "#",
         "set_reminder": "Track",
         "my_number": "Your #",
         "wait_count": "Ahead",
-        "status_wait": "⏳ %s groups ahead",
-        "status_arrival": "🎉 It's your turn!",
+        "status_wait": "⏳ %s groups",
+        "status_arrival": "🎉 Your Turn!",
         "status_passed": "⚠️ Passed",
         "passed_list_title": "Passed",
         "passed_empty": "None",
-        "copy_link": "Copy Link",
+        "copy_link": "Copy",
         "sound_enable": "Sound",
         "sound_on": "On",
-        "sound_mute": "Sound",
-        "scan_qr": "Scan to track",
+        "sound_mute": "Mute",
+        "scan_qr": "Scan",
         "error_network": "Offline",
         "take_success": "Success",
         "take_fail": "Failed",
-        "input_empty": "Enter number",
+        "input_empty": "Enter #",
         "cancel_confirm": "Stop tracking?",
         "copy_success": "Copied",
-        "public_announcement": "📢: ",
-        "queue_notification": "%s groups to go!",
-        "estimated_wait": "~%s mins",
+        "public_announcement": "📢 ",
+        "queue_notification": "%s groups left!",
+        "estimated_wait": "~%s min",
         "time_just_now": "Now",
-        "time_min_ago": "%s min ago",
+        "time_min_ago": "%s m ago",
         "status_connected": "Online",
-        "status_reconnecting": "Reconnecting (%s)..."
+        "status_reconnecting": "Retry (%s)..."
     }
 };
 
@@ -98,20 +94,15 @@ const DOM = {
     soundPrompt: document.getElementById("sound-prompt"),
     copyLinkPrompt: document.getElementById("copy-link-prompt"),
     
-    // Modes
     ticketingModeContainer: document.getElementById("ticketing-mode-container"),
     inputModeContainer: document.getElementById("input-mode-container"),
-    takeTicketView: document.getElementById("take-ticket-view"),
-    inputModeView: document.getElementById("input-mode-view"),
-    myTicketView: document.getElementById("my-ticket-view"),
     
-    // Buttons & Inputs
     btnTakeTicket: document.getElementById("btn-take-ticket"),
     btnTrackTicket: document.getElementById("btn-track-ticket"),
     manualTicketInput: document.getElementById("manual-ticket-input"),
     btnCancelTicket: document.getElementById("btn-cancel-ticket"),
     
-    // My Ticket Info
+    myTicketView: document.getElementById("my-ticket-view"),
     myTicketNum: document.getElementById("my-ticket-num"),
     ticketWaitingCount: document.getElementById("ticket-waiting-count"),
     ticketStatusText: document.getElementById("ticket-status-text"),
@@ -138,7 +129,6 @@ function unlockAudioContext() {
     if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
     if (audioContext.state === 'suspended') {
         audioContext.resume().then(() => {
-            // Play silent buffer to unlock
             const buffer = audioContext.createBuffer(1, 1, 22050);
             const source = audioContext.createBufferSource();
             source.buffer = buffer; source.connect(audioContext.destination); source.start(0);
@@ -175,7 +165,7 @@ function playNotificationSound() {
         playPromise.then(() => {
             audioPermissionGranted = true; updateMuteUI(false);
             if (!isSoundEnabled || isLocallyMuted) { DOM.notifySound.pause(); DOM.notifySound.currentTime = 0; }
-        }).catch(() => { console.warn("Autoplay blocked"); audioPermissionGranted = false; updateMuteUI(true, true); });
+        }).catch(() => { audioPermissionGranted = false; updateMuteUI(true, true); });
     }
 }
 
@@ -234,7 +224,7 @@ function renderPassed(numbers) {
     DOM.passedList.innerHTML = ""; const isEmpty = !numbers || numbers.length === 0;
     DOM.passedCount.textContent = numbers ? numbers.length : 0;
     if (isEmpty) {
-        DOM.passedEmptyMsg.style.display = 'flex'; DOM.passedList.style.display = 'none';
+        DOM.passedEmptyMsg.style.display = 'block'; DOM.passedList.style.display = 'none';
     } else {
         DOM.passedEmptyMsg.style.display = 'none'; DOM.passedList.style.display = 'flex';
         const frag = document.createDocumentFragment(); 
@@ -243,15 +233,10 @@ function renderPassed(numbers) {
     }
 }
 
-// --- Render Hyperlinks (Dock Style) ---
 function renderFeatured(contents) {
     DOM.featuredContainer.innerHTML = "";
-    if (!contents || contents.length === 0) {
-        DOM.featuredContainer.style.display = 'none'; return;
-    }
-    DOM.featuredContainer.style.display = 'flex';
+    if (!contents || contents.length === 0) { return; }
     const frag = document.createDocumentFragment();
-    
     contents.forEach(c => {
         const a = document.createElement("a");
         a.className = "link-chip";
@@ -262,24 +247,24 @@ function renderFeatured(contents) {
     DOM.featuredContainer.appendChild(frag);
 }
 
-// --- Ticket Logic ---
 function switchSystemModeUI(mode) {
     const isTicketing = mode === 'ticketing';
     DOM.ticketingModeContainer.style.display = isTicketing ? "block" : "none";
     DOM.inputModeContainer.style.display = isTicketing ? "none" : "block";
-    if (myTicket) showMyTicketMode(); else showTakeTicketMode();
+    // 如果有票，強制顯示票
+    if (myTicket) showMyTicketMode();
 }
 
 function showMyTicketMode() { 
-    DOM.takeTicketView.style.display = "none"; 
-    DOM.inputModeView.style.display = "none"; 
+    DOM.ticketingModeContainer.style.display = "none";
+    DOM.inputModeContainer.style.display = "none";
     DOM.myTicketView.style.display = "block"; 
     DOM.myTicketNum.textContent = myTicket; 
 }
+
 function showTakeTicketMode() { 
     DOM.myTicketView.style.display = "none"; 
-    DOM.takeTicketView.style.display = (currentSystemMode === 'ticketing') ? "block" : "none"; 
-    DOM.inputModeView.style.display = (currentSystemMode === 'input') ? "block" : "none"; 
+    switchSystemModeUI(currentSystemMode);
 }
 
 function updateTicketUI(currentNum) {
@@ -292,7 +277,7 @@ function updateTicketUI(currentNum) {
         if (avgServiceTime > 0) { 
             const min = Math.ceil(diff * avgServiceTime); 
             DOM.ticketWaitTime.textContent = T["estimated_wait"].replace("%s", min); 
-            waitTimeDisplay = "inline-block"; 
+            waitTimeDisplay = "block"; 
         }
         if (diff <= 3 && document.hidden && Notification.permission === "granted") {
             new Notification("Queue Update", { body: T["queue_notification"].replace("%s", diff) });
@@ -304,10 +289,10 @@ function updateTicketUI(currentNum) {
     } else { 
         DOM.ticketWaitingCount.textContent = "-"; statusText = T["status_passed"]; 
     }
-    DOM.ticketStatusText.textContent = statusText; DOM.ticketWaitTime.style.display = waitTimeDisplay;
+    DOM.ticketStatusText.textContent = statusText; 
+    DOM.ticketWaitTime.style.display = waitTimeDisplay;
 }
 
-// --- Event Listeners ---
 function handleUserInteraction(callback) { unlockAudioContext(); callback(); }
 
 if(DOM.btnTakeTicket) DOM.btnTakeTicket.addEventListener("click", () => handleUserInteraction(async () => {
@@ -338,13 +323,12 @@ if(DOM.btnCancelTicket) DOM.btnCancelTicket.addEventListener("click", () => {
     } 
 });
 
-// Sound & Copy
 function updateMuteUI(isMuted, needsPermission = false) { 
     isLocallyMuted = isMuted; 
     if (!DOM.soundPrompt) return; 
-    const text = needsPermission || isMuted ? T["sound_mute"] : T["sound_on"]; 
-    DOM.soundPrompt.innerHTML = `<span>${needsPermission || isMuted ? '🔇' : '🔊'}</span> ${text}`; 
-    DOM.soundPrompt.classList.toggle("is-active", !needsPermission && !isMuted); 
+    // const text = needsPermission || isMuted ? T["sound_mute"] : T["sound_on"]; 
+    // 緊湊版僅顯示 icon
+    DOM.soundPrompt.innerHTML = needsPermission || isMuted ? '🔇' : '🔊'; 
 }
 
 if (DOM.soundPrompt) DOM.soundPrompt.addEventListener("click", () => handleUserInteraction(() => { 
@@ -354,19 +338,17 @@ if (DOM.soundPrompt) DOM.soundPrompt.addEventListener("click", () => handleUserI
 if (DOM.copyLinkPrompt) DOM.copyLinkPrompt.addEventListener("click", () => { 
     if (!navigator.clipboard) return alert("Use HTTPS"); 
     navigator.clipboard.writeText(window.location.href).then(() => { 
-        DOM.copyLinkPrompt.innerHTML = `<span style="color:var(--primary)">${T["copy_success"]}</span>`; 
-        setTimeout(() => { DOM.copyLinkPrompt.innerHTML = `<span>🔗</span> ${T["copy_link"]}`; }, 2000); 
+        const originalText = DOM.copyLinkPrompt.textContent;
+        DOM.copyLinkPrompt.textContent = "✔"; 
+        setTimeout(() => { DOM.copyLinkPrompt.textContent = "🔗"; }, 2000); 
     }); 
 });
 
-// Init
 document.addEventListener("DOMContentLoaded", () => { 
     applyI18n(); 
     if (myTicket) showMyTicketMode(); else showTakeTicketMode(); 
     socket.connect(); 
     document.body.addEventListener('click', unlockAudioContext, { once: true });
-    
-    // QR Code
     try { 
         const qrEl = document.getElementById("qr-code-placeholder"); 
         if (qrEl) new QRCode(qrEl, { text: window.location.href, width: 120, height: 120 }); 
