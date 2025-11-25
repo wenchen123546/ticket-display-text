@@ -17,12 +17,12 @@
     --color-warning: #d97706; 
     
     --font-h1: clamp(1.5rem, 4vw, 2.2rem); 
-    --font-h2: clamp(1.5rem, 5vw, 2rem); /* 稍微縮小 h2 */
+    --font-h2: clamp(1.5rem, 5vw, 2rem); 
     --font-h3: clamp(1.5rem, 5vw, 2rem); 
     
-    /* 數字字體變數 */
-    --font-number-big: clamp(6rem, 20vw, 10rem);
-    --font-number-sub: clamp(3rem, 10vw, 5rem);
+    /* 數字字體變數：微調最小尺寸，提高適應性 */
+    --font-number-big: clamp(5rem, 20vw, 10rem); 
+    --font-number-sub: clamp(2.5rem, 10vw, 4rem);
     
     --font-passed: clamp(2.5rem, 7vw, 3.5rem);
     --font-featured: clamp(1.2rem, 4vw, 1.5rem); 
@@ -48,7 +48,7 @@ h1 {
     font-size: var(--font-h1); 
     color: var(--color-danger); 
     margin: 0; 
-    user-select: none; /* [優化] 禁止選取標題文字 */
+    user-select: none;
 }
 #last-updated { font-size: 1rem; color: var(--color-text-light); margin: 5px 0 0 0; }
 
@@ -63,7 +63,7 @@ h1 {
     width: 100%; box-sizing: border-box;
 }
 
-/* 【新】狀態看板 (Current & Issued) */
+/* 【狀態看板】(Current & Issued) */
 #status-board {
     display: flex;
     justify-content: space-around;
@@ -81,21 +81,21 @@ h1 {
 .status-item h2 {
     font-size: var(--font-h2);
     color: var(--color-text-light);
-    margin: 0 0 5px 0;
+    margin: 0 0 10px 0; /* 增加間距 */
     white-space: nowrap;
 }
 
-/* 左邊：目前叫號 */
+/* 左邊：目前叫號 (Main) */
 .main-item h2 { color: var(--color-text); }
 #number { 
     font-size: var(--font-number-big); 
     color: var(--color-primary); 
-    margin: 0; 
+    margin: 10px 0; /* 增加間距 */
     font-weight: bold; 
     line-height: 1; 
 }
 
-/* 右邊：已發號碼 */
+/* 右邊：已發號碼 (Sub) */
 .sub-item h2 { font-size: clamp(1.2rem, 4vw, 1.5rem); color: var(--color-text-lighter); }
 #issued-number-main { 
     font-size: var(--font-number-sub); 
@@ -120,6 +120,43 @@ h1 {
 }
 #number.updated { animation: flash 0.5s ease; }
 
+/* --- 【我的號碼卡片】 (My Ticket Card) 專屬樣式 --- */
+.my-ticket-card {
+    background: linear-gradient(135deg, var(--color-primary) 0%, #1e40af 100%); 
+    color: white; 
+    padding: 25px; 
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.my-ticket-card h3 { 
+    margin:0; font-size:1rem; opacity:0.9; border:none; padding:0; 
+}
+
+.my-ticket-number-display {
+    font-size: 5rem; font-weight: bold; line-height: 1; margin: 10px 0;
+}
+
+.my-ticket-info-block {
+    background: rgba(255,255,255,0.15); border-radius: 12px; padding: 15px; 
+    margin-top: 10px; display: flex; justify-content: space-around; align-items: center;
+}
+
+.info-item { text-align: center; }
+.info-label { display:block; font-size:0.8rem; opacity:0.8; }
+.info-value { font-size:1.5rem; font-weight:bold; }
+.info-unit { font-size:0.8rem; }
+.info-divider { width:1px; height: 30px; background:rgba(255,255,255,0.3);}
+
+/* 取消按鈕 */
+.btn-cancel-ticket {
+    position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.25); 
+    border: 1px solid rgba(255,255,255,0.4); padding: 6px 12px; border-radius: 20px; 
+    font-size: 0.85rem; cursor: pointer; color: white; z-index: 10; user-select: none;
+    transition: background 0.2s, border-color 0.2s;
+}
+.btn-cancel-ticket:hover { background: rgba(255,255,255,0.4) !important; }
+
 /* 取號按鈕 */
 .btn-primary-action {
     background: var(--color-primary); color: white; border: none; 
@@ -134,7 +171,6 @@ h1 {
 .btn-primary-action:disabled { background-color: #93c5fd; cursor: not-allowed; transform: none; }
 
 #ticket-section { transition: all 0.3s ease; }
-#btn-cancel-ticket:hover { background: rgba(255,255,255,0.4) !important; }
 
 /* 過號卡片 */
 #passed-container { margin-top: 0; } 
@@ -265,9 +301,9 @@ body.is-closed #maintenance-overlay { display: flex; }
         --font-h2: clamp(1.1rem, 5vw, 1.3rem);  
         --font-h3: clamp(1.1rem, 4vw, 1.3rem);  
         
-        /* 手機上適度縮小主要數字，避免撐破 */
-        --font-number-big: clamp(7rem, 30vw, 10rem); 
-        --font-number-sub: clamp(3rem, 12vw, 4rem);
+        /* 手機上使用 6rem 作為最小尺寸 */
+        --font-number-big: clamp(6rem, 30vw, 10rem); 
+        --font-number-sub: clamp(2rem, 12vw, 4rem);
 
         --font-passed: clamp(1.5rem, 6vw, 2rem);
         --font-featured: clamp(0.9rem, 4vw, 1.1rem); 
