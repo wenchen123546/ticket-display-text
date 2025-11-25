@@ -74,21 +74,27 @@
         <section class="control-section glass" id="ticket-section">
             
             <div id="ticketing-mode-container">
-                <div id="take-ticket-view" class="action-row">
+                <div id="take-ticket-view" class="action-column">
                     <div class="action-text">
                         <h3 data-i18n="online_ticket_title">線上取號</h3>
-                        <p data-i18n="online_ticket_desc">免排隊，到號通知</p>
+                        <p class="func-desc" data-i18n="help_take_ticket">無需現場排隊，手機直接領取號碼牌，即時通知。</p>
                     </div>
-                    <button id="btn-take-ticket" class="btn-main">
-                        <span data-i18n="take_ticket">取號</span> ➔
+                    <button id="btn-take-ticket" class="btn-main full-width">
+                        <span data-i18n="take_ticket">立即取號</span> ➔
                     </button>
                 </div>
             </div>
 
             <div id="input-mode-container" style="display: none;">
-                <div id="input-mode-view" class="input-wrapper">
-                    <input type="number" id="manual-ticket-input" class="fancy-input" placeholder="號碼" inputmode="numeric">
-                    <button id="btn-track-ticket" class="btn-track" data-i18n="set_reminder">追蹤</button>
+                <div id="input-mode-view" class="action-column">
+                    <div class="action-text">
+                        <h3 data-i18n="manual_input_title">手動追蹤</h3>
+                        <p class="func-desc" data-i18n="help_track_ticket">若您已有實體號碼牌，輸入號碼即可開啟到號提醒。</p>
+                    </div>
+                    <div class="input-wrapper">
+                        <input type="number" id="manual-ticket-input" class="fancy-input" placeholder="輸入號碼" inputmode="numeric">
+                        <button id="btn-track-ticket" class="btn-track" data-i18n="set_reminder">追蹤</button>
+                    </div>
                 </div>
             </div>
 
