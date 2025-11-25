@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 後台樣式 (admin.css) - v3.6 Final (Layout Fix & LINE Grid)
+ * 後台樣式 (admin.css) - v3.7 Final (Flex-Grow Fix)
  * ==========================================
  */
 
@@ -259,28 +259,29 @@ li:last-child { border-bottom: none; }
     #card-user-management .list-editor ul { margin-bottom: 0; max-height: 400px; }
     #card-user-management .input-group.vertical { background: #f9fafb; padding: 20px; border-radius: var(--radius-md); border: 1px solid var(--border-color); }
 
-    /* 3. [關鍵修正] LINE 設定排版 (Grid 模式) */
+    /* 3. [關鍵修正] LINE 設定改用 Flexbox + Grow 自動填滿，解決右側空白 */
     #card-line-settings details[open] {
-        display: grid;
-        grid-template-columns: 1fr 1fr; /* 強制兩欄平分 */
+        display: flex;
+        flex-wrap: wrap;
         gap: 16px;
-        align-items: start; /* 頂部對齊，避免高度被拉伸 */
         width: 100%;
     }
 
-    /* [關鍵] 強制標題橫跨左右兩欄，防止跑版 */
+    /* 強制標題橫跨 */
     #card-line-settings summary {
-        grid-column: 1 / -1; 
         width: 100%;
         margin-bottom: 10px;
         border-bottom: 2px solid #f3f4f6;
     }
 
-    /* 讓輸入框自動佔滿該格 */
+    /* flex-grow: 1 是關鍵：
+       - 如果是偶數個項目，它們會各佔 50%
+       - 如果是奇數個項目 (落單)，它會自動拉長佔滿 100%，消滅空白
+    */
     #card-line-settings details .control-group.form-group-boxed {
+        width: calc(50% - 8px); 
+        flex-grow: 1; 
         margin-bottom: 0;
-        width: 100%;
-        height: 100%;
     }
 }
 
