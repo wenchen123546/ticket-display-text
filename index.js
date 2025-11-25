@@ -1,7 +1,7 @@
 /*
  * ==========================================
- * 伺服器 (index.js) - v18.30 Optimized
- * 包含：Redis效能優化(移除keys*)、XSS增強、等待時間快取、自動修復邏輯
+ * 伺服器 (index.js) - v18.31 Optimized with File Logging
+ * 包含：Redis效能優化、XSS防護、自動修復邏輯、使用者檔案日誌(append)
  * ==========================================
  */
 
@@ -15,6 +15,8 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt'); 
 const line = require('@line/bot-sdk'); 
 const cron = require('node-cron'); 
+const fs = require("fs");
+const path = require("path");
 
 // 支援本地 .env
 if (process.env.NODE_ENV !== 'production') {
@@ -37,6 +39,36 @@ const SALT_ROUNDS = 10;
 const REMIND_BUFFER = 5; // 提醒緩衝區
 const MAX_HISTORY_FOR_PREDICTION = 15; 
 const MAX_VALID_SERVICE_MINUTES = 20;  
+
+// --- [新增] 初始化日誌目錄 ---
+const LOG_DIR = path.join(__dirname, 'user_logs');
+if (!fs.existsSync(LOG_DIR)) {
+    try {
+        fs.mkdirSync(LOG_DIR);
+        console.log(`📁 已建立使用者日誌目錄: ${LOG_DIR}`);
+    } catch (e) {
+        console.error("❌ 無法建立日誌目錄:", e);
+    }
+}
+
+// --- [新增] 使用者檔案日誌 Helper 函式 ---
+function logToUserFile(username, message) {
+    if (!username) return;
+    // 1. 確保檔名安全 (只保留英數字與底線)
+    const safeUsername = username.replace(/[^a-z0-9_\-]/gi, '_');
+    
+    // 2. 設定檔案路徑：user_logs/username.log
+    const filePath = path.join(LOG_DIR, `${safeUsername}.log`);
+    
+    // 3. 格式化時間與內容
+    const time = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+    const logEntry = `[${time}] ${message}\n`;
+
+    // 4. 使用 appendFile：檔案存在則續寫，不存在則建立
+    fs.appendFile(filePath, logEntry, (err) => {
+        if (err) console.error(`❌ 無法寫入使用者日誌 (${safeUsername}):`, err);
+    });
+}
 
 // LINE 設定
 const lineConfig = {
@@ -195,6 +227,7 @@ cron.schedule('0 4 * * *', async () => {
         await performReset('系統自動');
         io.to("admin").emit("newAdminLog", "[系統] ⏰ 執行每日自動歸零"); 
         addAdminLog("系統", "⏰ 執行每日自動歸零");
+        logToUserFile("system", "執行每日自動歸零");
     } catch (e) { console.error("❌ 自動重置失敗:", e); }
 }, { timezone: "Asia/Taipei" });
 
@@ -643,6 +676,7 @@ async function handleNumberControl(type, req) {
                 // [修正] 特殊邏輯：如果設定為 0 (重置)，則強制將目前叫號也歸零
                 if (newNum === 0) {
                     await performReset(req.user.nickname);
+                    logToUserFile(req.user.username, `[操作] 重置系統`);
                     return { success: true };
                 }
 
@@ -661,7 +695,13 @@ async function handleNumberControl(type, req) {
         console.error(`handleNumberControl ${type} error:`, e);
         return { success: false, error: e.message };
     } finally {
-        if (logMessage) await addAdminLog(req.user.nickname, logMessage);
+        if (logMessage) {
+            await addAdminLog(req.user.nickname, logMessage);
+            // --- [新增] 同步寫入使用者檔案日誌 ---
+            if (req.user && req.user.username) {
+                logToUserFile(req.user.username, `[操作] ${logMessage}`);
+            }
+        }
     }
 }
 
@@ -679,12 +719,19 @@ app.post("/login", loginLimiter, async (req, res) => {
             const storedHash = await redis.hget(KEY_USERS, username);
             if (storedHash) isValid = await bcrypt.compare(password, storedHash);
         }
-        if (!isValid) return res.status(403).json({ error: "帳號或密碼錯誤" });
+        if (!isValid) {
+            logToUserFile(username, "嘗試登入失敗 (密碼錯誤)");
+            return res.status(403).json({ error: "帳號或密碼錯誤" });
+        }
         const sessionToken = uuidv4();
         let nickname = await redis.hget(KEY_NICKNAMES, username);
         if (!nickname) nickname = username;
         
         await redis.set(`${SESSION_PREFIX}${sessionToken}`, JSON.stringify({ username, role, nickname }), "EX", 28800);
+        
+        // --- [新增] 記錄登入成功 ---
+        logToUserFile(username, `登入成功 (IP: ${req.ip})`);
+        
         res.json({ success: true, token: sessionToken, role, username, nickname });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -810,6 +857,7 @@ app.post("/api/admin/line-settings/save", async (req, res) => {
         
         await pipeline.exec();
         addAdminLog(req.user.nickname, "📝 更新了 LINE 自動回覆文案");
+        logToUserFile(req.user.username, "更新 LINE 自動回覆文案");
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -826,6 +874,7 @@ app.post("/api/admin/line-settings/reset", async (req, res) => {
         ];
         await redis.del(keys);
         addAdminLog(req.user.nickname, "↺ 重置了 LINE 自動回覆文案");
+        logToUserFile(req.user.username, "重置 LINE 自動回覆文案");
         res.json({ 
             success: true, 
             approach:   DEFAULT_MSG_APPROACH,
@@ -849,6 +898,7 @@ app.post("/api/admin/line-settings/set-unlock-pass", async (req, res) => {
         if (!password || password.trim() === "") return res.status(400).json({ error: "密碼不可為空" });
         await redis.set(KEY_LINE_UNLOCK_PWD, password.trim());
         addAdminLog(req.user.nickname, "🔑 更新了 LINE 後台解鎖密碼");
+        logToUserFile(req.user.username, "更新 LINE 後台解鎖密碼");
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -886,6 +936,7 @@ app.post("/api/admin/export-csv", async (req, res) => {
         }).replace(/\//g, '-').replace(/:/g, '').replace(' ', '_');
         res.json({ success: true, csvData: csvContent, fileName: `stats_${timestamp}.csv` });
         addAdminLog(req.user.nickname, "📥 下載了 CSV 報表");
+        logToUserFile(req.user.username, "下載 CSV 報表");
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -909,6 +960,7 @@ app.post("/set-system-mode", async (req, res) => {
         if (!['ticketing', 'input'].includes(mode)) return res.status(400).json({ error: "無效模式" });
         await redis.set(KEY_SYSTEM_MODE, mode);
         addAdminLog(req.user.nickname, `切換系統模式為: ${mode === 'ticketing' ? '線上取號' : '手動輸入'}`);
+        logToUserFile(req.user.username, `切換系統模式: ${mode}`);
         io.emit("updateSystemMode", mode);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -926,6 +978,7 @@ app.post("/api/control/pass-current", async (req, res) => {
 
         await logHistory(actualNextNum, req.user.nickname, 1);
         addAdminLog(req.user.nickname, `⏩ ${current} 號未到，標記過號，跳至 ${actualNextNum} 號`);
+        logToUserFile(req.user.username, `[操作] 標記過號 ${current}，跳至 ${actualNextNum}`);
 
         await broadcastList(KEY_PASSED_NUMBERS, "updatePassed", false);
         checkAndNotifyLineUsers(actualNextNum);
@@ -947,6 +1000,7 @@ app.post("/api/control/recall-passed", async (req, res) => {
         await pipeline.exec();
 
         addAdminLog(req.user.nickname, `↩️ 重呼過號 ${targetNum} (插隊辦理)`);
+        logToUserFile(req.user.username, `[操作] 重呼過號 ${targetNum}`);
 
         await broadcastList(KEY_PASSED_NUMBERS, "updatePassed", false);
         await broadcastQueueStatus();
@@ -962,6 +1016,7 @@ app.post("/api/admin/broadcast", async (req, res) => {
     const cleanMsg = sanitize(message).substring(0, 50); 
     io.emit("adminBroadcast", cleanMsg);
     addAdminLog(req.user.nickname, `📢 發送廣播: "${cleanMsg}"`);
+    logToUserFile(req.user.username, `發送廣播: ${cleanMsg}`);
     res.json({ success: true });
 });
 
@@ -992,6 +1047,7 @@ app.post("/api/admin/stats/adjust", async (req, res) => {
         await redis.lpush(KEY_HISTORY_STATS, JSON.stringify(record));
         await redis.ltrim(KEY_HISTORY_STATS, 0, 999);
         addAdminLog(req.user.nickname, `手動調整 ${hour}點 統計`);
+        logToUserFile(req.user.username, `手動調整統計 ${hour}點: ${delta}`);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1003,21 +1059,65 @@ app.post("/api/admin/stats/clear", async (req, res) => {
         multi.del(`${KEY_STATS_HOURLY_PREFIX}${dateStr}`); 
         multi.del(KEY_HISTORY_STATS); await multi.exec();
         addAdminLog(req.user.nickname, `⚠️ 清空了統計數據`);
+        logToUserFile(req.user.username, "清空統計數據");
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/passed/add", async (req, res) => { await redis.zadd(KEY_PASSED_NUMBERS, req.body.number, req.body.number); broadcastList(KEY_PASSED_NUMBERS, "updatePassed", false); res.json({ success: true }); });
-app.post("/api/passed/remove", async (req, res) => { await redis.zrem(KEY_PASSED_NUMBERS, req.body.number); broadcastList(KEY_PASSED_NUMBERS, "updatePassed", false); res.json({ success: true }); });
-app.post("/api/passed/clear", async (req, res) => { await redis.del(KEY_PASSED_NUMBERS); broadcastList(KEY_PASSED_NUMBERS, "updatePassed", false); res.json({ success: true }); });
-app.post("/api/featured/add", async (req, res) => { await redis.rpush(KEY_FEATURED_CONTENTS, JSON.stringify(req.body)); broadcastList(KEY_FEATURED_CONTENTS, "updateFeaturedContents", true); res.json({ success: true }); });
-app.post("/api/featured/remove", async (req, res) => { await redis.lrem(KEY_FEATURED_CONTENTS, 1, JSON.stringify(req.body)); broadcastList(KEY_FEATURED_CONTENTS, "updateFeaturedContents", true); res.json({ success: true }); });
-app.post("/api/featured/clear", async (req, res) => { await redis.del(KEY_FEATURED_CONTENTS); broadcastList(KEY_FEATURED_CONTENTS, "updateFeaturedContents", true); res.json({ success: true }); });
-app.post("/set-sound-enabled", async (req, res) => { await redis.set(KEY_SOUND_ENABLED, req.body.enabled ? "1" : "0"); addAdminLog(req.user.nickname, `音效設為 ${req.body.enabled}`); io.emit("updateSoundSetting", req.body.enabled); res.json({ success: true }); });
-app.post("/set-public-status", async (req, res) => { await redis.set(KEY_IS_PUBLIC, req.body.isPublic ? "1" : "0"); addAdminLog(req.user.nickname, `系統設為 ${req.body.isPublic ? '開放' : '維護'}`); io.emit("updatePublicStatus", req.body.isPublic); res.json({ success: true }); });
+app.post("/api/passed/add", async (req, res) => { 
+    await redis.zadd(KEY_PASSED_NUMBERS, req.body.number, req.body.number); 
+    broadcastList(KEY_PASSED_NUMBERS, "updatePassed", false); 
+    logToUserFile(req.user.username, `手動加入過號 ${req.body.number}`);
+    res.json({ success: true }); 
+});
+app.post("/api/passed/remove", async (req, res) => { 
+    await redis.zrem(KEY_PASSED_NUMBERS, req.body.number); 
+    broadcastList(KEY_PASSED_NUMBERS, "updatePassed", false); 
+    logToUserFile(req.user.username, `手動移除過號 ${req.body.number}`);
+    res.json({ success: true }); 
+});
+app.post("/api/passed/clear", async (req, res) => { 
+    await redis.del(KEY_PASSED_NUMBERS); 
+    broadcastList(KEY_PASSED_NUMBERS, "updatePassed", false); 
+    logToUserFile(req.user.username, `清空過號列表`);
+    res.json({ success: true }); 
+});
+app.post("/api/featured/add", async (req, res) => { 
+    await redis.rpush(KEY_FEATURED_CONTENTS, JSON.stringify(req.body)); 
+    broadcastList(KEY_FEATURED_CONTENTS, "updateFeaturedContents", true); 
+    logToUserFile(req.user.username, `新增連結 ${req.body.linkText}`);
+    res.json({ success: true }); 
+});
+app.post("/api/featured/remove", async (req, res) => { 
+    await redis.lrem(KEY_FEATURED_CONTENTS, 1, JSON.stringify(req.body)); 
+    broadcastList(KEY_FEATURED_CONTENTS, "updateFeaturedContents", true); 
+    logToUserFile(req.user.username, `移除連結 ${req.body.linkText}`);
+    res.json({ success: true }); 
+});
+app.post("/api/featured/clear", async (req, res) => { 
+    await redis.del(KEY_FEATURED_CONTENTS); 
+    broadcastList(KEY_FEATURED_CONTENTS, "updateFeaturedContents", true); 
+    logToUserFile(req.user.username, `清空連結列表`);
+    res.json({ success: true }); 
+});
+app.post("/set-sound-enabled", async (req, res) => { 
+    await redis.set(KEY_SOUND_ENABLED, req.body.enabled ? "1" : "0"); 
+    addAdminLog(req.user.nickname, `音效設為 ${req.body.enabled}`); 
+    logToUserFile(req.user.username, `設定音效: ${req.body.enabled}`);
+    io.emit("updateSoundSetting", req.body.enabled); 
+    res.json({ success: true }); 
+});
+app.post("/set-public-status", async (req, res) => { 
+    await redis.set(KEY_IS_PUBLIC, req.body.isPublic ? "1" : "0"); 
+    addAdminLog(req.user.nickname, `系統設為 ${req.body.isPublic ? '開放' : '維護'}`); 
+    logToUserFile(req.user.username, `設定系統狀態: ${req.body.isPublic}`);
+    io.emit("updatePublicStatus", req.body.isPublic); 
+    res.json({ success: true }); 
+});
 
 app.post("/reset", async (req, res) => {
     await performReset(req.user.nickname);
+    logToUserFile(req.user.username, "執行全域重置");
     res.json({ success: true });
 });
 
@@ -1025,6 +1125,7 @@ app.post("/api/logs/clear", async (req, res) => {
     await redis.del(KEY_ADMIN_LOG); 
     io.to("admin").emit("initAdminLogs", []); 
     addAdminLog(req.user.nickname, "🗑️ 清空了系統日誌");
+    logToUserFile(req.user.username, "清空系統日誌 (Redis)");
     res.json({ success: true }); 
 });
 
@@ -1043,6 +1144,7 @@ app.post("/api/admin/add-user", async (req, res) => {
     await redis.hset(KEY_USERS, newUsername, hash);
     await redis.hset(KEY_NICKNAMES, newUsername, sanitize(newNickname) || newUsername);
     addAdminLog(req.user.nickname, `新增管理員 ${newUsername}`);
+    logToUserFile(req.user.username, `新增管理員 ${newUsername}`);
     res.json({ success: true });
 });
 
@@ -1052,6 +1154,7 @@ app.post("/api/admin/del-user", async (req, res) => {
     await redis.hdel(KEY_USERS, delUsername);
     await redis.hdel(KEY_NICKNAMES, delUsername);
     addAdminLog(req.user.nickname, `刪除管理員 ${delUsername}`);
+    logToUserFile(req.user.username, `刪除管理員 ${delUsername}`);
     res.json({ success: true });
 });
 
@@ -1062,6 +1165,7 @@ app.post("/api/admin/set-nickname", async (req, res) => {
     }
     await redis.hset(KEY_NICKNAMES, targetUsername, sanitize(nickname));
     addAdminLog(req.user.nickname, `修改 ${targetUsername} 暱稱為 ${nickname}`);
+    logToUserFile(req.user.username, `修改暱稱 ${targetUsername} -> ${nickname}`);
     res.json({ success: true });
 });
 
@@ -1129,5 +1233,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server v18.30 (Optimized) ready on port ${PORT}`);
+    console.log(`🚀 Server v18.31 (File Logging Enabled) ready on port ${PORT}`);
 });
