@@ -1,6 +1,6 @@
 /*
  * ==========================================
- * 後台樣式 (admin.css) - v3.3 Final (Scroll Fix)
+ * 後台樣式 (admin.css) - v3.4 Final (Neat Layout & Scroll Fix)
  * ==========================================
  */
 
@@ -55,7 +55,7 @@ body {
 
 /* --- 1. 佈局架構 (Layout) --- */
 
-/* [修復] 必須強制 admin-panel 填滿畫面，才能讓內部的 scroll 生效 */
+/* 確保 Scroll 正常運作的關鍵 */
 #admin-panel {
     width: 100%;
     height: 100%;
@@ -117,7 +117,7 @@ body {
 }
 
 .section-group { 
-    max-width: 1100px; 
+    max-width: 1200px; /* 稍微放寬最大寬度 */
     margin: 0 auto; 
     display: none; 
     animation: fadeIn 0.3s ease-out;
@@ -151,7 +151,6 @@ body {
 }
 .dashboard-item .value { font-weight: 800; line-height: 1.1; color: var(--text-main); font-variant-numeric: tabular-nums; }
 
-/* 調整數字大小 */
 .big-number { 
     font-size: 3.5rem; 
     letter-spacing: -1px; 
@@ -164,7 +163,6 @@ body {
     color: var(--text-main); 
 }
 
-/* 底部彩條 */
 .dashboard-item::after {
     content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px;
 }
@@ -172,21 +170,27 @@ body {
 .dashboard-item:nth-child(2)::after { background: var(--success); }
 .dashboard-item:nth-child(3)::after { background: var(--warning); }
 
-/* --- 3. 卡片系統 (Cards) --- */
+/* --- 3. 卡片系統 (Cards) - [整齊化核心] --- */
 .card-container {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); 
     gap: 24px;
-    align-items: start;
+    align-items: stretch; /* [關鍵] 強制讓同一列的卡片高度一致 */
 }
 .full-width-card { grid-column: 1 / -1; }
+
+.card-wrapper {
+    height: 100%; /* 確保 wrapper 撐滿 grid cell */
+    display: flex;
+    flex-direction: column;
+}
 
 .admin-card {
     background: var(--bg-surface);
     border-radius: var(--radius-lg);
     padding: 24px;
     box-shadow: var(--shadow-card);
-    height: 100%;
+    height: 100%; /* [關鍵] 確保卡片撐滿高度 */
     display: flex; flex-direction: column;
     border: 1px solid white;
 }
@@ -208,7 +212,6 @@ body {
 button { border: none; cursor: pointer; font-family: inherit; transition: all 0.2s ease; user-select: none;}
 button:active { transform: scale(0.97); }
 
-/* 叫號控制區 */
 .big-action-row { display: flex; gap: 12px; margin-bottom: 20px; }
 
 .btn-big {
@@ -222,7 +225,6 @@ button:active { transform: scale(0.97); }
 }
 .btn-big .icon { font-size: 1.4rem; }
 
-/* 下一號特別樣式 (Hero Button) */
 #btn-call-next {
     flex: 2; 
     background: var(--primary-gradient);
@@ -234,12 +236,9 @@ button:active { transform: scale(0.97); }
 
 .btn-glass { background: #f9fafb; color: var(--text-sub); border: 1px solid var(--border-color); }
 .btn-glass:hover { background: white; border-color: #d1d5db; }
-
 .btn-warn { background: var(--warning-bg); color: var(--warning-text); border: 1px solid #fde68a; }
 .btn-warn:hover { background: #fef3c7; }
-
 .btn-success { background: var(--success-gradient); color: white; }
-
 .btn-secondary { 
     background: #e0e7ff; color: var(--primary); 
     font-weight: 600; padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.9rem;
@@ -254,30 +253,35 @@ button:active { transform: scale(0.97); }
     line-height: 1; padding-bottom: 3px;
 }
 
+/* [關鍵] 強制讓重置/底部按鈕沉底，對齊卡片底部 */
 .btn-reset-single {
     width: 100%; padding: 12px; border-radius: var(--radius-md);
     background: transparent; border: 1px dashed var(--border-color); color: var(--text-light);
-    font-size: 0.85rem; margin-top: auto;
+    font-size: 0.85rem; 
+    margin-top: auto; /* Push to bottom */
 }
 .btn-reset-single:hover { border-color: var(--danger); color: var(--danger); background: #fef2f2; }
 
 /* --- 5. 輸入與表單 (Inputs) --- */
-.control-group { margin-bottom: 20px; width: 100%; }
+/* [關鍵] 讓中間的控制項區塊佔據剩餘空間 */
+.control-group { 
+    margin-bottom: 20px; width: 100%; 
+    flex-shrink: 0; /* 防止被擠壓 */
+}
+.list-editor {
+    flex: 1; /* 對於列表類，讓它自動長高填充 */
+    display: flex; flex-direction: column;
+}
+
 .control-group label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-main); }
 .section-hint { font-size: 0.85rem; color: var(--text-sub); margin-top: 6px; line-height: 1.4; }
 
-/* LINE 變數提示樣式 */
 .var-hint { 
     font-family: monospace; font-size: 0.8rem; color: #4b5563; 
     background: #e5e7eb; padding: 2px 6px; border-radius: 4px; 
     display: inline-block; margin-bottom: 8px;
 }
-.var-hint code {
-    font-family: monospace;
-    background: #d1d5db; 
-    padding: 1px 4px;
-    border-radius: 3px;
-}
+.var-hint code { background: #d1d5db; padding: 1px 4px; border-radius: 3px; }
 
 .input-group { display: flex; gap: 8px; width: 100%; }
 .input-group.vertical { flex-direction: column; }
@@ -290,7 +294,6 @@ input[type="text"], input[type="number"], input[type="password"] {
 }
 input:focus { background: white; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); }
 
-/* 區塊化輸入群組 */
 .form-group-boxed {
     background: #f9fafb; border: 1px solid #f3f4f6;
     padding: 16px; border-radius: var(--radius-md);
@@ -303,7 +306,6 @@ textarea {
 }
 textarea:focus { border-color: var(--primary); }
 
-/* Toggle Switch */
 .toggle-wrapper { display: flex; align-items: center; }
 .sound-toggle-group, .system-toggle-group { 
     display: flex; justify-content: space-between; align-items: center; 
@@ -318,9 +320,15 @@ ul { list-style: none; padding: 0; margin: 0; }
     background: #f9fafb; border-radius: var(--radius-md);
     border: 1px solid #f3f4f6; 
     max-height: 220px; 
-    min-height: 100px;
+    min-height: 100px; /* 統一最小高度 */
     overflow-y: auto;
     margin-bottom: 12px;
+}
+/* 特殊調整：過號名單和連結列表可以稍微長一點 */
+#passed-list-ui, #featured-list-ui {
+    flex: 1; /* 佔滿剩餘高度 */
+    min-height: 150px;
+    max-height: 300px;
 }
 
 li {
@@ -331,16 +339,8 @@ li {
 }
 li:last-child { border-bottom: none; }
 
-/* 日誌樣式 */
-.admin-log-container {
-    flex: 1; 
-    display: flex; flex-direction: column;
-}
-#admin-log-ui { 
-    flex: 1; 
-    min-height: 150px; 
-    background: #1f2937; border: none; font-family: monospace; 
-}
+.admin-log-container { flex: 1; display: flex; flex-direction: column; }
+#admin-log-ui { flex: 1; min-height: 150px; background: #1f2937; border: none; font-family: monospace; }
 #admin-log-ui li { color: #d1d5db; border-bottom: 1px solid #374151; font-size: 0.85rem; }
 
 /* --- 7. 圖表 (Charts) --- */
@@ -357,7 +357,6 @@ li:last-child { border-bottom: none; }
 
 /* --- 8. 手機響應式 (Mobile) --- */
 @media (max-width: 768px) {
-    /* Sidebar 轉 Bottom Nav */
     .sidebar {
         width: 100%; height: var(--mobile-nav-height);
         bottom: 0; top: auto; left: 0;
@@ -368,7 +367,6 @@ li:last-child { border-bottom: none; }
         justify-content: space-between;
     }
     .sidebar-header, .sidebar-footer { display: none; }
-    
     .sidebar-nav { flex-direction: row; width: 100%; padding: 0; gap: 0; }
     .nav-btn {
         flex-direction: column; justify-content: center; align-items: center;
@@ -378,28 +376,16 @@ li:last-child { border-bottom: none; }
     .nav-btn .nav-icon { margin: 0; font-size: 1.4rem; display: block; }
     .nav-btn.active { background: transparent; color: var(--primary); box-shadow: inset 0 3px 0 var(--primary); }
 
-    /* 內容區避開 Bottom Nav */
-    .content-area { 
-        padding: 20px 16px; 
-        padding-bottom: calc(var(--mobile-nav-height) + 30px); 
-    }
-    
-    /* 儀表板 RWD */
-    .dashboard-header { 
-        grid-template-columns: 1fr 1fr; 
-        gap: 12px; margin-bottom: 20px;
-    }
+    .content-area { padding: 20px 16px; padding-bottom: calc(var(--mobile-nav-height) + 30px); }
+    .dashboard-header { grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
     .dashboard-item { padding: 16px; }
     .dashboard-item:last-child { grid-column: 1 / -1; } 
     .big-number { font-size: 2.5rem; }
     .sub-number { font-size: 2rem; }
     
-    /* 按鈕 RWD */
     .big-action-row { flex-wrap: wrap; }
     #btn-call-next { min-width: 100%; order: -1; margin-bottom: 4px; }
     .btn-big { min-width: calc(50% - 6px); }
-    
-    /* 卡片全寬 */
     .card-container { grid-template-columns: 1fr; }
 }
 
@@ -433,7 +419,6 @@ li:last-child { border-bottom: none; }
 }
 #toast-notification.show { transform: translate(-50%, 0); opacity: 1; }
 
-/* Modal Overlay */
 .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px);
@@ -451,29 +436,19 @@ li:last-child { border-bottom: none; }
 
 /*
  * ==========================================
- * [新增] 大螢幕版面優化 (Desktop Optimization)
- * 針對 1024px 以上螢幕重新排版，避免元件過大
+ * [大螢幕版面優化] (Desktop Optimization)
  * ==========================================
  */
 
 @media (min-width: 1024px) {
 
-    /* --- 1. 叫號控制 & 發號機 (Section Live) --- */
-    /* 讓「叫號控制」不再佔滿整行，改為自動適應，使其能與「發號機」並排 */
-    #card-calling.full-width-card {
-        grid-column: auto; 
-    }
+    /* [關鍵修正] 叫號控制 & 發號機並排，且高度對齊 */
+    #card-calling.full-width-card { grid-column: auto; }
     
-    /* 調整叫號控制台內的按鈕比例 */
-    #card-calling .big-action-row {
-        margin-bottom: 15px;
-    }
-    #btn-call-next {
-        flex: 1.5;
-    }
+    #card-calling .big-action-row { margin-bottom: 15px; }
+    #btn-call-next { flex: 1.5; }
 
-    /* --- 2. 用戶管理 (User Management) --- */
-    /* 將列表與新增表單改為左右分欄 */
+    /* 用戶管理分欄 */
     #card-user-management .list-editor {
         display: grid;
         grid-template-columns: 1.5fr 1fr;
@@ -482,50 +457,25 @@ li:last-child { border-bottom: none; }
         max-height: none;
         overflow: visible;
     }
-    
-    #card-user-management .list-editor ul {
-        margin-bottom: 0;
-        max-height: 400px;
-    }
-
+    #card-user-management .list-editor ul { margin-bottom: 0; max-height: 400px; }
     #card-user-management .input-group.vertical {
-        background: #f9fafb;
-        padding: 20px;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border-color);
+        background: #f9fafb; padding: 20px; border-radius: var(--radius-md); border: 1px solid var(--border-color);
     }
 
-    /* --- 3. LINE 通知設定 (LINE Settings) --- */
-    /* 讓設定區塊變成網格排列 */
+    /* LINE 設定網格化 */
     #card-line-settings details {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 16px;
         width: 100%;
     }
-
-    #card-line-settings summary {
-        grid-column: 1 / -1;
-        margin-bottom: 10px;
-        border-bottom: 2px solid #f3f4f6;
-    }
-
-    /* 強制某些大型區塊橫跨兩欄 */
+    #card-line-settings summary { grid-column: 1 / -1; margin-bottom: 10px; border-bottom: 2px solid #f3f4f6; }
     #card-line-settings .control-group.form-group-boxed:nth-of-type(1), 
-    #card-line-settings .control-group.form-group-boxed:nth-of-type(2) 
-    {
-        grid-column: span 1;
-    }
-
-    #card-line-settings details:nth-of-type(2) .control-group.form-group-boxed {
-        margin-bottom: 0;
-        height: 100%;
-    }
+    #card-line-settings .control-group.form-group-boxed:nth-of-type(2) { grid-column: span 1; }
+    #card-line-settings details:nth-of-type(2) .control-group.form-group-boxed { margin-bottom: 0; height: 100%; }
 }
 
-/* 針對超寬螢幕 (1440px+) 的額外修正 */
 @media (min-width: 1440px) {
-    .card-container {
-        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    }
+    /* [大螢幕整齊化] 固定為 3 欄，避免寬度過度拉伸 */
+    .card-container { grid-template-columns: repeat(3, 1fr); }
 }
