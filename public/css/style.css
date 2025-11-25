@@ -1,7 +1,7 @@
 /*
  * ==========================================
- * 前台樣式 (style.css) - v18.37 Fixed Layout
- * 修復跑版問題：強制單一螢幕、內層獨立捲動
+ * 前台樣式 (style.css) - v18.39 Final Layout
+ * 佈局：狀態看板(上) -> 過號名單(中/可捲動) -> 操作區(下)
  * ==========================================
  */
 
@@ -19,29 +19,31 @@
     --color-secondary-light: #f5f3ff; 
     --color-warning: #d97706; 
     
-    /* 字體大小調整：縮小最小值以適應小手機 */
+    /* 字體大小：使用 clamp 確保在不同螢幕的適應性 */
     --font-h1: clamp(1.2rem, 3vh, 1.8rem); 
     --font-h2: clamp(0.9rem, 2.5vh, 1.5rem); 
     --font-h3: clamp(0.9rem, 2.2vh, 1.3rem); 
     
-    /* 核心數字：允許在空間不足時縮小 */
+    /* 核心數字 */
     --font-number-big: clamp(3rem, 12vh, 8rem); 
     --font-number-sub: clamp(1.5rem, 6vh, 3rem);
     
-    --font-passed: clamp(0.8rem, 2vh, 1.5rem);
+    /* 列表字體 */
+    --font-passed: clamp(0.9rem, 2.2vh, 1.5rem); 
     --font-featured: clamp(0.8rem, 1.8vh, 1rem); 
     
-    --gap-base: 1vh; /* 統一間距 */
+    /* 統一間距 */
+    --gap-base: 1vh;
 }
 
-/* --- 1. 全局強制設定 --- */
+/* --- 1. 全局設定 --- */
 html, body { 
     height: 100%; 
     width: 100%;
     margin: 0; 
     padding: 0; 
-    overflow: hidden; /* 禁止網頁層級捲動 */
-    position: fixed; /* 鎖定在視窗上，防止 iOS 橡皮筋效果 */
+    overflow: hidden; /* 強制禁止整頁捲動 */
+    position: fixed; /* 鎖定視窗，防止 iOS 橡皮筋效果 */
 }
 
 body { 
@@ -50,21 +52,24 @@ body {
     background: var(--color-bg); 
     color: var(--color-text);
     
-    /* 使用 Flex Column 佈局 */
     display: flex; 
     flex-direction: column; 
     align-items: center; 
     
-    /* 安全區域設定 (針對 iPhone瀏海) */
+    /* 安全區域設定 (瀏海屏適配) */
     padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
     box-sizing: border-box; 
 }
 
-/* --- 2. 佈局結構 (由上而下) --- */
+/* iOS 輸入框防放大 */
+input, select, textarea { font-size: 16px !important; }
 
-/* (A) 頂部標題：高度固定 (auto) */
+
+/* --- 2. 主要區塊佈局 --- */
+
+/* (A) 頂部標題 */
 .top-header { 
-    flex: 0 0 auto; /* 不伸縮 */
+    flex: 0 0 auto; 
     width: 100%; 
     margin-bottom: var(--gap-base); 
     position: relative;
@@ -73,21 +78,21 @@ body {
 h1 { margin: 0; line-height: 1.2; font-weight: 900; color: var(--color-danger); }
 #last-updated { margin: 2px 0 0 0; font-size: 0.75rem; color: var(--color-text-light); }
 
-/* (B) 中間主要內容區：佔滿剩餘空間 */
+
+/* (B) 內容包裝層 (核心區域) */
 .content-wrapper {
-    flex: 1 1 auto; /* 自動填滿 */
+    flex: 1 1 auto; /* 自動填滿剩餘高度 */
     width: 100%; 
-    max-width: 600px; /* 限制最大寬度，避免在大螢幕太寬難看 */
+    max-width: 600px;
     display: flex; 
     flex-direction: column; 
     gap: var(--gap-base);
     
-    /* 關鍵：允許 Flex 子元素縮小至內容以下，防止破版 */
-    min-height: 0; 
+    min-height: 0; /* 關鍵：防止內容撐破容器 */
     overflow: hidden; 
 }
 
-/* 卡片通用設定 */
+/* 卡片通用樣式 */
 .card {
     background: var(--color-bg-light); 
     border-radius: 12px;
@@ -101,12 +106,13 @@ h1 { margin: 0; line-height: 1.2; font-weight: 900; color: var(--color-danger); 
     align-items: center;
 }
 
-/* --- 3. 各區塊權重與細節 --- */
 
-/* [看板區] */
+/* --- 3. 內部元件樣式 --- */
+
+/* [1. 狀態看板] (上方) */
 #status-board {
-    flex: 0 0 auto; /* 高度由內容決定，適度伸縮 */
-    min-height: 15vh; /* 給予最小高度 */
+    flex: 0 0 auto; /* 高度由內容決定 */
+    min-height: 12vh;
     flex-direction: row; 
     justify-content: space-around;
     padding: 1vh 0;
@@ -117,27 +123,55 @@ h1 { margin: 0; line-height: 1.2; font-weight: 900; color: var(--color-danger); 
 #issued-number-main { font-size: var(--font-number-sub); font-weight: bold; line-height: 1; margin: 0; }
 .status-divider { width: 1px; height: 70%; background-color: #eee; margin: 0 10px; }
 
-/* [取號/我的號碼區] - 這是畫面主角，權重最高 */
-#ticket-section { 
-    flex: 1 1 auto; /* 佔據最多空間 */
-    min-height: 0; /* 允許縮小 */
-    padding: 0;
-    overflow: hidden; /* 防止內部內容撐開 */
+
+/* [2. 過號清單] (中間 - 自動伸縮捲動) */
+#passed-container { 
+    flex: 1 1 auto; /* 關鍵：佔據中間所有剩餘空間 */
+    min-height: 0;  
+    justify-content: flex-start; /* 內容靠上對齊 */
+    padding: 1.5vh 3vw;
+}
+#passed-container h3 { 
+    margin: 0 0 1vh 0; 
+    font-size: 1rem; 
+    color: #888; 
+    flex-shrink: 0; 
+}
+#passedList { 
+    list-style: none; padding: 0; margin: 0; 
+    display: flex; flex-wrap: wrap; 
+    justify-content: center; align-content: flex-start; 
+    gap: 8px; 
+    width: 100%; 
+    overflow-y: auto; /* 內部捲動 */
+    flex: 1; /* 填滿卡片高度 */
+}
+#passedList li { 
+    font-size: var(--font-passed); color: #888; background: #e5e7eb; 
+    padding: 4px 12px; border-radius: 8px; font-weight: 700;
 }
 
-/* 內部容器設定 */
+
+/* [3. 取號/輸入區] (底部 - 固定高度) */
+#ticket-section { 
+    flex: 0 0 auto; /* 高度固定，不隨視窗拉伸 */
+    padding: 0;
+    margin-top: auto; /* 確保貼底 */
+    overflow: visible; 
+}
+
+/* 內部視圖容器 */
 #ticketing-mode-container, #input-mode-container, #my-ticket-view {
-    width: 100%; height: 100%;
+    width: 100%;
     display: flex; flex-direction: column; 
     justify-content: center; align-items: center;
-    overflow-y: auto; /* 只有這裡內容太多時才卷動 */
 }
 
-/* 取號介面 */
-#take-ticket-view, #input-mode-view { padding: 10px; }
+#take-ticket-view, #input-mode-view { padding: 10px; width: 100%; box-sizing: border-box; }
 #take-ticket-view h3, #input-mode-view h3 { margin: 0 0 1vh 0; font-size: var(--font-h3); }
-#take-ticket-view p, #input-mode-view p { margin: 0 0 2vh 0; font-size: 0.9rem; line-height: 1.4; color: #666; }
+#take-ticket-view p, #input-mode-view p { margin: 0 0 1.5vh 0; font-size: 0.9rem; line-height: 1.4; color: #666; }
 
+/* 按鈕樣式 */
 .btn-primary-action {
     padding: 1.5vh 6vw; 
     font-size: clamp(1rem, 2.5vh, 1.3rem); 
@@ -146,131 +180,114 @@ h1 { margin: 0; line-height: 1.2; font-weight: 900; color: var(--color-danger); 
     box-shadow: 0 4px 12px rgba(37,99,235,0.3); white-space: nowrap;
 }
 
-/* 我的號碼卡片 */
+
+/* [我的號碼卡片] */
 .my-ticket-card {
     background: linear-gradient(135deg, var(--color-primary) 0%, #1e40af 100%); 
-    color: white; width: 100%; height: 100%;
-    display: flex; flex-direction: column; justify-content: center; align-items: center;
-    padding: 1vh 2vw; box-sizing: border-box; position: relative;
+    color: white; width: 100%; 
+    padding: 2vh 3vw; box-sizing: border-box; position: relative;
+    border-radius: 12px;
 }
 .btn-cancel-ticket {
     position: absolute; top: 10px; right: 10px;
     background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);
     padding: 4px 10px; border-radius: 15px; font-size: 0.8rem; color: white;
 }
-.my-ticket-number-display { font-size: clamp(3rem, 10vh, 6rem); font-weight: bold; line-height: 1; margin: 1vh 0; }
+.my-ticket-number-display { font-size: clamp(3rem, 8vh, 5rem); font-weight: bold; line-height: 1; margin: 1vh 0; }
 .my-ticket-info-block {
-    background: rgba(255,255,255,0.15); border-radius: 10px; padding: 1vh 2vw; width: 90%;
+    background: rgba(255,255,255,0.15); border-radius: 10px; padding: 1vh 2vw; width: 95%;
     display: flex; justify-content: space-around; backdrop-filter: blur(5px);
 }
 .info-label { font-size: 0.75rem; opacity: 0.9; margin-bottom: 2px; display: block; }
 .info-value { font-size: 1.4rem; font-weight: bold; }
 #ticket-status-text { margin: 1.5vh 0 0 0; font-weight: bold; font-size: 1rem; }
 
-/* [過號區] */
-#passed-container { 
-    flex: 0 1 auto; /* 空間不足時優先縮小 */
-    min-height: 0;
-    max-height: 20vh; /* 限制最大高度 */
-    justify-content: flex-start;
-    padding: 1vh 2vw;
-    display: flex; flex-direction: column;
-}
-#passed-container h3 { margin: 0 0 0.5vh 0; font-size: 0.9rem; color: #888; }
-#passedList { 
-    list-style: none; padding: 0; margin: 0; 
-    display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 6px; 
-    width: 100%; overflow-y: auto; /* 內部捲動 */
-}
-#passedList li { 
-    font-size: var(--font-passed); color: #888; background: #e5e7eb; 
-    padding: 2px 10px; border-radius: 6px; font-weight: 700;
-}
 
-/* [精選連結區] */
+/* (C) 底部連結與工具列 */
 #featured-container {
-    flex: 0 1 auto;
-    max-height: 12vh; /* 限制高度 */
+    flex: 0 0 auto; 
+    max-height: 10vh; 
     overflow-y: auto;
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; 
     margin-bottom: 0.5vh;
 }
 .featured-link { 
-    font-size: 0.85rem; padding: 6px 14px; border-radius: 20px; 
+    font-size: 0.8rem; padding: 4px 10px; border-radius: 20px; 
     background: var(--color-secondary-light); color: var(--color-secondary); 
-    text-decoration: none; font-weight: bold; display: inline-block;
+    text-decoration: none; font-weight: bold; 
 }
 
-/* (C) 底部工具列：固定高度 */
-.utility-buttons {
-    flex: 0 0 auto;
+.utility-buttons { 
+    flex: 0 0 auto; 
     display: flex; justify-content: center; gap: 10px; 
-    width: 100%; padding-top: 0.5vh;
+    width: 100%; padding-bottom: 0.5vh; 
 }
-#sound-prompt, #copy-link-prompt {
-    background: #fff; padding: 8px 16px; border-radius: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer;
-    font-size: 0.85rem; color: var(--color-text-light); border: 1px solid #eee;
+#sound-prompt, #copy-link-prompt { 
+    background: #fff; padding: 6px 12px; border-radius: 20px; 
+    font-size: 0.8rem; color: var(--color-text-light); border: 1px solid #eee; 
 }
 
-/* --- 4. 輔助樣式與 RWD --- */
 
-/* 隱藏元素 */
-.empty-state-message { display: none; font-size: 0.8rem; color: #bbb; margin: 2px 0; }
+/* --- 4. 輔助與 RWD --- */
+
+/* 空狀態 */
+.empty-state-message { display: none; font-size: 0.9rem; color: #bbb; margin: auto; }
 #passed-container.is-empty .empty-state-message { display: block; }
 #passed-container.is-empty #passedList { display: none; }
 #featured-container.is-empty { display: none; }
 
-/* 狀態列 */
+/* 狀態通知列 */
 #status-bar { 
-    position: absolute; top: 0; left: 0; width: 100%; height: 40px;
-    background-color: var(--color-danger); color: white; line-height: 40px;
-    font-weight: bold; text-align: center; z-index: 2000; font-size: 0.9rem;
+    position: absolute; top: 0; left: 0; width: 100%; height: 40px; 
+    background-color: var(--color-danger); color: white; line-height: 40px; 
+    font-weight: bold; text-align: center; z-index: 2000; 
     transform: translateY(-100%); transition: transform 0.3s ease; 
 }
 #status-bar.visible { transform: translateY(0); }
 
-/* QR Code (僅在空間足夠時顯示) */
+/* QR Code */
 #qr-code-container { display: none; } 
 @media (min-width: 1024px) and (min-height: 700px) {
     #qr-code-container { 
-        position: fixed; bottom: 20px; right: 20px; display: block;
+        position: fixed; bottom: 20px; right: 20px; display: block; 
         background: white; padding: 10px; border-radius: 12px; 
-        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15); z-index: 100; 
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15); z-index: 100; 
     }
 }
 
-/* 維護模式遮罩 */
-#maintenance-overlay {
-    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+/* 維護模式 */
+#maintenance-overlay { 
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
     background: #f3f4f6; z-index: 9999; 
-    flex-direction: column; justify-content: center; align-items: center;
+    flex-direction: column; justify-content: center; align-items: center; 
 }
 body.is-closed #maintenance-overlay { display: flex; }
 
-/* Toast 提示 */
-#toast-container {
-    position: fixed; bottom: 10%; left: 50%; transform: translateX(-50%);
-    z-index: 9999; display: flex; flex-direction: column; gap: 5px;
-    pointer-events: none; width: max-content; max-width: 90%;
+/* Toast */
+#toast-container { 
+    position: fixed; bottom: 15%; left: 50%; transform: translateX(-50%); 
+    z-index: 9999; display: flex; flex-direction: column; gap: 5px; 
+    pointer-events: none; width: max-content; max-width: 90%; 
 }
-.toast-message {
-    background: rgba(31, 41, 55, 0.95); color: white;
-    padding: 8px 16px; border-radius: 50px; font-size: 0.85rem;
-    opacity: 0; transform: translateY(10px); transition: all 0.3s;
+.toast-message { 
+    background: rgba(31, 41, 55, 0.95); color: white; 
+    padding: 8px 16px; border-radius: 50px; font-size: 0.85rem; 
+    opacity: 0; transform: translateY(10px); transition: all 0.3s; 
 }
 .toast-message.show { opacity: 1; transform: translateY(0); }
 
-/* 輸入框優化 */
-input, select { font-size: 16px !important; } /* 防止 iOS 放大 */
+/* 動畫 */
+@keyframes flash { 
+    0% { transform: scale(1); opacity: 1; } 
+    30% { transform: scale(1.1); color: var(--color-warning); }
+    100% { transform: scale(1); opacity: 1; color: var(--color-primary); } 
+}
+#number.updated { animation: flash 0.6s ease-out; }
 
-/* 極小螢幕 (如 iPhone SE) 額外優化 */
+/* 小螢幕優化 (隱藏次要資訊) */
 @media (max-height: 600px) {
     :root { --gap-base: 0.5vh; }
-    .top-header { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 5px; }
     h1 { font-size: 1rem; }
-    #last-updated { display: none; } /* 空間不足隱藏更新時間 */
-    #featured-container { display: none; } /* 空間不足隱藏連結 */
+    #last-updated, #featured-container { display: none; }
     #status-board { min-height: 10vh; padding: 0; }
-    .card { padding: 0.5vh 2vw; }
 }
