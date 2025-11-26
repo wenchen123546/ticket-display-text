@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台樣式 (admin.css) - v34.0 Strict Layout
+ * 後台樣式 (admin.css) - v35.0 Stable Grid & Persistence
  * ========================================== */
 :root {
     --bg-body: #f3f4f6; --bg-surface: #ffffff; --bg-sidebar: #ffffff;
@@ -42,22 +42,17 @@ body { margin: 0; width: 100%; min-height: 100vh; font-family: 'Inter', sans-ser
 .sub-number { font-size: 1.8rem; font-weight: 700; color: var(--text-main); }
 .label { font-size: 0.85rem; color: var(--text-sub); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
 
-/* [修正重點] 強制卡片大小一致 */
-.card-container { display: grid; gap: 24px; grid-template-columns: 1fr; } /* 手機預設 1 欄 */
-
-/* 平板 2 欄 */
-@media (min-width: 768px) { .card-container { grid-template-columns: repeat(2, 1fr); } } 
-/* 桌機 3 欄 (強制平均，不允許大小不一) */
-@media (min-width: 1200px) { .card-container { grid-template-columns: repeat(3, 1fr); } }
-
-/* 需要全寬的卡片 (如數據分析) 使用 span */
+/* Grid Layout */
+.card-container { display: grid; gap: 24px; grid-template-columns: 1fr; } /* 手機 */
+@media (min-width: 768px) { .card-container { grid-template-columns: repeat(2, 1fr); } } /* 平板 */
+@media (min-width: 1200px) { .card-container { grid-template-columns: repeat(3, 1fr); } } /* 桌機 */
 .full-width-card { grid-column: 1 / -1; }
 
 .admin-card { background: var(--bg-surface); border-radius: var(--radius-lg); padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); height: 100%; display: flex; flex-direction: column; }
 .admin-card h3 { margin: 0 0 20px 0; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; color: var(--text-main); }
 .card-icon { font-size: 1.2rem; }
 
-/* Controls & Flex Layouts */
+/* Controls */
 .big-action-row { display: flex; gap: 15px; margin-bottom: 20px; width: 100%; }
 .btn-big { flex: 1; padding: 20px; border-radius: var(--radius-md); font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); min-height: 90px; border: none; cursor: pointer; transition: 0.2s; font-size: 1rem; }
 .btn-glass { background: #f3f4f6; color: var(--text-main); }
@@ -80,22 +75,21 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .btn-reset-single { width: 100%; padding: 12px; border: 1px dashed var(--border-color); background: transparent; color: var(--text-sub); margin-top: auto; cursor: pointer; border-radius: var(--radius-md); }
 .btn-reset-single:hover { background: #f9fafb; color: var(--text-main); }
 
-.list-editor ul, .log-list { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: var(--radius-md); max-height: 300px; overflow-y: auto; margin: 0 0 12px 0; padding: 0; list-style: none; }
-.list-editor li { padding: 10px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.list-editor li > div { overflow: hidden; }
-.list-editor li span, .list-editor li small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-
-.log-list li { padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 0.9rem; color: #555; }
-.var-hint { display: block; font-size: 0.8rem; color: #666; margin-bottom: 4px; font-family: monospace; background: #eee; padding: 2px 5px; border-radius: 4px; width: fit-content; }
-.form-group-boxed { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
-
-/* Chart */
-.chart-container { height: 150px; display: flex; align-items: flex-end; gap: 2px; padding: 10px 0; overflow-x: auto; }
+/* [修正] Chart & Lists */
+.chart-container { min-height: 150px; display: flex; align-items: flex-end; gap: 2px; padding: 10px 0; overflow-x: auto; width: 100%; }
 .chart-col { flex: 1; min-width: 15px; display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: 0.7; transition: 0.2s; }
 .chart-col:hover, .chart-col.current { opacity: 1; }
 .chart-bar { width: 100%; background: var(--primary); border-radius: 4px 4px 0 0; min-height: 4px; }
 .chart-val { font-size: 0.7rem; color: #666; margin-bottom: 2px; }
 .chart-label { font-size: 0.6rem; color: #999; margin-top: 2px; }
+
+.list-editor ul, .log-list { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: var(--radius-md); max-height: 300px; overflow-y: auto; margin: 0 0 12px 0; padding: 0; list-style: none; }
+.list-editor li { padding: 10px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.list-editor li > div { overflow: hidden; }
+.list-editor li span, .list-editor li small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.log-list li { padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 0.9rem; color: #555; }
+.var-hint { display: block; font-size: 0.8rem; color: #666; margin-bottom: 4px; font-family: monospace; background: #eee; padding: 2px 5px; border-radius: 4px; width: fit-content; }
+.form-group-boxed { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
 
 /* Overlays */
 #status-bar { position: fixed; top: 0; width: 100%; background: var(--danger); color: white; text-align: center; padding: 8px; transform: translateY(-100%); transition: 0.3s; z-index: 9999; } #status-bar.visible { transform: translateY(0); }
@@ -116,10 +110,7 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
     .nav-btn { flex-direction: column; justify-content: center; flex: 1; font-size: 0.75rem; border-radius: 0; text-align: center; height: 60px; padding: 5px; gap: 4px; white-space: nowrap; }
     .content-area { padding: 15px 15px 90px 15px; width: 100%; min-width: 100%; flex: auto; }
     .dashboard-header { grid-template-columns: 1fr 1fr; } .dashboard-item:last-child { grid-column: 1 / -1; }
-    
-    /* 手機強制單欄 */
     .card-container { grid-template-columns: 1fr; } 
-    
     .big-action-row { flex-direction: column; }
     .input-group { flex-direction: column; }
     #btn-call-next { order: -1; min-width: 100%; }
