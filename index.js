@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v52.0 Final Stable
+ * 伺服器 (index.js) - v53.0 Fix Data Source
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http");
@@ -16,7 +16,6 @@ const fs = require("fs");
 const path = require("path");
 const sqlite3 = require('sqlite3').verbose();
 
-// --- 1. Config ---
 const { PORT = 3000, UPSTASH_REDIS_URL: REDIS_URL, ADMIN_TOKEN, LINE_ACCESS_TOKEN, LINE_CHANNEL_SECRET } = process.env;
 if (!ADMIN_TOKEN || !REDIS_URL) process.exit(1);
 
@@ -32,10 +31,8 @@ const app = express();
 const server = Server(app);
 const io = socketio(server, { cors: { origin: "*" }, pingTimeout: 60000 });
 
-// --- 2. DB Init ---
 const LOG_DIR = path.join(__dirname, 'user_logs');
 try { if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR); } catch(e) {}
-
 const db = new sqlite3.Database(path.join(__dirname, 'callsys.db'), (err) => {
     if(!err) {
         db.run(`CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, date_str TEXT, timestamp INTEGER, number INTEGER, action TEXT, operator TEXT, wait_time_min REAL)`);
@@ -57,7 +54,6 @@ const KEYS = {
 redis.defineCommand("safeNextNumber", { numberOfKeys: 2, lua: `return (tonumber(redis.call("GET",KEYS[1]))or 0) < (tonumber(redis.call("GET",KEYS[2]))or 0) and redis.call("INCR",KEYS[1]) or -1` });
 redis.defineCommand("decrIfPositive", { numberOfKeys: 1, lua: `local v=tonumber(redis.call("GET",KEYS[1])) return (v and v>0) and redis.call("DECR",KEYS[1]) or (v or 0)` });
 
-// --- 3. Helpers ---
 const sanitize = s => typeof s==='string'?s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"): '';
 const getTWTime = () => {
     const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hour12:false}).formatToParts(new Date());
@@ -75,13 +71,10 @@ const broadcastQueue = async () => {
     io.emit("update", c); io.emit("updateQueue", { current: c, issued: i });
     io.emit("updateWaitTime", await calcWaitTime()); io.emit("updateTimestamp", new Date().toISOString());
 };
-// [新增] 廣播在線管理員
 const broadcastOnlineAdmins = async () => {
     const sockets = await io.in("admin").fetchSockets();
     const admins = [];
-    for(const s of sockets) {
-        try { const u = s.handshake.auth.token ? JSON.parse(await redis.get(`${KEYS.SESSION}${s.handshake.auth.token}`)) : null; if(u) admins.push(u); } catch(e){}
-    }
+    for(const s of sockets) { try { const u = s.handshake.auth.token ? JSON.parse(await redis.get(`${KEYS.SESSION}${s.handshake.auth.token}`)) : null; if(u) admins.push(u); } catch(e){} }
     const uniqueAdmins = [...new Map(admins.map(item => [item.username, item])).values()];
     io.to("admin").emit("updateOnlineAdmins", uniqueAdmins);
 };
@@ -98,7 +91,6 @@ const calcWaitTime = async (force=false) => {
     });
 };
 
-// --- 4. Core Logic ---
 async function handleControl(type, { body, user }) {
     const { direction, number } = body;
     const curr = parseInt(await redis.get(KEYS.CURRENT))||0;
@@ -136,7 +128,6 @@ async function handleControl(type, { body, user }) {
         addLog(user.nickname, logMsg);
         const { dateStr, hour } = getTWTime();
         db.run(`INSERT INTO history (date_str, timestamp, number, action, operator, wait_time_min) VALUES (?, ?, ?, ?, ?, ?)`, [dateStr, Date.now(), newNum||curr, type, user.nickname, await calcWaitTime()]);
-        // [關鍵] 恢復 Redis 統計計數
         if(['call','issue','pass'].includes(type) || type.startsWith('set')) {
             await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, 1); await redis.expire(`${KEYS.HOURLY}${dateStr}`, 172800);
         }
@@ -170,7 +161,7 @@ const checkPermission = (act) => (req, res, next) => {
     res.status(403).json({ error: "權限不足" });
 };
 
-// --- Routes ---
+// Routes
 app.post("/login", rateLimit({windowMs:9e5,max:100}), asyncHandler(async req => {
     const { username: u, password: p } = req.body;
     let valid = (u==='superadmin' && p===ADMIN_TOKEN);
@@ -236,13 +227,22 @@ app.post("/api/passed/add", auth, checkPermission('pass'), asyncHandler(async r=
 app.post("/api/passed/remove", auth, checkPermission('pass'), asyncHandler(async r=>{ await redis.zrem(KEYS.PASSED, r.body.number); io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number)); }));
 app.post("/api/passed/clear", auth, checkPermission('pass'), asyncHandler(async r=>{ await redis.del(KEYS.PASSED); io.emit("updatePassed", []); }));
 app.post("/api/appointment/add", auth, checkPermission('appointment'), asyncHandler(async req => { db.run("INSERT INTO appointments (number, scheduled_time) VALUES (?, ?)", [req.body.number, new Date(req.body.timeStr).getTime()]); addLog(req.user.nickname, `📅 預約: ${req.body.number}號`); }));
+
+// [修正] 流量分析 API 改為讀取 SQLite
 app.post("/api/admin/stats", auth, asyncHandler(async req => {
     const {dateStr, hour} = getTWTime();
-    const [hist, hData] = await Promise.all([redis.lrange(KEYS.LOGS,0,99), redis.hgetall(`${KEYS.HOURLY}${dateStr}`)]);
+    const hData = await redis.hgetall(`${KEYS.HOURLY}${dateStr}`);
     const counts = new Array(24).fill(0); let total=0;
     for(const [h,c] of Object.entries(hData||{})) { counts[parseInt(h)]=parseInt(c); total+=parseInt(c); }
-    return { history: hist, hourlyCounts: counts, todayCount: total, serverHour: hour };
+    
+    return new Promise((resolve, reject) => {
+        db.all("SELECT * FROM history ORDER BY id DESC LIMIT 50", [], (err, rows) => {
+            if(err) resolve({ history: [], hourlyCounts: counts, todayCount: total, serverHour: hour }); // 降級處理
+            else resolve({ history: rows, hourlyCounts: counts, todayCount: total, serverHour: hour });
+        });
+    });
 }));
+
 app.post("/api/admin/history-report", auth, checkPermission('settings'), asyncHandler(async req => { return new Promise((res, rej) => db.all("SELECT * FROM history ORDER BY timestamp DESC LIMIT 1000", [], (e, r) => e?rej(e):res({data:r}))); }));
 app.post("/api/admin/stats/adjust", auth, checkPermission('settings'), asyncHandler(async r=>{ const {dateStr}=getTWTime(); await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, r.body.hour, r.body.delta); }));
 app.post("/api/admin/stats/clear", auth, checkPermission('settings'), asyncHandler(async r=>{ await redis.del(`${KEYS.HOURLY}${getTWTime().dateStr}`); addLog(r.user.nickname,"⚠️ 清空統計"); }));
@@ -275,4 +275,4 @@ io.on("connection", async s => {
     s.on("disconnect", () => { setTimeout(broadcastOnlineAdmins, 1000); });
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v52.0 running on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v53.0 running on ${PORT}`));
