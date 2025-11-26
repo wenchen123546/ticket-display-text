@@ -1,6 +1,10 @@
+{
+type: uploaded file
+fileName: style.css
+fullContent:
 /*
  * ==========================================
- * Theme: Maximized Compact v30.0 (Final Fixes)
+ * Theme: Maximized Compact v31.0 (Layout Fixes)
  * ==========================================
  */
 
@@ -43,7 +47,8 @@ body {
 .app-container {
     width: 100%; max-width: 550px;
     height: 100%;
-    padding: max(var(--gap-outer), env(safe-area-inset-top)) var(--gap-outer) max(var(--gap-outer), env(safe-area-inset-bottom)) var(--gap-outer);
+    /* 保持上方空間，減少下方 Padding */
+    padding: max(var(--gap-outer), env(safe-area-inset-top)) var(--gap-outer) 4px var(--gap-outer);
     display: flex; flex-direction: column;
     gap: var(--gap-inner);
 }
@@ -60,11 +65,24 @@ body {
 .app-header {
     flex: 0 0 auto;
     display: flex; justify-content: space-between; align-items: center;
-    padding: 0 4px; height: 20px;
+    padding: 4px 8px; height: 32px;
+    z-index: 10;
 }
 .status-indicator { font-size: 0.75rem; font-weight: 700; color: var(--text-sub); display: flex; align-items: center; }
 .dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 6px; }
-.lang-switch { background: transparent; border: none; font-size: 0.75rem; font-weight: 700; color: var(--text-sub); padding: 0; }
+
+/* [修改] 語言切換樣式 - 更明顯 */
+.lang-switch { 
+    background: #e2e8f0; 
+    border: 1px solid #cbd5e1; 
+    border-radius: 20px;
+    font-size: 0.8rem; 
+    font-weight: 700; 
+    color: var(--text-main); 
+    padding: 2px 10px; 
+    outline: none;
+    cursor: pointer;
+}
 
 .side-panel {
     display: flex; flex-direction: column; gap: var(--gap-inner);
@@ -99,12 +117,14 @@ body {
     display: flex; align-items: center; justify-content: center;
     font-size: clamp(8rem, 32vh, 16rem);
     font-weight: 900; 
-    line-height: 0.75; 
+    line-height: 0.8; /* [修改] 縮小行高 */
     background: linear-gradient(180deg, var(--text-main) 10%, var(--primary-dark) 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     letter-spacing: -6px; 
     font-variant-numeric: tabular-nums;
-    padding-bottom: 4vh; 
+    /* [修改] 移除下方 Padding */
+    padding-bottom: 0; 
+    margin-top: -10px; /* 微調讓數字更靠上，釋放下方空間 */
 }
 
 /* --- List Section (過號) --- */
@@ -190,7 +210,6 @@ body {
 .links-wrapper { width: 100%; }
 .links-label { font-size: 0.7rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; }
 
-/* [修改] 精選連結顏色：藍色系 */
 #featured-container { display: flex; flex-wrap: wrap; gap: 6px; }
 .link-chip {
     padding: 6px 12px; font-size: 0.85rem; font-weight: 600; 
@@ -202,7 +221,6 @@ body {
 }
 .link-chip:active { background: #bae6fd; }
 
-/* [修改] 功能按鈕區：深色系，加上文字 */
 .util-btns { 
     display: flex; gap: 8px; 
     border-top: 1px dashed #e2e8f0; padding-top: 8px; 
@@ -217,7 +235,6 @@ body {
 }
 .btn-util:active { background: #e2e8f0; }
 
-/* [新增] 按鈕反饋樣式 */
 .btn-util.is-feedback {
     background: #d1fae5 !important;
     color: #047857 !important;
@@ -252,9 +269,24 @@ body {
         height: 100%;
         max-height: 900px; 
         margin: auto;
+        position: relative;
     }
     
-    .app-header { display: none; }
+    /* [修改] 桌面版 Header 改為顯示並定位於右上角，確保可切換語言 */
+    .app-header { 
+        display: flex; 
+        position: absolute; 
+        top: -45px; right: 0; 
+        width: auto; height: auto; 
+        padding: 0;
+    }
+    .status-indicator { display: none; } /* 桌面版不需要顯示連線狀態小點(Status Bar已夠) */
+    .lang-switch {
+        background: white;
+        padding: 6px 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        font-size: 0.9rem;
+    }
 
     /* Left: Hero */
     .hero-section {
@@ -269,7 +301,7 @@ body {
     .s-label { font-size: 1.2rem; }
     .s-value { font-size: 2.5rem; } 
     
-    #number { font-size: 22rem; line-height: 0.8; padding-bottom: 0; }
+    #number { font-size: 22rem; line-height: 0.8; padding-bottom: 0; margin-top: 0; }
     
     /* Right: Panel */
     .side-panel {
@@ -315,4 +347,5 @@ body {
         background: white; padding: 20px; border-radius: 20px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; z-index: 50;
     }
+}
 }
