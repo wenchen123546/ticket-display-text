@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v41.2 Robust Path Fix
+ * 伺服器 (index.js) - v41.3 Fixed CSP & Path
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http");
@@ -13,7 +13,7 @@ const bcrypt = require('bcrypt');
 const line = require('@line/bot-sdk');
 const cron = require('node-cron');
 const fs = require("fs");
-const path = require("path"); // [必要] 引入路徑處理模組
+const path = require("path");
 
 // --- 1. 環境變數檢查 ---
 const { PORT = 3000, UPSTASH_REDIS_URL: REDIS_URL, ADMIN_TOKEN, LINE_ACCESS_TOKEN, LINE_CHANNEL_SECRET } = process.env;
@@ -28,7 +28,6 @@ const server = Server(app);
 const io = socketio(server, { cors: { origin: "*" }, pingTimeout: 60000 });
 
 // --- 2. Config & Helpers ---
-// 使用 path.join 確保在任何作業系統下路徑都正確
 const LOG_DIR = path.join(__dirname, 'user_logs');
 try { if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR); } catch(e) { console.warn("⚠️ 無法建立 Log 資料夾，忽略日誌功能"); }
 
@@ -166,13 +165,27 @@ async function logHistory(num, op, delta=0) {
     await pipe.exec(); calcWaitTime(true);
 }
 
-// Middleware
-app.use(helmet({ contentSecurityPolicy: false }));
+// --- Middleware (CSP Fix) ---
+// [修正] 設定 Content-Security-Policy 以允許 eval 和外部資源
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'self'", "*"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*"],
+        styleSrc: ["'self'", "'unsafe-inline'", "*"],
+        imgSrc: ["'self'", "data:", "*"],
+        connectSrc: ["'self'", "*"],
+        fontSrc: ["'self'", "*"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+  })
+);
 
-// [關鍵修正] 使用 path.join(__dirname, 'public') 強制鎖定 public 資料夾位置
-// 這能確保無論您在哪個目錄執行 node index.js，都能正確找到 CSS 和 HTML
 app.use(express.static(path.join(__dirname, "public"))); 
-
 app.use(express.json()); app.set('trust proxy', 1);
 
 const asyncHandler = fn => async(req, res, next) => {
@@ -188,7 +201,7 @@ const auth = async(req, res, next) => {
 };
 const superAuth = (req,res,next) => req.user.role==='super' ? next() : res.status(403).json({error:"權限不足"});
 
-// Routes
+// --- Routes ---
 app.post("/login", rateLimit({windowMs:9e5,max:100}), asyncHandler(async req => {
     const { username: u, password: p } = req.body;
     let valid = (u==='superadmin' && p===ADMIN_TOKEN);
@@ -359,4 +372,4 @@ io.on("connection", async s => {
     s.emit("updateWaitTime", await calcWaitTime());
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v41.2 running on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v41.3 running on ${PORT}`));
