@@ -1,14 +1,50 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v37.0 (Crash Protection Fix)
+ * 後台邏輯 (admin.js) - v38.0 (Live Lang & Fixes)
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}) => { const e = document.createElement(t); if(c) e.className=c; if(txt) e.textContent=txt; Object.entries(ev).forEach(([k,v])=>e[k]=v); return e; };
 
+// I18n Dictionary
 const i18n = {
-    "zh-TW": { status_conn:"✅ 已連線", status_dis:"連線中斷...", wait:"等待組數", login_fail:"登入失敗", denied:"❌ 權限不足", expired:"Session 過期", saved:"✅ 已儲存", confirm:"⚠️ 確認", recall:"↩️ 重呼", edit:"✎", del:"✕", save:"✓", cancel:"✕" },
-    "en": { status_conn:"✅ Connected", status_dis:"Disconnected...", wait:"Waiting", login_fail:"Failed", denied:"❌ Denied", expired:"Expired", saved:"✅ Saved", confirm:"⚠️ Confirm", recall:"↩️ Recall", edit:"Edit", del:"Del", save:"Save", cancel:"Cancel" }
+    "zh-TW": { 
+        status_conn:"✅ 已連線", status_dis:"連線中斷...", saved:"✅ 已儲存", denied:"❌ 權限不足", expired:"Session 過期", login_fail:"登入失敗",
+        confirm:"⚠️ 確認", recall:"↩️ 重呼", edit:"✎", del:"✕", save:"✓", cancel:"✕",
+        login_title:"請登入管理系統", login_btn:"登入", admin_panel:"管理後台", logout:"登出",
+        nav_live:"現場控台", nav_stats:"數據報表", nav_settings:"系統設定", nav_line:"LINE設定",
+        dash_curr:"目前叫號", dash_issued:"已發號至", dash_wait:"等待組數",
+        card_call:"叫號控制", btn_prev:"◀ 上一號", btn_pass:"過號", btn_next:"下一號 ▶", lbl_assign:"指定 / 插隊", btn_exec:"執行", btn_reset_call:"↺ 重置叫號",
+        card_issue:"發號機", btn_recall:"➖ 收回", btn_issue:"發號 ➕", lbl_fix_issue:"修正發號數", btn_fix:"修正", btn_reset_issue:"↺ 重置發號",
+        card_passed:"過號名單", btn_clear_passed:"清空過號",
+        card_stats:"流量分析", lbl_today:"今日人次", btn_refresh:"重整", btn_clear_stats:"⚠ 清空統計",
+        card_logs:"操作日誌", btn_clear_logs:"清除日誌",
+        card_sys:"系統", lbl_public:"🌐 開放前台", lbl_sound:"🔊 提示音", lbl_tts:"TTS 廣播", btn_play:"播放", lbl_mode:"模式", mode_online:"線上", mode_manual:"手動", btn_reset_all:"💥 全域重置",
+        card_online:"在線管理", card_links:"連結管理", btn_clear_links:"清空連結",
+        card_users:"帳號管理", lbl_add_user:"新增帳號", 
+        btn_save:"儲存", btn_save_settings:"儲存設定", btn_restore:"恢復預設",
+        modal_edit:"編輯數據", btn_done:"完成",
+        ph_account:"帳號", ph_password:"密碼", ph_nick:"暱稱", ph_link_name:"名稱"
+    },
+    "en": { 
+        status_conn:"✅ Connected", status_dis:"Disconnected...", saved:"✅ Saved", denied:"❌ Denied", expired:"Expired", login_fail:"Failed",
+        confirm:"⚠️ Confirm", recall:"↩️ Recall", edit:"Edit", del:"Del", save:"Save", cancel:"Cancel",
+        login_title:"Login Required", login_btn:"Login", admin_panel:"Admin Panel", logout:"Logout",
+        nav_live:"Live Console", nav_stats:"Statistics", nav_settings:"Settings", nav_line:"LINE Config",
+        dash_curr:"Current", dash_issued:"Issued", dash_wait:"Waiting",
+        card_call:"Call Control", btn_prev:"◀ Prev", btn_pass:"Pass", btn_next:"Next ▶", lbl_assign:"Assign / Jump", btn_exec:"Set", btn_reset_call:"↺ Reset Call",
+        card_issue:"Ticket Issue", btn_recall:"➖ Recall", btn_issue:"Issue ➕", lbl_fix_issue:"Fix Issued", btn_fix:"Fix", btn_reset_issue:"↺ Reset Issue",
+        card_passed:"Passed List", btn_clear_passed:"Clear Passed",
+        card_stats:"Traffic Stats", lbl_today:"Today Total", btn_refresh:"Refresh", btn_clear_stats:"⚠ Clear Stats",
+        card_logs:"System Logs", btn_clear_logs:"Clear Logs",
+        card_sys:"System", lbl_public:"🌐 Public Page", lbl_sound:"🔊 Sound", lbl_tts:"TTS Broadcast", btn_play:"Play", lbl_mode:"Mode", mode_online:"Online", mode_manual:"Manual", btn_reset_all:"💥 Factory Reset",
+        card_online:"Online Admins", card_links:"Links Manager", btn_clear_links:"Clear Links",
+        card_users:"User Manager", lbl_add_user:"Add User",
+        btn_save:"Save", btn_save_settings:"Save Settings", btn_restore:"Restore Default",
+        modal_edit:"Edit Data", btn_done:"Done",
+        ph_account:"Account", ph_password:"Password", ph_nick:"Nickname", ph_link_name:"Name"
+    }
 };
+
 let curLang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[curLang];
 let token="", userRole="normal", username="", uniqueUser="", toastTimer;
 const socket = io({ autoConnect: false, auth: { token: "" } });
@@ -17,6 +53,24 @@ function toast(msg, type='info') {
     const t = $("toast-notification"); if(!t) return;
     t.textContent = msg; t.className = `${type} show`;
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+// [功能] 即時更新語言 UI (不重新整理)
+function updateLangUI() {
+    T = i18n[curLang];
+    $$('[data-i18n]').forEach(el => {
+        const k = el.getAttribute('data-i18n');
+        if(T[k]) el.textContent = T[k];
+    });
+    $$('[data-i18n-ph]').forEach(el => {
+        const k = el.getAttribute('data-i18n-ph');
+        if(T[k]) el.placeholder = T[k];
+    });
+    // 重新載入動態生成的列表以套用語言
+    loadUsers(); 
+    loadStats();
+    // 重新取得 Featured Links (雖然內容是 user 定義，但按鈕語言要變)
+    req("/api/featured/get").then(res => { if(res) socket.emit("updateFeaturedContents", res); }); // Trigger refresh
 }
 
 // API Wrapper
@@ -78,7 +132,7 @@ async function showPanel() {
     if($('button[data-target="section-line"]')) $('button[data-target="section-line"]').style.display = isSuper?"flex":"none";
     socket.auth.token = token; socket.connect();
     
-    // Safety Wrap
+    updateLangUI(); // Apply Init Lang
     try { await loadStats(); } catch(e){ console.error(e); }
     if(isSuper) { 
         try { await loadUsers(); } catch(e){ console.error(e); }
@@ -158,34 +212,43 @@ function renderLogs(logs, init) {
     logs.forEach(msg => { const li=mk("li", null, msg); init ? ul.appendChild(li) : ul.insertBefore(li, ul.firstChild); });
 }
 
+// [修復] 帳號管理: 暱稱修改功能 (View/Edit 切換)
 async function loadUsers() {
     const ul = $("user-list-ui"); if(!ul) return;
     const d = await req("/api/admin/users");
     if(!d) return; ul.innerHTML="";
     d.users.forEach(u => {
         const li = mk("li");
+        
+        // 1. 顯示模式
         const view = mk("div", null, null, {style:"display:flex; justify-content:space-between; width:100%; align-items:center;"});
         const info = mk("div", null, null, {style:"display:flex; flex-direction:column;"});
         info.append(mk("span", null, `${u.role==='super'?'👑':'👤'} ${u.nickname}`, {style:"font-weight:600"}), mk("small", null, u.username, {style:"color:#666;"}));
-
-        const editDiv = mk("div", null, null, {style:"display:none; width:100%; gap:5px; align-items:center;"});
-        const input = mk("input", null, null, {value:u.nickname, type:"text", placeholder:"Nickname"});
-        const saveBtn = mk("button", "btn-secondary success", T.save);
         
+        // 2. 編輯模式
+        const editDiv = mk("div", null, null, {style:"display:none; width:100%; gap:5px; align-items:center;"});
+        const input = mk("input", null, null, {value:u.nickname, type:"text"});
+        const saveBtn = mk("button", "btn-secondary success", T.save);
         saveBtn.onclick = async () => { if(await req("/api/admin/set-nickname", {targetUsername:u.username, nickname:input.value})) { toast(T.saved, "success"); loadUsers(); } };
+        const cancelBtn = mk("button", "btn-secondary", T.cancel, {onclick:()=>{ editDiv.style.display="none"; view.style.display="flex"; }});
+        editDiv.append(input, saveBtn, cancelBtn);
+
+        // 3. 按鈕區
         const acts = mk("div", null, null, {style:"display:flex; gap:5px; flex-shrink:0;"});
-        acts.append(mk("button", "btn-secondary", T.edit, {onclick:()=>{ view.style.display="none"; editDiv.style.display="flex"; }}));
+        const editBtn = mk("button", "btn-secondary", T.edit, {onclick:()=>{ view.style.display="none"; editDiv.style.display="flex"; }});
+        acts.appendChild(editBtn);
+
         if(u.role!=='super' && userRole==='super') {
             const del = mk("button", "delete-item-btn", T.del); 
             confirmBtn(del, T.del, async()=>{ await req("/api/admin/del-user",{delUsername:u.username}); loadUsers(); });
             acts.appendChild(del);
         }
-        editDiv.append(input, saveBtn, mk("button", "btn-secondary", T.cancel, {onclick:()=>{ editDiv.style.display="none"; view.style.display="flex"; }}));
-        view.appendChild(info, acts); li.append(view, editDiv); ul.appendChild(li);
+
+        view.append(info, acts); li.append(view, editDiv); ul.appendChild(li);
     });
 }
 
-// [Safety] Added checks for elements
+// [修復] 流量分析列表渲染
 async function loadStats() {
     const d = await req("/api/admin/stats");
     if(d?.success) {
@@ -231,7 +294,12 @@ confirmBtn($("btn-reset-line-msg"), "↺ 恢復預設", ()=>req("/api/admin/line
 $("sound-toggle")?.addEventListener("change", e => req("/set-sound-enabled", {enabled:e.target.checked}));
 $("public-toggle")?.addEventListener("change", e => req("/set-public-status", {isPublic:e.target.checked}));
 $$('input[name="systemMode"]').forEach(r => r.addEventListener("change", ()=>confirm("Switch Mode?")?req("/set-system-mode", {mode:r.value}):(r.checked=!r.checked)));
-$("admin-lang-selector")?.addEventListener("change", e => { curLang=e.target.value; localStorage.setItem('callsys_lang', curLang); T=i18n[curLang]; location.reload(); });
+
+// [功能] 語言切換
+$("admin-lang-selector")?.addEventListener("change", e => { 
+    curLang=e.target.value; localStorage.setItem('callsys_lang', curLang);
+    updateLangUI();
+});
 
 const modal = $("edit-stats-overlay"); let editHr=null;
 function openStatModal(h, val) { $("modal-current-count").textContent=val; editHr=h; modal.style.display="flex"; }
