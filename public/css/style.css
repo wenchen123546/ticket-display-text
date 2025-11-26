@@ -4,7 +4,7 @@ fileName: style.css
 fullContent:
 /*
  * ==========================================
- * Theme: Maximized Compact v31.0 (Layout Fixes)
+ * Theme: Maximized Compact v32.0 (Mobile Layout & Safe Margin Fix)
  * ==========================================
  */
 
@@ -21,7 +21,6 @@ fullContent:
     --radius-lg: 16px;
     --radius-sm: 8px;
     
-    /* 極小間距 */
     --gap-outer: 4px;
     --gap-inner: 4px;
 }
@@ -47,7 +46,7 @@ body {
 .app-container {
     width: 100%; max-width: 550px;
     height: 100%;
-    /* 保持上方空間，減少下方 Padding */
+    /* 使用安全距離，保留足夠上下空間防止切版 */
     padding: max(var(--gap-outer), env(safe-area-inset-top)) var(--gap-outer) 4px var(--gap-outer);
     display: flex; flex-direction: column;
     gap: var(--gap-inner);
@@ -71,7 +70,6 @@ body {
 .status-indicator { font-size: 0.75rem; font-weight: 700; color: var(--text-sub); display: flex; align-items: center; }
 .dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 6px; }
 
-/* [修改] 語言切換樣式 - 更明顯 */
 .lang-switch { 
     background: #e2e8f0; 
     border: 1px solid #cbd5e1; 
@@ -89,19 +87,21 @@ body {
     flex: 0 0 auto; 
 }
 
-/* --- Hero Section (極限壓縮空白) --- */
+/* --- Hero Section --- */
 .hero-section {
     flex: 1; 
     display: flex; flex-direction: column; 
-    justify-content: flex-start; 
-    padding: 8px 12px; 
+    /* 修正：增加 Padding 防止內容貼邊或重疊 */
+    padding: 12px 12px 0 12px;
     position: relative; overflow: hidden;
+    min-height: 0; /* 關鍵：允許 Flex 子元素縮小 */
 }
 
 .hero-top-info {
     flex: 0 0 auto;
     display: flex; justify-content: space-between; align-items: center; z-index: 2;
-    margin-bottom: 0; 
+    margin-bottom: 0;
+    min-height: 30px;
 }
 .hero-label { font-size: 0.95rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
 
@@ -115,16 +115,16 @@ body {
 #number {
     flex: 1;
     display: flex; align-items: center; justify-content: center;
-    font-size: clamp(8rem, 32vh, 16rem);
+    /* 修正：恢復合理的字體大小與行高，防止裁切 */
+    font-size: clamp(6rem, 28vh, 14rem);
     font-weight: 900; 
-    line-height: 0.8; /* [修改] 縮小行高 */
+    line-height: 1; 
     background: linear-gradient(180deg, var(--text-main) 10%, var(--primary-dark) 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     letter-spacing: -6px; 
     font-variant-numeric: tabular-nums;
-    /* [修改] 移除下方 Padding */
-    padding-bottom: 0; 
-    margin-top: -10px; /* 微調讓數字更靠上，釋放下方空間 */
+    padding-bottom: 2vh; /* 微調底部空間 */
+    margin-top: 0; /* 移除危險的負邊距 */
 }
 
 /* --- List Section (過號) --- */
@@ -272,7 +272,6 @@ body {
         position: relative;
     }
     
-    /* [修改] 桌面版 Header 改為顯示並定位於右上角，確保可切換語言 */
     .app-header { 
         display: flex; 
         position: absolute; 
@@ -280,7 +279,7 @@ body {
         width: auto; height: auto; 
         padding: 0;
     }
-    .status-indicator { display: none; } /* 桌面版不需要顯示連線狀態小點(Status Bar已夠) */
+    .status-indicator { display: none; } 
     .lang-switch {
         background: white;
         padding: 6px 15px;
