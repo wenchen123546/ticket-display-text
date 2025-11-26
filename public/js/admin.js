@@ -1,11 +1,10 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v39.1 (Fix Lang Error)
+ * 後台邏輯 (admin.js) - v41.0 (Line List Edit)
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}) => { const e = document.createElement(t); if(c) e.className=c; if(txt) e.textContent=txt; Object.entries(ev).forEach(([k,v])=>e[k]=v); return e; };
 
-// I18n Dictionary
 const i18n = {
     "zh-TW": { 
         status_conn:"✅ 已連線", status_dis:"連線中斷...", saved:"✅ 已儲存", denied:"❌ 權限不足", expired:"Session 過期", login_fail:"登入失敗",
@@ -55,18 +54,14 @@ function toast(msg, type='info') {
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
 }
 
-// [修正] 即時更新語言 UI (移除無效 API 呼叫)
 function updateLangUI() {
     T = i18n[curLang];
     $$('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if(T[k]) el.textContent = T[k]; });
     $$('[data-i18n-ph]').forEach(el => { const k = el.getAttribute('data-i18n-ph'); if(T[k]) el.placeholder = T[k]; });
-    
-    // 重新載入列表以更新語言
-    loadUsers(); 
-    loadStats();
+    loadUsers(); loadStats(); loadLineSettings();
+    req("/api/featured/get").then(res => { if(res) socket.emit("updateFeaturedContents", res); });
 }
 
-// API Wrapper
 async function req(url, data={}, lockBtn=null) {
     if(lockBtn) lockBtn.disabled=true;
     try {
@@ -88,15 +83,11 @@ function confirmBtn(el, origTxt, action) {
     el.onclick = (e) => {
         e.stopPropagation();
         if(el.classList.contains("is-confirming")) { action(); reset(); } 
-        else {
-            el.classList.add("is-confirming"); el.textContent = `${T.confirm} (${c})`;
-            t = setInterval(() => { c--; el.textContent = `${T.confirm} (${c})`; if(c<=0) reset(); }, 1000);
-        }
+        else { el.classList.add("is-confirming"); el.textContent = `${T.confirm} (${c})`; t = setInterval(() => { c--; el.textContent = `${T.confirm} (${c})`; if(c<=0) reset(); }, 1000); }
     };
     const reset = () => { clearInterval(t); el.classList.remove("is-confirming"); el.textContent = origTxt; c=5; };
 }
 
-// Session
 function checkSession() {
     const storedToken = localStorage.getItem('callsys_token');
     const storedUser = localStorage.getItem('callsys_user');
@@ -128,8 +119,6 @@ async function showPanel() {
         try { await loadUsers(); } catch(e){ console.error(e); }
         try { loadLineSettings(); } catch(e){ console.error(e); }
     }
-    
-    // Init Online List
     const onlineUl = $("online-users-list");
     if(onlineUl && onlineUl.textContent === "Loading...") onlineUl.innerHTML = `<li>👤 ${username} (You)</li>`;
 }
@@ -147,7 +136,6 @@ $("login-button").onclick = async () => {
     b.disabled=false;
 };
 
-// Socket
 socket.on("connect", () => { $("status-bar").classList.remove("visible"); toast(`${T.status_conn} (${username})`, "success"); });
 socket.on("disconnect", () => { $("status-bar").classList.add("visible"); });
 socket.on("updateQueue", d => { $("number").textContent=d.current; $("issued-number").textContent=d.issued; $("waiting-count").textContent=Math.max(0, d.issued-d.current); loadStats(); });
@@ -207,15 +195,12 @@ function renderLogs(logs, init) {
     logs.forEach(msg => { const li=mk("li", null, msg); init ? ul.appendChild(li) : ul.insertBefore(li, ul.firstChild); });
 }
 
-// 帳號管理
 async function loadUsers() {
     const ul = $("user-list-ui"); if(!ul) return;
     const d = await req("/api/admin/users");
-    if(!d || !d.users) return; 
-    ul.innerHTML="";
+    if(!d || !d.users) return; ul.innerHTML="";
     d.users.forEach(u => {
         const li = mk("li");
-        
         const view = mk("div", null, null, {style:"display:flex; justify-content:space-between; width:100%; align-items:center;"});
         const info = mk("div", null, null, {style:"display:flex; flex-direction:column;"});
         info.append(mk("span", null, `${u.role==='super'?'👑':'👤'} ${u.nickname}`, {style:"font-weight:600"}), mk("small", null, u.username, {style:"color:#666;"}));
@@ -223,52 +208,91 @@ async function loadUsers() {
         const editDiv = mk("div", null, null, {style:"display:none; width:100%; gap:5px; align-items:center;"});
         const input = mk("input", null, null, {value:u.nickname, type:"text"});
         const saveBtn = mk("button", "btn-secondary success", T.save);
-        
-        saveBtn.onclick = async () => { 
-            if(input.value === u.nickname) { editDiv.style.display="none"; view.style.display="flex"; return; }
-            if(await req("/api/admin/set-nickname", {targetUsername:u.username, nickname:input.value})) { 
-                toast(T.saved, "success"); loadUsers(); 
-            } 
-        };
-
+        saveBtn.onclick = async () => { if(input.value === u.nickname) { editDiv.style.display="none"; view.style.display="flex"; return; } if(await req("/api/admin/set-nickname", {targetUsername:u.username, nickname:input.value})) { toast(T.saved, "success"); loadUsers(); } };
         const cancelBtn = mk("button", "btn-secondary", T.cancel, {onclick:()=>{ input.value = u.nickname; editDiv.style.display="none"; view.style.display="flex"; }});
         editDiv.append(input, saveBtn, cancelBtn);
 
         const acts = mk("div", null, null, {style:"display:flex; gap:5px; flex-shrink:0;"});
         const editBtn = mk("button", "btn-secondary", T.edit, {onclick:()=>{ view.style.display="none"; editDiv.style.display="flex"; }});
         acts.appendChild(editBtn);
-
         if(u.role!=='super' && userRole==='super') {
-            const del = mk("button", "delete-item-btn", T.del); 
-            confirmBtn(del, T.del, async()=>{ await req("/api/admin/del-user",{delUsername:u.username}); loadUsers(); });
+            const del = mk("button", "delete-item-btn", T.del); confirmBtn(del, T.del, async()=>{ await req("/api/admin/del-user",{delUsername:u.username}); loadUsers(); });
             acts.appendChild(del);
         }
-
         view.append(info, acts); li.append(view, editDiv); ul.appendChild(li);
     });
 }
 
-// 流量分析 (修正 Success 檢查)
-async function loadStats() {
-    const ul = $("stats-list-ui");
-    const d = await req("/api/admin/stats");
+// LINE Settings List Logic
+const lineSettingsConfig = {
+    approach: { label: "快到了提醒", hint: "{current} {target} {diff}" },
+    arrival:  { label: "正式到號提醒", hint: "{current} {target}" },
+    status:   { label: "查詢狀態回覆", hint: "{current} {issued} {personal}" },
+    personal: { label: "個人追蹤資訊 (附加)", hint: "{target} {diff}" },
+    passed:   { label: "過號查詢回覆", hint: "{list}" },
+    set_ok:   { label: "設定追蹤成功", hint: "{target} {current} {diff}" },
+    cancel:   { label: "取消追蹤成功", hint: "{target}" },
+    login_hint: { label: "後台登入提示", hint: "無變數" },
+    err_passed: { label: "錯誤：已過號", hint: "{target} {current}" },
+    err_no_sub: { label: "錯誤：無設定", hint: "無變數" },
+    set_hint:   { label: "設定指令提示", hint: "無變數" }
+};
+let cachedLineSettings = {};
+
+async function loadLineSettings() {
+    const ul = $("line-settings-list-ui"); if (!ul) return;
+    const data = await req("/api/admin/line-settings/get");
+    if (!data) { ul.innerHTML = "<li>Error loading settings</li>"; return; }
+    cachedLineSettings = data; ul.innerHTML = "";
     
+    const passData = await req("/api/admin/line-settings/get-unlock-pass");
+    if($("line-unlock-pwd") && passData) $("line-unlock-pwd").value = passData.password || "";
+
+    Object.keys(lineSettingsConfig).forEach(key => {
+        const config = lineSettingsConfig[key];
+        const currentVal = data[key] || "";
+        const li = mk("li");
+
+        const viewDiv = mk("div", null, null, { style: "display:flex; justify-content:space-between; width:100%; align-items:flex-start; padding:5px 0;" });
+        const infoDiv = mk("div", null, null, { style: "display:flex; flex-direction:column; width:85%;" });
+        infoDiv.append(mk("span", null, config.label, { style: "font-weight:700; color:var(--primary); margin-bottom:4px;" }),
+            mk("span", "line-msg-preview", currentVal || "(未設定)", { style: "color:#555; font-size:0.9rem; white-space:pre-wrap; word-break:break-all; background:#f1f5f9; padding:8px; border-radius:6px;" }));
+        const actsDiv = mk("div", null, null, { style: "display:flex; gap:5px; flex-shrink:0; margin-top:5px;" });
+        const editBtn = mk("button", "btn-secondary", T.edit, { onclick: () => { viewDiv.style.display = "none"; editDiv.style.display = "flex"; } });
+        actsDiv.appendChild(editBtn);
+        viewDiv.append(infoDiv, actsDiv);
+
+        const editDiv = mk("div", null, null, { style: "display:none; width:100%; flex-direction:column; gap:10px; padding:10px; background:#fff; border:1px solid var(--border-color); border-radius:8px;" });
+        const headerDiv = mk("div", null, null, { style: "display:flex; justify-content:space-between; align-items:center;" });
+        headerDiv.append(mk("span", null, config.label, { style: "font-weight:700;" }), mk("span", "var-hint", config.hint, { style: "font-size:0.8rem; color:#666; background:#eee; padding:2px 6px; border-radius:4px;" }));
+        const textarea = mk("textarea", null, null, { value: currentVal, rows: 3, style: "width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;" });
+        const btnRow = mk("div", null, null, { style: "display:flex; justify-content:flex-end; gap:8px;" });
+        const saveBtn = mk("button", "btn-secondary success", T.save);
+        saveBtn.onclick = async () => {
+            if (textarea.value === currentVal) { editDiv.style.display = "none"; viewDiv.style.display = "flex"; return; }
+            cachedLineSettings[key] = textarea.value;
+            if (await req("/api/admin/line-settings/save", cachedLineSettings)) { toast(T.saved, "success"); loadLineSettings(); }
+        };
+        const cancelBtn = mk("button", "btn-secondary", T.cancel, { onclick: () => { textarea.value = currentVal; editDiv.style.display = "none"; viewDiv.style.display = "flex"; } });
+        btnRow.append(cancelBtn, saveBtn);
+        editDiv.append(headerDiv, textarea, btnRow);
+        li.append(viewDiv, editDiv); ul.appendChild(li);
+    });
+}
+
+async function loadStats() {
+    const ul = $("stats-list-ui"); const d = await req("/api/admin/stats");
     if(d && d.hourlyCounts) {
         if($("stats-today-count")) $("stats-today-count").textContent = d.todayCount;
         renderChart(d.hourlyCounts, d.serverHour);
-        if(ul) {
-             ul.innerHTML = d.history.map(h => `<li><span>${new Date(h.time).toLocaleTimeString('zh-TW',{hour12:false})} - ${h.num} <small>(${h.operator})</small></span></li>`).join("") || `<li>[Empty]</li>`;
-        }
-    } else {
-        if(ul && ul.textContent.includes("Load")) ul.innerHTML = "<li>[No Data]</li>";
-    }
+        if(ul) ul.innerHTML = d.history.map(h => `<li><span>${new Date(h.time).toLocaleTimeString('zh-TW',{hour12:false})} - ${h.num} <small>(${h.operator})</small></span></li>`).join("") || `<li>[Empty]</li>`;
+    } else { if(ul && ul.textContent.includes("Load")) ul.innerHTML = "<li>[No Data]</li>"; }
 }
 
 function renderChart(counts, curHr) {
     const c = $("hourly-chart"); if(!c) return; c.innerHTML=""; 
     const safeCounts = counts || new Array(24).fill(0);
     const max = Math.max(...safeCounts, 1);
-    
     safeCounts.forEach((val, i) => {
         const col = mk("div", `chart-col ${i===curHr?'current':''}`, null, {onclick:()=>openStatModal(i, val)});
         col.innerHTML = `<div class="chart-val">${val||''}</div><div class="chart-bar" style="height:${Math.max(val/max*100, 2)}%; background:${val===0?'#e5e7eb':''}"></div><div class="chart-label">${String(i).padStart(2,'0')}</div>`;
@@ -276,7 +300,6 @@ function renderChart(counts, curHr) {
     });
 }
 
-// Bindings
 const act = (id, api, data={}) => $(id)?.addEventListener("click", () => req(api, data, $(id)));
 act("btn-call-prev", "/api/control/call", {direction:"prev"});
 act("btn-call-next", "/api/control/call", {direction:"next"});
@@ -303,10 +326,7 @@ $("sound-toggle")?.addEventListener("change", e => req("/set-sound-enabled", {en
 $("public-toggle")?.addEventListener("change", e => req("/set-public-status", {isPublic:e.target.checked}));
 $$('input[name="systemMode"]').forEach(r => r.addEventListener("change", ()=>confirm("Switch Mode?")?req("/set-system-mode", {mode:r.value}):(r.checked=!r.checked)));
 
-$("admin-lang-selector")?.addEventListener("change", e => { 
-    curLang=e.target.value; localStorage.setItem('callsys_lang', curLang);
-    updateLangUI();
-});
+$("admin-lang-selector")?.addEventListener("change", e => { curLang=e.target.value; localStorage.setItem('callsys_lang', curLang); updateLangUI(); });
 
 const modal = $("edit-stats-overlay"); let editHr=null;
 function openStatModal(h, val) { $("modal-current-count").textContent=val; editHr=h; modal.style.display="flex"; }
@@ -317,9 +337,6 @@ $("btn-modal-close")?.addEventListener("click", ()=>modal.style.display="none");
 }));
 $("btn-export-csv")?.addEventListener("click", async()=>{ const d=await req("/api/admin/export-csv"); if(d?.csvData) { const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\uFEFF"+d.csvData],{type:'text/csv'})); a.download=d.fileName; a.click(); toast("✅ Downloaded","success"); }});
 
-const lineKeys = ["approach","arrival","status","personal","passed","set_ok","cancel","login_hint","err_passed","err_no_sub","set_hint"];
-async function loadLineSettings() { const d=await req("/api/admin/line-settings/get"); if(d) lineKeys.forEach(k=>{ if($(`line-msg-${k}`)) $(`line-msg-${k}`).value=d[k]||""; }); $("line-unlock-pwd").value = (await req("/api/admin/line-settings/get-unlock-pass"))?.password || ""; }
-$("btn-save-line-msg")?.addEventListener("click", async()=>{ const data={}; lineKeys.forEach(k=>data[k]=$(`line-msg-${k}`).value); if(await req("/api/admin/line-settings/save", data)) toast(T.saved,"success"); });
 $("btn-save-unlock-pwd")?.addEventListener("click", async()=>{ if(await req("/api/admin/line-settings/set-unlock-pass", {password:$("line-unlock-pwd").value})) toast(T.saved,"success"); });
 $("add-user-btn")?.addEventListener("click", async()=>{ if(await req("/api/admin/add-user", {newUsername:$("new-user-username").value, newPassword:$("new-user-password").value, newNickname:$("new-user-nickname").value})) { toast(T.saved,"success"); $("new-user-username").value=""; $("new-user-password").value=""; $("new-user-nickname").value=""; loadUsers(); }});
 
