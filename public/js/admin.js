@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v53.0 Final Fix
+ * 後台邏輯 (admin.js) - v53.1 Mode Switch Fix
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
@@ -12,6 +12,9 @@ const i18n = {
 
 let curLang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[curLang];
 let token="", userRole="normal", username="", uniqueUser="", toastTimer;
+// [新增] 記錄當前系統模式的真實狀態
+let currentSystemMode = 'ticketing'; 
+
 const socket = io({ autoConnect: false, auth: { token: "" } });
 
 function toast(msg, type='info') { const t = $("toast-notification"); if(!t) return; t.textContent = msg; t.className = `${type} show`; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 3000); }
@@ -66,6 +69,7 @@ $("login-button").onclick = async () => {
     if(res.token) { token=res.token; userRole=res.role; username=res.nickname; uniqueUser=res.username; localStorage.setItem('callsys_token', token); localStorage.setItem('callsys_user', uniqueUser); localStorage.setItem('callsys_role', userRole); localStorage.setItem('callsys_nick', username); showPanel(); } else { $("login-error").textContent=res.error||T.login_fail; } b.disabled=false;
 };
 
+// --- Socket Events ---
 socket.on("connect", () => { $("status-bar").classList.remove("visible"); toast(`${T.status_conn} (${username})`, "success"); });
 socket.on("disconnect", () => { $("status-bar").classList.add("visible"); });
 socket.on("updateQueue", d => { $("number").textContent=d.current; $("issued-number").textContent=d.issued; $("waiting-count").textContent=Math.max(0, d.issued-d.current); loadStats(); });
@@ -74,8 +78,13 @@ socket.on("initAdminLogs", l => renderLogs(l, true));
 socket.on("newAdminLog", l => renderLogs([l], false));
 socket.on("updatePublicStatus", b => { if($("public-toggle")) $("public-toggle").checked = b; });
 socket.on("updateSoundSetting", b => { if($("sound-toggle")) $("sound-toggle").checked=b; });
-socket.on("updateSystemMode", m => $$('input[name="systemMode"]').forEach(r => r.checked=(r.value===m)));
-// [新增] 連結管理更新
+
+// [修正] 模式切換監聽：記住伺服器狀態，確保 UI 同步
+socket.on("updateSystemMode", m => {
+    currentSystemMode = m; // 更新真實狀態
+    $$('input[name="systemMode"]').forEach(r => r.checked = (r.value === m));
+});
+
 socket.on("updateFeaturedContents", list => {
     const ul = $("featured-list-ui"); if(!ul) return; ul.innerHTML="";
     list.forEach(item => {
@@ -92,8 +101,8 @@ socket.on("updateFeaturedContents", list => {
     });
 });
 socket.on("updateOnlineAdmins", list => {
-    const ul = $("online-users-list"); if(!ul) return; if(!list || !list.length) { ul.innerHTML = `<li><small>Waiting...</small></li>`; return; }
-    ul.innerHTML = ""; list.forEach(u => ul.appendChild(mk("li", null, `🟢 ${u.nickname} (${u.username})`)));
+    const ul = $("online-users-list"); if(!ul) return; if(!list || !list.length) { ul.innerHTML = `<li><small style="color:#999">等待連線...</small></li>`; return; }
+    ul.innerHTML = ""; list.sort((a,b)=>(a.role==='super'?-1:1)).forEach(u => ul.appendChild(mk("li", null, `🟢 ${u.nickname} (${u.username})`)));
 });
 socket.on("updatePassed", list => {
     const ul = $("passed-list-ui"); if(!ul) return; ul.innerHTML="";
@@ -175,7 +184,25 @@ $("quick-add-5")?.addEventListener("click", async()=>{ const c=parseInt($("numbe
 $("quick-clear")?.addEventListener("click", ()=>{ $("manualNumber").value=""; });
 confirmBtn($("resetNumber"), "↺ 重置叫號", ()=>req("/api/control/set-call",{number:0})); confirmBtn($("resetIssued"), "↺ 重置發號", ()=>req("/api/control/set-issue",{number:0})); confirmBtn($("resetPassed"), "清空列表", ()=>req("/api/passed/clear")); confirmBtn($("resetFeaturedContents"), "清空連結", ()=>req("/api/featured/clear")); confirmBtn($("resetAll"), "💥 全域重置", ()=>req("/reset")); confirmBtn($("btn-clear-logs"), "清除日誌", ()=>req("/api/logs/clear")); confirmBtn($("btn-clear-stats"), "🗑️ 清空統計", ()=>req("/api/admin/stats/clear").then(()=>loadStats())); confirmBtn($("btn-reset-line-msg"), "↺ 恢復預設", ()=>req("/api/admin/line-settings/reset").then(d=>{if(d)loadLineSettings();}));
 $("sound-toggle")?.addEventListener("change", e => req("/set-sound-enabled", {enabled:e.target.checked})); $("public-toggle")?.addEventListener("change", e => req("/set-public-status", {isPublic:e.target.checked}));
-$$('input[name="systemMode"]').forEach(r => r.addEventListener("change", ()=>confirm("Switch Mode?")?req("/set-system-mode", {mode:r.value}):(r.checked=!r.checked)));
+
+// [修正] Mode 切換邏輯：失敗或取消時，強制還原為 currentSystemMode
+$$('input[name="systemMode"]').forEach(r => r.addEventListener("change", async (e) => {
+    // 先阻止預設的「已經勾選」狀態是不可能的 (change event happens after check)
+    // 所以我們用邏輯判斷：如果用戶確認 -> 發請求 -> 失敗 -> 轉回舊的
+    if(confirm(T.confirm + " Switch Mode?")) {
+        const res = await req("/set-system-mode", {mode: r.value});
+        if(!res) {
+            // API 失敗，還原勾選
+            const old = document.querySelector(`input[name="systemMode"][value="${currentSystemMode}"]`);
+            if(old) old.checked = true;
+        }
+    } else {
+        // 用戶取消，還原勾選
+        const old = document.querySelector(`input[name="systemMode"][value="${currentSystemMode}"]`);
+        if(old) old.checked = true;
+    }
+}));
+
 $("admin-lang-selector")?.addEventListener("change", e => { curLang=e.target.value; localStorage.setItem('callsys_lang', curLang); updateLangUI(); });
 const modal = $("edit-stats-overlay"); let editHr=null;
 function openStatModal(h, val) { $("modal-current-count").textContent=val; editHr=h; modal.style.display="flex"; }
