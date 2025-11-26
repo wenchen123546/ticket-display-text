@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v39.0 (Fix Data Rendering)
+ * 後台邏輯 (admin.js) - v39.1 (Fix Lang Error)
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
@@ -55,14 +55,15 @@ function toast(msg, type='info') {
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
 }
 
-// UI Update
+// [修正] 即時更新語言 UI (移除無效 API 呼叫)
 function updateLangUI() {
     T = i18n[curLang];
     $$('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if(T[k]) el.textContent = T[k]; });
     $$('[data-i18n-ph]').forEach(el => { const k = el.getAttribute('data-i18n-ph'); if(T[k]) el.placeholder = T[k]; });
+    
+    // 重新載入列表以更新語言
     loadUsers(); 
     loadStats();
-    req("/api/featured/get").then(res => { if(res) socket.emit("updateFeaturedContents", res); });
 }
 
 // API Wrapper
@@ -210,7 +211,6 @@ function renderLogs(logs, init) {
 async function loadUsers() {
     const ul = $("user-list-ui"); if(!ul) return;
     const d = await req("/api/admin/users");
-    // [FIX] 不檢查 d.success，直接檢查 d.users
     if(!d || !d.users) return; 
     ul.innerHTML="";
     d.users.forEach(u => {
@@ -248,12 +248,11 @@ async function loadUsers() {
     });
 }
 
-// [FIX] 流量分析：移除 d.success 檢查，並確保圖表渲染
+// 流量分析 (修正 Success 檢查)
 async function loadStats() {
     const ul = $("stats-list-ui");
     const d = await req("/api/admin/stats");
     
-    // API 回傳直接是物件，沒有 success 欄位，所以改為檢查是否有 hourlyCounts
     if(d && d.hourlyCounts) {
         if($("stats-today-count")) $("stats-today-count").textContent = d.todayCount;
         renderChart(d.hourlyCounts, d.serverHour);
@@ -261,14 +260,12 @@ async function loadStats() {
              ul.innerHTML = d.history.map(h => `<li><span>${new Date(h.time).toLocaleTimeString('zh-TW',{hour12:false})} - ${h.num} <small>(${h.operator})</small></span></li>`).join("") || `<li>[Empty]</li>`;
         }
     } else {
-        // 如果失敗，清空 Loading
         if(ul && ul.textContent.includes("Load")) ul.innerHTML = "<li>[No Data]</li>";
     }
 }
 
 function renderChart(counts, curHr) {
     const c = $("hourly-chart"); if(!c) return; c.innerHTML=""; 
-    // 安全處理：確保 counts 存在
     const safeCounts = counts || new Array(24).fill(0);
     const max = Math.max(...safeCounts, 1);
     
