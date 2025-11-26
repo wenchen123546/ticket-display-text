@@ -1,5 +1,5 @@
 /* ==========================================
- * 前端邏輯 (main.js) - v31.1 Compact
+ * 前端邏輯 (main.js) - v32.0 Polished
  * ========================================== */
 const $ = i => document.getElementById(i);
 const on = (el, evt, fn) => el?.addEventListener(evt, fn);
@@ -7,14 +7,15 @@ const show = (el, v) => el && (el.style.display = v ? 'block' : 'none');
 
 // --- I18n Data ---
 const i18n = {
-    "zh-TW": { cur:"目前叫號", iss:"已發至", online:"線上取號", help:"免排隊，手機領號", man_t:"號碼提醒", man_p:"輸入您的號碼開啟到號提醒", take:"立即取號", track:"追蹤", my:"我的號碼", ahead:"前方", wait:"⏳ 剩 %s 組", arr:"🎉 輪到您了！", pass:"⚠️ 已過號", p_list:"過號", none:"無", links:"精選連結", copy:"複製連結", sound:"音效", s_on:"開啟", s_off:"靜音", scan:"掃描追蹤", off:"連線中斷", ok:"取號成功", fail:"失敗", no_in:"請輸入號碼", cancel:"取消追蹤？", copied:"已複製", notice:"📢 ", q_left:"還剩 %s 組！", est:"約 %s 分", just:"剛剛", ago:"%s 分前", conn:"已連線", retry:"連線中 (%s)..." },
-    "en": { cur:"Now Serving", iss:"Issued", online:"Get Ticket", help:"Digital ticket & notify", man_t:"Number Alert", man_p:"Enter number to get alerted", take:"Get Ticket", track:"Track", my:"Your #", ahead:"Ahead", wait:"⏳ %s groups", arr:"🎉 Your Turn!", pass:"⚠️ Passed", p_list:"Passed", none:"None", links:"Links", copy:"Copy Link", sound:"Sound", s_on:"On", s_off:"Mute", scan:"Scan", off:"Offline", ok:"Success", fail:"Failed", no_in:"Enter #", cancel:"Stop tracking?", copied:"Copied", notice:"📢 ", q_left:"%s groups left!", est:"~%s min", just:"Now", ago:"%s m ago", conn:"Online", retry:"Retry (%s)..." }
+    "zh-TW": { cur:"目前叫號", iss:"已發至", online:"線上取號", help:"免排隊，手機領號", man_t:"號碼提醒", man_p:"輸入您的號碼開啟到號提醒", take:"立即取號", track:"追蹤", my:"我的號碼", ahead:"前方", wait:"⏳ 剩 %s 組", arr:"🎉 輪到您了！", pass:"⚠️ 已過號", p_list:"過號", none:"無", links:"精選連結", copy:"複製連結", sound:"音效", s_on:"開啟", s_off:"靜音", scan:"掃描追蹤", off:"連線中斷", ok:"取號成功", fail:"失敗", no_in:"請輸入號碼", cancel:"取消追蹤？", copied:"已複製", notice:"📢 ", q_left:"還剩 %s 組！", est:"約 %s 分", est_less:"< 1 分", just:"剛剛", ago:"%s 分前", conn:"已連線", retry:"連線中 (%s)..." },
+    "en": { cur:"Now Serving", iss:"Issued", online:"Get Ticket", help:"Digital ticket & notify", man_t:"Number Alert", man_p:"Enter number to get alerted", take:"Get Ticket", track:"Track", my:"Your #", ahead:"Ahead", wait:"⏳ %s groups", arr:"🎉 Your Turn!", pass:"⚠️ Passed", p_list:"Passed", none:"None", links:"Links", copy:"Copy Link", sound:"Sound", s_on:"On", s_off:"Mute", scan:"Scan", off:"Offline", ok:"Success", fail:"Failed", no_in:"Enter #", cancel:"Stop tracking?", copied:"Copied", notice:"📢 ", q_left:"%s groups left!", est:"~%s min", est_less:"< 1 min", just:"Now", ago:"%s m ago", conn:"Online", retry:"Retry (%s)..." }
 };
 
 // --- State ---
 let lang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[lang];
 let myTicket = localStorage.getItem('callsys_ticket'), sysMode = 'ticketing';
 let sndEnabled = false, localMute = false, avgTime = 0, lastUpd = null, audioCtx = null, ttsOk = false;
+let connTimer;
 const socket = io({ autoConnect: false, reconnection: true });
 
 // --- Core Helpers ---
@@ -44,7 +45,7 @@ function applyText() {
             current_number:'cur', issued_number:'iss', online_ticket_title:'online', help_take_ticket:'help', manual_input_title:'man_t', 
             take_ticket:'take', set_reminder:'track', my_number:'my', wait_count:'ahead', passed_list_title:'p_list', passed_empty:'none', 
             links_title:'links', copy_link:'copy', sound_enable:'sound', scan_qr:'scan'
-        }; // Map old keys to short keys
+        };
         if(map[k] && T[map[k]]) e.textContent = T[map[k]];
     });
     if($("manual-ticket-input")) $("manual-ticket-input").placeholder = T.man_p;
@@ -64,7 +65,12 @@ function updateTicket(curr) {
     $("ticket-waiting-count").textContent = diff > 0 ? diff : (diff===0 ? "0" : "-");
     $("ticket-status-text").textContent = diff > 0 ? T.wait.replace("%s",diff) : (diff===0 ? T.arr : T.pass);
     
-    if(diff > 0 && avgTime > 0) { wEl.textContent = T.est.replace("%s", Math.ceil(diff*avgTime)); show(wEl, true); } 
+    // [Optimization] Better estimate display
+    if(diff > 0 && avgTime >= 0) { 
+        const min = Math.ceil(diff * avgTime);
+        wEl.textContent = (min <= 1) ? T.est_less : T.est.replace("%s", min); 
+        show(wEl, true); 
+    } 
     else show(wEl, false);
 
     if(diff === 0) { if(typeof confetti!=='undefined') confetti({particleCount:100, spread:70, origin:{y:0.6}}); if(navigator.vibrate) navigator.vibrate([200,100,200]); }
@@ -85,8 +91,16 @@ function feedback(btn, msgKey) {
 }
 
 // --- Socket Events ---
-socket.on("connect", () => { socket.emit('joinRoom', 'public'); $("status-bar").textContent = T.conn; $("status-bar").classList.remove("visible"); });
-socket.on("disconnect", () => { $("status-bar").textContent = T.off; $("status-bar").classList.add("visible"); });
+socket.on("connect", () => { 
+    socket.emit('joinRoom', 'public'); 
+    clearTimeout(connTimer); 
+    $("status-bar").textContent = T.conn; 
+    $("status-bar").classList.remove("visible"); 
+});
+socket.on("disconnect", () => { 
+    // [Optimization] Delay showing disconnect to prevent flickering
+    connTimer = setTimeout(() => { $("status-bar").textContent = T.off; $("status-bar").classList.add("visible"); }, 1000);
+});
 socket.on("reconnect_attempt", a => $("status-bar").textContent = T.retry.replace("%s",a));
 
 socket.on("updateQueue", d => {
@@ -118,6 +132,7 @@ setInterval(updTime, 10000);
 
 // --- Interactions ---
 on($("btn-take-ticket"), "click", async () => {
+    if($("btn-take-ticket").disabled) return; // Double check
     unlockAudio(); if(Notification.permission!=='granted') Notification.requestPermission();
     $("btn-take-ticket").disabled = true;
     try {
@@ -125,7 +140,7 @@ on($("btn-take-ticket"), "click", async () => {
         if(r.success) { myTicket = r.ticket; localStorage.setItem('callsys_ticket', myTicket); renderMode(); toast(T.ok, "success"); }
         else toast(r.error||T.fail, "error");
     } catch(e) { toast(T.off, "error"); }
-    $("btn-take-ticket").disabled = false;
+    setTimeout(() => $("btn-take-ticket").disabled = false, 1000); // Prevent double-tap
 });
 
 on($("btn-track-ticket"), "click", () => {
