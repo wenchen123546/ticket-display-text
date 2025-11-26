@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v41.1 No IPv4 Force
+ * 伺服器 (index.js) - v41.1 Safe Mode
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http");
@@ -15,29 +15,48 @@ const cron = require('node-cron');
 const fs = require("fs");
 const path = require("path");
 
+// --- 1. 環境變數檢查 (最常見的崩潰原因) ---
+const { PORT = 3000, UPSTASH_REDIS_URL: REDIS_URL, ADMIN_TOKEN, LINE_ACCESS_TOKEN, LINE_CHANNEL_SECRET } = process.env;
+if (!ADMIN_TOKEN || !REDIS_URL) {
+    console.error("\n\n❌❌❌ [嚴重錯誤] 缺少核心變數 ❌❌❌");
+    console.error("請檢查您的 .env 檔案，確認包含：");
+    console.error("1. UPSTASH_REDIS_URL (Redis 連線網址)");
+    console.error("2. ADMIN_TOKEN (後台登入密碼)\n\n");
+    process.exit(1);
+}
+
 const app = express();
 const server = Server(app);
 const io = socketio(server, { cors: { origin: "*" }, pingTimeout: 60000 });
-const { PORT = 3000, UPSTASH_REDIS_URL: REDIS_URL, ADMIN_TOKEN, LINE_ACCESS_TOKEN, LINE_CHANNEL_SECRET } = process.env;
 
-if (!ADMIN_TOKEN || !REDIS_URL) { console.error("❌ 缺核心變數: 請檢查 .env 檔案設定"); process.exit(1); }
-
-// --- Config & Helpers ---
+// --- 2. Config & Helpers ---
 const LOG_DIR = path.join(__dirname, 'user_logs');
-if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR);
+// 使用 try-catch 防止沒有權限建立資料夾時崩潰
+try { if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR); } catch(e) { console.warn("⚠️ 無法建立 Log 資料夾，將略過檔案日誌"); }
 
 const logSystemDaily = (user, msg) => {
-    const now = new Date();
-    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now).split('T')[0];
-    const timeStr = now.toLocaleString('zh-TW', {timeZone:'Asia/Taipei', hour12:false});
-    const logPath = path.join(LOG_DIR, `system_${dateStr}.log`);
-    fs.appendFile(logPath, `[${timeStr}] [${user || 'System'}] ${msg}\n`, (err) => { if(err) console.error("Log Error:", err); });
+    try {
+        const now = new Date();
+        const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now).split('T')[0];
+        const timeStr = now.toLocaleString('zh-TW', {timeZone:'Asia/Taipei', hour12:false});
+        const logPath = path.join(LOG_DIR, `system_${dateStr}.log`);
+        fs.appendFile(logPath, `[${timeStr}] [${user || 'System'}] ${msg}\n`, (err) => {});
+    } catch (e) {}
 };
 
-// [修改] 移除了 family: 4，恢復 Node.js 預設連線行為
+// --- 3. Redis 連線 (安全模式) ---
+// [修正] 移除 family: 4，增加錯誤監聽
 const redis = new Redis(REDIS_URL, { 
     tls: { rejectUnauthorized: false }, 
     retryStrategy: t => Math.min(t * 50, 2000) 
+});
+
+redis.on("error", (err) => {
+    console.error("🔥 [Redis Error] 連線失敗:", err.message);
+});
+
+redis.on("connect", () => {
+    console.log("✅ Redis 連線成功！");
 });
 
 const lineClient = (LINE_ACCESS_TOKEN && LINE_CHANNEL_SECRET) ? new line.Client({ channelAccessToken: LINE_ACCESS_TOKEN, channelSecret: LINE_CHANNEL_SECRET }) : null;
@@ -59,32 +78,34 @@ const getTWTime = () => {
     return { dateStr: `${parts[0].value}-${parts[2].value}-${parts[4].value}`, hour: parseInt(parts[6].value)%24 };
 };
 const addLog = async (nick, msg) => { 
-    const time = new Date().toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour12:false});
-    await redis.lpush(KEYS.LOGS, `[${time}] [${nick}] ${msg}`); 
-    await redis.ltrim(KEYS.LOGS, 0, 99); 
-    io.to("admin").emit("newAdminLog", `[${time}] [${nick}] ${msg}`);
+    try {
+        const time = new Date().toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour12:false});
+        await redis.lpush(KEYS.LOGS, `[${time}] [${nick}] ${msg}`); 
+        await redis.ltrim(KEYS.LOGS, 0, 99); 
+        io.to("admin").emit("newAdminLog", `[${time}] [${nick}] ${msg}`);
+    } catch(e) { console.error("Log Redis Error", e); }
 };
 const broadcast = async (evt, data) => { io.emit(evt, data); await redis.set(KEYS.UPDATED, new Date().toISOString()); io.emit("updateTimestamp", new Date().toISOString()); };
 const broadcastList = async (k, evt, isJSON) => broadcast(evt, (isJSON ? await redis.lrange(k,0,-1) : await redis.zrange(k,0,-1)).map(isJSON?JSON.parse:Number));
 
 let cacheWait = 0, lastWaitCalc = 0;
 const calcWaitTime = async (force=false) => {
-    if(!force && Date.now()-lastWaitCalc<60000) return cacheWait;
-    const hist = (await redis.lrange(KEYS.HISTORY, 0, 19)).map(JSON.parse).filter(r=>r.num);
-    let total=0, weight=0;
-    for(let i=0; i<hist.length-1; i++) {
-        const t1 = new Date(hist[i].time), t2 = new Date(hist[i+1].time);
-        const diff = (t1 - t2)/60000; 
-        const nDiff = Math.abs(hist[i].num - hist[i+1].num);
-        if(nDiff > 0 && diff > 0 && (diff/nDiff) <= 20) { 
-            const w = (20-i); 
-            total += (diff/nDiff) * w; 
-            weight += w; 
+    try {
+        if(!force && Date.now()-lastWaitCalc<60000) return cacheWait;
+        const hist = (await redis.lrange(KEYS.HISTORY, 0, 19)).map(JSON.parse).filter(r=>r.num);
+        let total=0, weight=0;
+        for(let i=0; i<hist.length-1; i++) {
+            const t1 = new Date(hist[i].time), t2 = new Date(hist[i+1].time);
+            const diff = (t1 - t2)/60000; 
+            const nDiff = Math.abs(hist[i].num - hist[i+1].num);
+            if(nDiff > 0 && diff > 0 && (diff/nDiff) <= 20) { 
+                const w = (20-i); total += (diff/nDiff) * w; weight += w; 
+            }
         }
-    }
-    cacheWait = weight > 0 ? (total/weight) : 0;
-    lastWaitCalc = Date.now();
-    return cacheWait;
+        cacheWait = weight > 0 ? (total/weight) : 0;
+        lastWaitCalc = Date.now();
+        return cacheWait;
+    } catch(e) { return 0; }
 };
 
 async function handleControl(type, { body, user }) {
@@ -102,7 +123,7 @@ async function handleControl(type, { body, user }) {
         } else { newNum = await redis.decrIfPositive(KEYS.CURRENT); logMsg = `號碼回退為 ${newNum}`; }
         
         await logHistory(newNum, user.nickname, delta);
-        checkLineNotify(newNum).catch(e => console.error("Line Error:", e)); 
+        checkLineNotify(newNum).catch(e => console.error("Line Error (Background):", e.message)); 
     } else if(type === 'issue') {
         if(direction==='next') { newNum = await redis.incr(KEYS.ISSUED); logMsg = `手動發號至 ${newNum}`; }
         else if(issued > curr) { newNum = await redis.decr(KEYS.ISSUED); logMsg = `手動發號回退至 ${newNum}`; }
@@ -116,7 +137,7 @@ async function handleControl(type, { body, user }) {
             await redis.mset(KEYS.CURRENT, newNum, ...(newNum>issued?[KEYS.ISSUED, newNum]:[]));
             delta = Math.max(0, newNum-curr); logMsg = `手動設定為 ${newNum}`;
             await logHistory(newNum, user.nickname, delta);
-            checkLineNotify(newNum).catch(e => console.error("Line Error:", e));
+            checkLineNotify(newNum).catch(e => console.error("Line Error (Background):", e.message));
         } else { await redis.set(KEYS.ISSUED, newNum); logMsg = `修正發號為 ${newNum}`; }
     }
     if(logMsg) { addLog(user.nickname, logMsg); logSystemDaily(user.username, `[操作] ${logMsg}`); }
@@ -144,7 +165,7 @@ async function broadcastQueue() {
 async function logHistory(num, op, delta=0) {
     const { dateStr, hour } = getTWTime();
     const pipe = redis.multi().lpush(KEYS.HISTORY, JSON.stringify({num, time:new Date(), operator:op})).ltrim(KEYS.HISTORY,0,999);
-    if(delta>0) pipe.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, delta).expire(`${KEYS.HOURLY}${dateStr}`, 2592000); // 30 Days
+    if(delta>0) pipe.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, delta).expire(`${KEYS.HOURLY}${dateStr}`, 2592000); 
     await pipe.exec(); calcWaitTime(true);
 }
 
@@ -268,7 +289,7 @@ app.post("/api/admin/line-settings/:act", auth, superAuth, asyncHandler(async re
     if(act==='get-unlock-pass') return { password: await redis.get(KEYS.LINE.PWD)||"" };
 }));
 
-// LINE Bot logic
+// LINE Bot
 const lineMsgs = { approach:"🔔 叫號提醒！\n現已叫號至 {current}。\n您的 {target} 即將輪到 (剩 {diff} 組)。", arrival:"🎉 輪到您了！\n{current} 號請至櫃台。", status:"📊 叫號：{current}\n發號：{issued}{personal}" };
 async function checkLineNotify(curr) {
     if(!lineClient) return;
