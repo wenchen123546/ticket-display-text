@@ -1,6 +1,10 @@
+{
+type: uploaded file
+fileName: main.js
+fullContent:
 /*
  * ==========================================
- * 前端邏輯 (main.js) - v30.0 (Sound Feedback Fix)
+ * 前端邏輯 (main.js) - v31.0 (Sound Logic Fix)
  * ==========================================
  */
 
@@ -173,7 +177,6 @@ function applyI18n() {
         const key = el.getAttribute('data-i18n'); 
         if(T[key]) el.textContent = T[key]; 
     });
-    // 更新 Placeholder
     if(DOM.manualTicketInput) DOM.manualTicketInput.placeholder = T["manual_input_placeholder"];
 }
 
@@ -298,30 +301,23 @@ function updateTicketUI(currentNum) {
 
 function handleUserInteraction(callback) { unlockAudioContext(); callback(); }
 
-// [新增] 統一的按鈕反饋函式
 function showButtonFeedback(buttonEl, messageKey) {
     const iconSpan = buttonEl.querySelector('span:first-child');
     const textSpan = buttonEl.querySelector('span:last-child');
-
     const originalIcon = iconSpan.textContent;
     const originalText = textSpan.textContent;
     
-    // 1. 顯示暫時性反饋
     buttonEl.classList.add('is-feedback');
     iconSpan.textContent = '✔';
     textSpan.textContent = T[messageKey]; 
 
-    // 2. 延遲後恢復
     setTimeout(() => {
         buttonEl.classList.remove('is-feedback');
         iconSpan.textContent = originalIcon;
         textSpan.textContent = originalText;
-        
-        // 由於反饋期間，persistent state 可能已更新，這裡需強制重新檢查並設置一次 UI
         if(buttonEl.id === 'sound-prompt') {
             updateMuteUI(isLocallyMuted); 
         } else {
-            // 對於非音效按鈕，只需要恢復 I18n
             applyI18n(); 
         }
     }, 1500);
@@ -363,15 +359,17 @@ function updateMuteUI(isMuted, needsPermission = false) {
     const textSpan = DOM.soundPrompt.querySelector('span:last-child');
 
     const icon = needsPermission || isMuted ? '🔇' : '🔊'; 
+    const text = needsPermission || isMuted ? T["sound_mute"] : T["sound_on"]; // 直接顯示狀態文字
+    
     const isActive = !needsPermission && !isMuted;
     
     if(iconSpan) iconSpan.textContent = icon;
-    if(textSpan) textSpan.textContent = T["sound_enable"]; 
+    if(textSpan) textSpan.textContent = text;
     
     DOM.soundPrompt.classList.toggle("is-active", isActive); 
 }
 
-// [修改] 複製按鈕 - 使用統一反饋
+// 複製連結 - 使用 Feedback
 if (DOM.copyLinkPrompt) DOM.copyLinkPrompt.addEventListener("click", () => { 
     if (!navigator.clipboard) return; 
     navigator.clipboard.writeText(window.location.href).then(() => { 
@@ -379,10 +377,8 @@ if (DOM.copyLinkPrompt) DOM.copyLinkPrompt.addEventListener("click", () => {
     }); 
 });
 
-// [修改] 音效按鈕 - 使用統一反饋
+// [修改] 音效按鈕點擊 - 修復邏輯錯誤，不再顯示錯誤的 Feedback
 if (DOM.soundPrompt) DOM.soundPrompt.addEventListener("click", () => {
-    
-    // 1. 執行核心邏輯 (這會立即改變 isLocallyMuted 和 updateMuteUI 的持久狀態)
     handleUserInteraction(() => { 
         if (!audioPermissionGranted) {
             playNotificationSound(); 
@@ -390,9 +386,7 @@ if (DOM.soundPrompt) DOM.soundPrompt.addEventListener("click", () => {
             updateMuteUI(!isLocallyMuted); 
         }
     });
-
-    // 2. 顯示暫時性反饋 (✔ 音效開啟)
-    showButtonFeedback(DOM.soundPrompt, 'sound_on'); 
+    // 注意：這裡移除了 showButtonFeedback，避免強制顯示 "開啟" 導致誤解
 });
 
 document.addEventListener("DOMContentLoaded", () => { 
@@ -405,3 +399,4 @@ document.addEventListener("DOMContentLoaded", () => {
         if (qrEl) new QRCode(qrEl, { text: window.location.href, width: 120, height: 120 }); 
     } catch (e) {}
 });
+}
