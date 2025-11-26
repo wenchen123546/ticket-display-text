@@ -229,22 +229,14 @@
                             </div>
                         </div>
 
-                        <div class="line-config-grid">
-                            <div class="config-section">
-                                <h4 class="config-title"><span style="color:var(--primary);">📌 主要通知</span></h4>
-                                <div class="control-group"><label>快到了</label><span class="var-hint">{current} {target} {diff}</span><textarea id="line-msg-approach"></textarea></div>
-                                <div class="control-group"><label>正式到號</label><span class="var-hint">{current} {target}</span><textarea id="line-msg-arrival"></textarea></div>
-                            </div>
-                            <div class="config-section">
-                                <h4 class="config-title"><span style="color:var(--text-sub);">🤖 自動回覆</span></h4>
-                                <div class="control-group"><label>查詢狀態</label><textarea id="line-msg-status" style="height:70px;"></textarea></div>
-                                <div class="control-group"><label>追蹤文字</label><textarea id="line-msg-personal" style="height:60px;"></textarea></div>
-                            </div>
+                        <div class="control-group list-editor">
+                            <ul id="line-settings-list-ui">
+                                <li>Loading settings...</li>
+                            </ul>
                         </div>
 
-                        <div class="control-group" style="margin-top:20px; display:flex; gap:10px;">
-                            <button id="btn-save-line-msg" class="btn-primary" style="flex:2;" data-i18n="btn_save_settings">儲存設定</button>
-                            <button id="btn-reset-line-msg" class="btn-reset-single" style="flex:1;" data-i18n="btn_restore">恢復預設</button>
+                        <div class="control-group" style="margin-top:20px; display:flex; gap:10px; justify-content: flex-end;">
+                            <button id="btn-reset-line-msg" class="btn-reset-single" style="width:auto;" data-i18n="btn_restore">恢復預設值</button>
                         </div>
                     </div>
                 </div>
