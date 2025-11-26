@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台樣式 (admin.css) - v35.0 Stable Grid & Persistence
+ * 後台樣式 (admin.css) - v36.0 Layout & Wrap Fix
  * ========================================== */
 :root {
     --bg-body: #f3f4f6; --bg-surface: #ffffff; --bg-sidebar: #ffffff;
@@ -42,10 +42,16 @@ body { margin: 0; width: 100%; min-height: 100vh; font-family: 'Inter', sans-ser
 .sub-number { font-size: 1.8rem; font-weight: 700; color: var(--text-main); }
 .label { font-size: 0.85rem; color: var(--text-sub); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
 
-/* Grid Layout */
-.card-container { display: grid; gap: 24px; grid-template-columns: 1fr; } /* 手機 */
-@media (min-width: 768px) { .card-container { grid-template-columns: repeat(2, 1fr); } } /* 平板 */
-@media (min-width: 1200px) { .card-container { grid-template-columns: repeat(3, 1fr); } } /* 桌機 */
+/* Grid Layout System */
+.card-container { display: grid; gap: 24px; grid-template-columns: 1fr; } /* Mobile: 1 col */
+@media (min-width: 768px) { .card-container { grid-template-columns: repeat(2, 1fr); } } /* Tablet: 2 cols */
+@media (min-width: 1200px) { .card-container { grid-template-columns: repeat(3, 1fr); } } /* Desktop: 3 cols */
+
+/* [修正 1] 針對流量分析頁面，桌機版強制改為兩欄滿版 (1fr 1fr)，使其並排顯示 */
+@media (min-width: 1200px) {
+    #section-stats .card-container { grid-template-columns: 1fr 1fr; }
+}
+
 .full-width-card { grid-column: 1 / -1; }
 
 .admin-card { background: var(--bg-surface); border-radius: var(--radius-lg); padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); height: 100%; display: flex; flex-direction: column; }
@@ -75,21 +81,31 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .btn-reset-single { width: 100%; padding: 12px; border: 1px dashed var(--border-color); background: transparent; color: var(--text-sub); margin-top: auto; cursor: pointer; border-radius: var(--radius-md); }
 .btn-reset-single:hover { background: #f9fafb; color: var(--text-main); }
 
-/* [修正] Chart & Lists */
-.chart-container { min-height: 150px; display: flex; align-items: flex-end; gap: 2px; padding: 10px 0; overflow-x: auto; width: 100%; }
+/* Lists & Editors */
+/* [修正 3] 加入 flex: 1 確保列表在容器內自動填充高度 */
+.list-editor ul, .log-list { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: var(--radius-md); max-height: 300px; overflow-y: auto; margin: 0 0 12px 0; padding: 0; list-style: none; flex: 1; min-height: 100px; }
+.list-editor li { padding: 10px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+/* [修正 2] 讓長連結可以換行 */
+.list-editor li > div { overflow: visible; } /* 允許內容撐開 */
+.list-editor li span, .list-editor li small { 
+    white-space: normal; /* 允許換行 */
+    word-break: break-all; /* 強制長網址換行 */
+    display: block; 
+}
+
+.log-list li { padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 0.9rem; color: #555; }
+.var-hint { display: block; font-size: 0.8rem; color: #666; margin-bottom: 4px; font-family: monospace; background: #eee; padding: 2px 5px; border-radius: 4px; width: fit-content; }
+.form-group-boxed { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
+
+/* Chart */
+/* [修正 3] 強制設定 min-height 避免圖表在並排時消失 */
+.chart-container { min-height: 180px; flex: 1; display: flex; align-items: flex-end; gap: 2px; padding: 10px 0; overflow-x: auto; width: 100%; margin-bottom: 10px; }
 .chart-col { flex: 1; min-width: 15px; display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: 0.7; transition: 0.2s; }
 .chart-col:hover, .chart-col.current { opacity: 1; }
 .chart-bar { width: 100%; background: var(--primary); border-radius: 4px 4px 0 0; min-height: 4px; }
 .chart-val { font-size: 0.7rem; color: #666; margin-bottom: 2px; }
 .chart-label { font-size: 0.6rem; color: #999; margin-top: 2px; }
-
-.list-editor ul, .log-list { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: var(--radius-md); max-height: 300px; overflow-y: auto; margin: 0 0 12px 0; padding: 0; list-style: none; }
-.list-editor li { padding: 10px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.list-editor li > div { overflow: hidden; }
-.list-editor li span, .list-editor li small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-.log-list li { padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 0.9rem; color: #555; }
-.var-hint { display: block; font-size: 0.8rem; color: #666; margin-bottom: 4px; font-family: monospace; background: #eee; padding: 2px 5px; border-radius: 4px; width: fit-content; }
-.form-group-boxed { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
 
 /* Overlays */
 #status-bar { position: fixed; top: 0; width: 100%; background: var(--danger); color: white; text-align: center; padding: 8px; transform: translateY(-100%); transition: 0.3s; z-index: 9999; } #status-bar.visible { transform: translateY(0); }
@@ -111,6 +127,7 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
     .content-area { padding: 15px 15px 90px 15px; width: 100%; min-width: 100%; flex: auto; }
     .dashboard-header { grid-template-columns: 1fr 1fr; } .dashboard-item:last-child { grid-column: 1 / -1; }
     .card-container { grid-template-columns: 1fr; } 
+    #section-stats .card-container { grid-template-columns: 1fr; } /* Mobile force 1 col */
     .big-action-row { flex-direction: column; }
     .input-group { flex-direction: column; }
     #btn-call-next { order: -1; min-width: 100%; }
