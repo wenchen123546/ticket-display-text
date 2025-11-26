@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v19.1 Compact
+ * 伺服器 (index.js) - v40.0 Daily Log Rotation
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http");
@@ -25,16 +25,25 @@ if (!ADMIN_TOKEN || !REDIS_URL) { console.error("❌ 缺核心變數"); process.
 // --- Config & Helpers ---
 const LOG_DIR = path.join(__dirname, 'user_logs');
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR);
-const logToUserFile = (user, msg) => {
-    if (!user) return;
-    const p = path.join(LOG_DIR, `${user.replace(/[^a-z0-9_\-]/gi, '_')}.log`);
-    fs.appendFile(p, `[${new Date().toLocaleString('zh-TW', {timeZone:'Asia/Taipei', hour12:false})}] ${msg}\n`, () => {});
+
+// [v40.0] Log System - Daily File
+const logSystemDaily = (user, msg) => {
+    const now = new Date();
+    // 格式化日期為 YYYY-MM-DD
+    const dateStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(now).split('T')[0];
+    
+    const timeStr = now.toLocaleString('zh-TW', {timeZone:'Asia/Taipei', hour12:false});
+    const logPath = path.join(LOG_DIR, `system_${dateStr}.log`);
+    const logLine = `[${timeStr}] [${user || 'System'}] ${msg}\n`;
+    
+    fs.appendFile(logPath, logLine, (err) => { if(err) console.error("Log Error:", err); });
 };
 
 const redis = new Redis(REDIS_URL, { tls: { rejectUnauthorized: false }, retryStrategy: t => Math.min(t * 50, 2000) });
 const lineClient = (LINE_ACCESS_TOKEN && LINE_CHANNEL_SECRET) ? new line.Client({ channelAccessToken: LINE_ACCESS_TOKEN, channelSecret: LINE_CHANNEL_SECRET }) : null;
 
-// Redis Keys & Lua
 const KEYS = {
     CURRENT: 'callsys:number', ISSUED: 'callsys:issued', MODE: 'callsys:mode', PASSED: 'callsys:passed',
     FEATURED: 'callsys:featured', UPDATED: 'callsys:updated', SOUND: 'callsys:soundEnabled', PUBLIC: 'callsys:isPublic',
@@ -45,7 +54,6 @@ const KEYS = {
 redis.defineCommand("safeNextNumber", { numberOfKeys: 2, lua: `return (tonumber(redis.call("GET",KEYS[1]))or 0) < (tonumber(redis.call("GET",KEYS[2]))or 0) and redis.call("INCR",KEYS[1]) or -1` });
 redis.defineCommand("decrIfPositive", { numberOfKeys: 1, lua: `local v=tonumber(redis.call("GET",KEYS[1])) return (v and v>0) and redis.call("DECR",KEYS[1]) or (v or 0)` });
 
-// Utilities
 const sanitize = s => typeof s==='string'?s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"): '';
 const getTWTime = () => {
     const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hour12:false}).formatToParts(new Date());
@@ -67,7 +75,6 @@ const calcWaitTime = async (force=false) => {
     return cacheWait = (weight>0 ? total/weight : 0), lastWaitCalc = Date.now(), cacheWait;
 };
 
-// --- Core Logic ---
 async function handleControl(type, { body, user }) {
     const { direction, number } = body;
     const curr = parseInt(await redis.get(KEYS.CURRENT))||0;
@@ -97,7 +104,7 @@ async function handleControl(type, { body, user }) {
             await logHistory(newNum, user.nickname, delta); checkLineNotify(newNum);
         } else { await redis.set(KEYS.ISSUED, newNum); logMsg = `修正發號為 ${newNum}`; }
     }
-    if(logMsg) { addLog(user.nickname, logMsg); logToUserFile(user.username, `[操作] ${logMsg}`); }
+    if(logMsg) { addLog(user.nickname, logMsg); logSystemDaily(user.username, `[操作] ${logMsg}`); }
     await broadcastQueue();
     return { number: newNum, issued: type==='issue'?newNum:undefined };
 }
@@ -126,8 +133,8 @@ async function logHistory(num, op, delta=0) {
     await pipe.exec(); calcWaitTime(true);
 }
 
-// --- Middleware & Setup ---
-app.use(helmet({ contentSecurityPolicy: false })); // Simplified for brevity
+// Middleware
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.static("public")); app.use(express.json()); app.set('trust proxy', 1);
 
 const asyncHandler = fn => async(req, res, next) => {
@@ -141,25 +148,23 @@ const auth = async(req, res, next) => {
 };
 const superAuth = (req,res,next) => req.user.role==='super' ? next() : res.status(403).json({error:"權限不足"});
 
-// --- Routes ---
+// Routes
 app.post("/login", rateLimit({windowMs:9e5,max:100}), asyncHandler(async req => {
     const { username: u, password: p } = req.body;
     let valid = (u==='superadmin' && p===ADMIN_TOKEN);
     if(!valid && await redis.hexists(KEYS.USERS, u)) valid = await bcrypt.compare(p, await redis.hget(KEYS.USERS, u));
-    if(!valid) { logToUserFile(u, "登入失敗"); throw new Error("帳密錯誤"); }
+    if(!valid) { logSystemDaily(u, "登入失敗"); throw new Error("帳密錯誤"); }
     const token = uuidv4(), nick = await redis.hget(KEYS.NICKS, u) || u;
     await redis.set(`${KEYS.SESSION}${token}`, JSON.stringify({username:u, role:valid&&u==='superadmin'?'super':'normal', nickname:nick}), "EX", 28800);
-    logToUserFile(u, "登入成功");
+    logSystemDaily(u, "登入成功");
     return { token, role: u==='superadmin'?'super':'normal', username: u, nickname: nick };
 }));
 
-// Public Ticket
 app.post("/api/ticket/take", rateLimit({windowMs:36e5,max:10}), asyncHandler(async req => {
     if(await redis.get(KEYS.MODE)==='input') throw new Error("僅限手動輸入");
     const t = await redis.incr(KEYS.ISSUED); await broadcastQueue(); return { ticket: t };
 }));
 
-// Protected Control APIs
 const ctrls = ['call','issue','set-call','set-issue'];
 ctrls.forEach(c => app.post(`/api/control/${c}`, auth, asyncHandler(async req => {
     const r = await handleControl(c.replace('-','_'), req);
@@ -180,7 +185,6 @@ app.post("/api/control/recall-passed", auth, asyncHandler(async req => {
     addLog(req.user.nickname, `↩️ 重呼 ${req.body.number}`); broadcastList(KEYS.PASSED, "updatePassed"); await broadcastQueue();
 }));
 
-// Data & Settings APIs
 app.post("/api/passed/add", auth, asyncHandler(async r=>{ await redis.zadd(KEYS.PASSED, r.body.number, r.body.number); broadcastList(KEYS.PASSED,"updatePassed"); }));
 app.post("/api/passed/remove", auth, asyncHandler(async r=>{ await redis.zrem(KEYS.PASSED, r.body.number); broadcastList(KEYS.PASSED,"updatePassed"); }));
 app.post("/api/passed/clear", auth, asyncHandler(async r=>{ await redis.del(KEYS.PASSED); broadcastList(KEYS.PASSED,"updatePassed"); }));
@@ -192,13 +196,13 @@ app.post("/api/featured/edit", auth, asyncHandler(async r=>{
 }));
 app.post("/api/featured/remove", auth, asyncHandler(async r=>{ await redis.lrem(KEYS.FEATURED, 1, JSON.stringify(r.body)); broadcastList(KEYS.FEATURED,"updateFeaturedContents",true); }));
 app.post("/api/featured/clear", auth, asyncHandler(async r=>{ await redis.del(KEYS.FEATURED); broadcastList(KEYS.FEATURED,"updateFeaturedContents",true); }));
+app.post("/api/featured/get", auth, asyncHandler(async r=>{ return (await redis.lrange(KEYS.FEATURED,0,-1)).map(JSON.parse); })); // [v39.1 fix] Added get API
 
 app.post("/set-sound-enabled", auth, asyncHandler(async r=>{ await redis.set(KEYS.SOUND, r.body.enabled?"1":"0"); io.emit("updateSoundSetting", r.body.enabled); }));
 app.post("/set-public-status", auth, asyncHandler(async r=>{ await redis.set(KEYS.PUBLIC, r.body.isPublic?"1":"0"); io.emit("updatePublicStatus", r.body.isPublic); }));
 app.post("/api/admin/broadcast", auth, asyncHandler(async r=>{ io.emit("adminBroadcast", sanitize(r.body.message).substr(0,50)); addLog(r.user.nickname,`📢 ${r.body.message}`); }));
 app.post("/api/logs/clear", auth, asyncHandler(async r=>{ await redis.del(KEYS.LOGS); io.to("admin").emit("initAdminLogs",[]); }));
 
-// Stats
 app.post("/api/admin/stats", auth, asyncHandler(async req => {
     const {dateStr, hour} = getTWTime(), hKey = `${KEYS.HOURLY}${dateStr}`;
     const [hist, hData] = await Promise.all([redis.lrange(KEYS.HISTORY,0,99), redis.hgetall(hKey)]);
@@ -212,7 +216,6 @@ app.post("/api/admin/stats/adjust", auth, asyncHandler(async r=>{
 }));
 app.post("/api/admin/stats/clear", auth, asyncHandler(async r=>{ await redis.del(`${KEYS.HOURLY}${getTWTime().dateStr}`, KEYS.HISTORY); addLog(r.user.nickname,"⚠️ 清空統計"); }));
 
-// Super Admin
 app.post("/set-system-mode", auth, superAuth, asyncHandler(async r=>{ await redis.set(KEYS.MODE, r.body.mode); io.emit("updateSystemMode", r.body.mode); }));
 app.post("/reset", auth, superAuth, asyncHandler(async r=>{ await performReset(r.user.nickname); }));
 app.post("/api/admin/users", auth, asyncHandler(async r=>{
@@ -227,6 +230,10 @@ app.post("/api/admin/add-user", auth, superAuth, asyncHandler(async r=>{
 app.post("/api/admin/del-user", auth, superAuth, asyncHandler(async r=>{ 
     if(r.body.delUsername==='superadmin') throw new Error("不可刪除"); 
     await redis.hdel(KEYS.USERS, r.body.delUsername); await redis.hdel(KEYS.NICKS, r.body.delUsername); 
+}));
+app.post("/api/admin/set-nickname", auth, asyncHandler(async r=>{ 
+    if(r.body.targetUsername !== r.user.username && r.user.role !== 'super') throw new Error("權限不足");
+    await redis.hset(KEYS.NICKS, r.body.targetUsername, r.body.nickname);
 }));
 app.post("/api/admin/export-csv", auth, superAuth, asyncHandler(async r=>{
     const h = (await redis.lrange(KEYS.HISTORY,0,-1)).map(JSON.parse).reverse();
@@ -243,7 +250,7 @@ app.post("/api/admin/line-settings/:act", auth, superAuth, asyncHandler(async re
     if(act==='get-unlock-pass') return { password: await redis.get(KEYS.LINE.PWD)||"" };
 }));
 
-// --- LINE Bot ---
+// LINE Bot
 const lineMsgs = { approach:"🔔 叫號提醒！\n現已叫號至 {current}。\n您的 {target} 即將輪到 (剩 {diff} 組)。", arrival:"🎉 輪到您了！\n{current} 號請至櫃台。", status:"📊 叫號：{current}\n發號：{issued}{personal}" };
 async function checkLineNotify(curr) {
     if(!lineClient) return;
@@ -266,8 +273,6 @@ async function handleLine(e) {
     if(e.type!=='message' || e.message.type!=='text') return;
     const txt = e.message.text.trim(), uid = e.source.userId, rT = e.replyToken, ctx = `${KEYS.LINE.CTX}${uid}`;
     const reply = t => lineClient.replyMessage(rT, {type:'text',text:t});
-    
-    // Msg Templates
     const msgKeys = ['status','personal','passed','set_ok','cancel','login_hint','err_passed','err_no_sub','set_hint'];
     const msgs = (await redis.mget(msgKeys.map(k=>`callsys:line:msg:${k}`))).reduce((a,v,i)=>(a[msgKeys[i]]=v,a),{});
 
@@ -295,7 +300,6 @@ async function handleLine(e) {
     if(['過號','passed'].includes(txt)) return reply((msgs.passed||"過號：{list}").replace('{list}', (await redis.zrange(KEYS.PASSED,0,-1)).join(',')||"無"));
 }
 
-// --- Cron & Socket ---
 cron.schedule('0 4 * * *', () => performReset('系統自動'), { timezone: "Asia/Taipei" });
 io.on("connection", async s => {
     if(s.handshake.auth.token) {
@@ -313,4 +317,4 @@ io.on("connection", async s => {
     s.emit("updateWaitTime", await calcWaitTime());
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v19.1 running on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v40.0 running on ${PORT}`));
