@@ -118,6 +118,7 @@
                             <div class="input-group" style="width:auto;"><button id="btn-refresh-stats" class="btn-secondary">重整</button><button id="btn-export-csv" class="btn-success btn-secondary" style="display:none; color:white;">CSV</button></div>
                         </div>
                         <div id="hourly-chart" class="chart-container"><p style="margin:auto; color:#ccc;">Loading...</p></div>
+                        <ul id="stats-list-ui" class="log-list" style="margin-top:10px;"><li>Loading...</li></ul>
                         <button id="btn-clear-stats" class="btn-reset-single">⚠ 清空統計</button>
                     </div>
                 </div>
@@ -125,7 +126,9 @@
                 <div class="card-wrapper">
                     <div class="admin-card">
                         <h3><span class="card-icon">📋</span> 操作日誌</h3>
-                        <div class="control-group admin-log-container"><ul id="admin-log-ui" class="log-list"><li>Wait...</li></ul></div>
+                        <div class="control-group admin-log-container" style="flex:1; display:flex; flex-direction:column;">
+                            <ul id="admin-log-ui" class="log-list" style="flex:1;"><li>Wait...</li></ul>
+                        </div>
                         <button id="btn-clear-logs" class="btn-reset-single">清除日誌</button>
                     </div>
                 </div>
@@ -201,7 +204,7 @@
 
         <div id="section-line" class="section-group">
             <div class="card-container">
-                <div class="card-wrapper full-width-card">
+                <div class="card-wrapper" style="grid-column: 1 / -1;">
                     <div class="admin-card">
                         <h3><span class="card-icon">💬</span> LINE 設定</h3>
                         <div class="control-group form-group-boxed" id="unlock-pwd-group" style="background:#fff7ed; display:none;">
