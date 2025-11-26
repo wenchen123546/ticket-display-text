@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台樣式 (admin.css) - v46.0 Compact Fix
+ * 後台樣式 (admin.css) - v47.0 List View Restore
  * ========================================== */
 :root {
     --bg-body: #f3f4f6; --bg-surface: #ffffff; --bg-sidebar: #ffffff;
@@ -80,7 +80,6 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 
 /* Lists & Editors */
 .list-editor ul, .log-list { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: var(--radius-md); max-height: 300px; overflow-y: auto; margin: 0 0 12px 0; padding: 0; list-style: none; flex: 1; min-height: 120px; }
-/* [修正] 縮小列表間距 */
 .list-editor li { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
 .list-editor li > div { overflow: visible; } 
 .list-editor li span, .list-editor li small { white-space: normal; word-break: break-all; display: block; }
@@ -88,52 +87,68 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .var-hint { display: block; font-size: 0.8rem; color: #666; margin-bottom: 4px; font-family: monospace; background: #eee; padding: 2px 5px; border-radius: 4px; width: fit-content; }
 .form-group-boxed { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
 
-/* * [修正] 後台過號名單 (Grid 網格排版)
- */
+/* -----------------------------------------------------------
+ * [修改] 後台過號名單 (回歸條列式 List View)
+ * ----------------------------------------------------------- */
 #passed-list-ui {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-    gap: 10px;
-    padding: 10px;
-    background: #f1f5f9;
+    display: block; /* 取消 Grid */
+    background: #f9fafb;
+    border: 1px solid #f3f4f6;
+    padding: 0;
+    max-height: 280px; /* 限制高度，超過出現卷軸 */
+    overflow-y: auto;
 }
 #passed-list-ui li {
     display: flex;
-    flex-direction: column;
-    align-items: center;
+    flex-direction: row; /* 左右排列 */
     justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    border-bottom: 1px solid #e5e7eb;
     background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-shadow: none;
     height: auto;
-    gap: 8px;
+    gap: 10px;
+    margin: 0;
 }
-/* 強制修正 JS 生成的內部結構 */
+#passed-list-ui li:last-child {
+    border-bottom: none;
+}
+/* 左側區塊：號碼+按鈕 */
 #passed-list-ui li > div {
     display: flex !important;
-    flex-direction: column !important;
+    flex-direction: row !important;
     align-items: center !important;
-    width: 100%;
+    gap: 12px !important;
+    width: auto !important;
+    margin: 0 !important;
 }
+/* 號碼樣式 */
 #passed-list-ui li span {
-    font-size: 1.6rem !important;
-    font-weight: 800 !important;
-    color: var(--primary);
-    line-height: 1;
-    margin-bottom: 5px;
+    font-size: 1.2rem !important;
+    font-weight: 700 !important;
+    color: var(--text-main) !important;
+    margin: 0 !important;
+    min-width: 40px;
 }
+/* 按鈕 */
 #passed-list-ui button {
-    width: 100%;
+    width: auto;
     margin: 0;
-    font-size: 0.8rem;
+    padding: 4px 12px;
 }
+/* 刪除按鈕 */
 #passed-list-ui .delete-item-btn {
-    background: #fee2e2;
+    background: transparent;
     color: #ef4444;
+    font-weight: bold;
+    font-size: 1.1rem;
+    padding: 4px 10px;
+    margin: 0;
     border-radius: 4px;
-    padding: 4px;
+}
+#passed-list-ui .delete-item-btn:hover {
+    background: #fee2e2;
 }
 
 /* Chart */
@@ -159,17 +174,16 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .sec-content { flex: 1; }
 .sec-title { font-weight: 800; color: #c2410c; margin-bottom: 5px; display: block; font-size: 1rem; }
 
-/* * [修正] LINE 訊息預覽 (緊湊版) 
- */
+/* LINE 訊息預覽 (緊湊版) */
 .line-msg-preview { 
     display: block; 
     font-family: monospace; 
     line-height: 1.3; 
-    max-height: 80px; /* 限制最大高度 */
+    max-height: 80px; 
     overflow-y: auto; 
     color: #475569; 
     font-size: 0.8rem; 
-    padding: 6px 10px !important; /* 強制覆蓋 */
+    padding: 6px 10px !important; 
     background: #f1f5f9; 
     border-radius: 6px;
     margin-top: 4px;
