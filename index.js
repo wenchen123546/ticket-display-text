@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v40.0 Daily Log Rotation
+ * 伺服器 (index.js) - v41.0 Optimized
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http");
@@ -26,22 +26,20 @@ if (!ADMIN_TOKEN || !REDIS_URL) { console.error("❌ 缺核心變數"); process.
 const LOG_DIR = path.join(__dirname, 'user_logs');
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR);
 
-// [v40.0] Log System - Daily File
 const logSystemDaily = (user, msg) => {
     const now = new Date();
-    // 格式化日期為 YYYY-MM-DD
-    const dateStr = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit'
-    }).format(now).split('T')[0];
-    
+    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now).split('T')[0];
     const timeStr = now.toLocaleString('zh-TW', {timeZone:'Asia/Taipei', hour12:false});
     const logPath = path.join(LOG_DIR, `system_${dateStr}.log`);
-    const logLine = `[${timeStr}] [${user || 'System'}] ${msg}\n`;
-    
-    fs.appendFile(logPath, logLine, (err) => { if(err) console.error("Log Error:", err); });
+    fs.appendFile(logPath, `[${timeStr}] [${user || 'System'}] ${msg}\n`, (err) => { if(err) console.error("Log Error:", err); });
 };
 
-const redis = new Redis(REDIS_URL, { tls: { rejectUnauthorized: false }, retryStrategy: t => Math.min(t * 50, 2000) });
+// [Optimization] Add family: 4 to force IPv4, prevents lookups delay
+const redis = new Redis(REDIS_URL, { 
+    tls: { rejectUnauthorized: false }, 
+    family: 4,
+    retryStrategy: t => Math.min(t * 50, 2000) 
+});
 const lineClient = (LINE_ACCESS_TOKEN && LINE_CHANNEL_SECRET) ? new line.Client({ channelAccessToken: LINE_ACCESS_TOKEN, channelSecret: LINE_CHANNEL_SECRET }) : null;
 
 const KEYS = {
@@ -51,6 +49,7 @@ const KEYS = {
     HISTORY: 'callsys:stats:history', HOURLY: 'callsys:stats:hourly:',
     LINE: { SUB: 'callsys:line:notify:', USER: 'callsys:line:user:', PWD: 'callsys:line:unlock_pwd', ADMIN: 'callsys:line:admin_session:', CTX: 'callsys:line:context:', ACTIVE: 'callsys:line:active_subs_set' }
 };
+
 redis.defineCommand("safeNextNumber", { numberOfKeys: 2, lua: `return (tonumber(redis.call("GET",KEYS[1]))or 0) < (tonumber(redis.call("GET",KEYS[2]))or 0) and redis.call("INCR",KEYS[1]) or -1` });
 redis.defineCommand("decrIfPositive", { numberOfKeys: 1, lua: `local v=tonumber(redis.call("GET",KEYS[1])) return (v and v>0) and redis.call("DECR",KEYS[1]) or (v or 0)` });
 
@@ -59,20 +58,35 @@ const getTWTime = () => {
     const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hour12:false}).formatToParts(new Date());
     return { dateStr: `${parts[0].value}-${parts[2].value}-${parts[4].value}`, hour: parseInt(parts[6].value)%24 };
 };
-const addLog = async (nick, msg) => { await redis.lpush(KEYS.LOGS, `[${new Date().toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour12:false})}] [${nick}] ${msg}`); await redis.ltrim(KEYS.LOGS, 0, 99); io.to("admin").emit("newAdminLog", `[${nick}] ${msg}`); };
+const addLog = async (nick, msg) => { 
+    const time = new Date().toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour12:false});
+    await redis.lpush(KEYS.LOGS, `[${time}] [${nick}] ${msg}`); 
+    await redis.ltrim(KEYS.LOGS, 0, 99); 
+    io.to("admin").emit("newAdminLog", `[${time}] [${nick}] ${msg}`); // Removed redundant nick
+};
 const broadcast = async (evt, data) => { io.emit(evt, data); await redis.set(KEYS.UPDATED, new Date().toISOString()); io.emit("updateTimestamp", new Date().toISOString()); };
 const broadcastList = async (k, evt, isJSON) => broadcast(evt, (isJSON ? await redis.lrange(k,0,-1) : await redis.zrange(k,0,-1)).map(isJSON?JSON.parse:Number));
 
 let cacheWait = 0, lastWaitCalc = 0;
 const calcWaitTime = async (force=false) => {
     if(!force && Date.now()-lastWaitCalc<60000) return cacheWait;
-    const hist = (await redis.lrange(KEYS.HISTORY, 0, 15)).map(JSON.parse).filter(r=>r.num);
+    const hist = (await redis.lrange(KEYS.HISTORY, 0, 19)).map(JSON.parse).filter(r=>r.num); // Increased sample size
     let total=0, weight=0;
+    // [Optimization] Robust calc logic preventing division by zero
     for(let i=0; i<hist.length-1; i++) {
-        const diff = (new Date(hist[i].time)-new Date(hist[i+1].time))/60000, nDiff = Math.abs(hist[i].num - hist[i+1].num);
-        if(nDiff>0 && diff>0 && (diff/nDiff)<=20) { total += (diff/nDiff)*(15-i); weight += (15-i); }
+        const t1 = new Date(hist[i].time), t2 = new Date(hist[i+1].time);
+        const diff = (t1 - t2)/60000; 
+        const nDiff = Math.abs(hist[i].num - hist[i+1].num);
+        // Only count reasonable processing times (e.g. < 20 mins per group)
+        if(nDiff > 0 && diff > 0 && (diff/nDiff) <= 20) { 
+            const w = (20-i); // Higher weight for recent
+            total += (diff/nDiff) * w; 
+            weight += w; 
+        }
     }
-    return cacheWait = (weight>0 ? total/weight : 0), lastWaitCalc = Date.now(), cacheWait;
+    cacheWait = weight > 0 ? (total/weight) : 0; // Prevent NaN
+    lastWaitCalc = Date.now();
+    return cacheWait;
 };
 
 async function handleControl(type, { body, user }) {
@@ -88,7 +102,10 @@ async function handleControl(type, { body, user }) {
             }
             logMsg = `號碼增加為 ${newNum}`; delta=1;
         } else { newNum = await redis.decrIfPositive(KEYS.CURRENT); logMsg = `號碼回退為 ${newNum}`; }
-        await logHistory(newNum, user.nickname, delta); checkLineNotify(newNum);
+        
+        await logHistory(newNum, user.nickname, delta);
+        // [Optimization] Fire and forget LINE notify (don't await)
+        checkLineNotify(newNum).catch(e => console.error("Line Error:", e)); 
     } else if(type === 'issue') {
         if(direction==='next') { newNum = await redis.incr(KEYS.ISSUED); logMsg = `手動發號至 ${newNum}`; }
         else if(issued > curr) { newNum = await redis.decr(KEYS.ISSUED); logMsg = `手動發號回退至 ${newNum}`; }
@@ -101,7 +118,8 @@ async function handleControl(type, { body, user }) {
         if(type==='set_call') {
             await redis.mset(KEYS.CURRENT, newNum, ...(newNum>issued?[KEYS.ISSUED, newNum]:[]));
             delta = Math.max(0, newNum-curr); logMsg = `手動設定為 ${newNum}`;
-            await logHistory(newNum, user.nickname, delta); checkLineNotify(newNum);
+            await logHistory(newNum, user.nickname, delta);
+            checkLineNotify(newNum).catch(e => console.error("Line Error:", e));
         } else { await redis.set(KEYS.ISSUED, newNum); logMsg = `修正發號為 ${newNum}`; }
     }
     if(logMsg) { addLog(user.nickname, logMsg); logSystemDaily(user.username, `[操作] ${logMsg}`); }
@@ -129,7 +147,7 @@ async function broadcastQueue() {
 async function logHistory(num, op, delta=0) {
     const { dateStr, hour } = getTWTime();
     const pipe = redis.multi().lpush(KEYS.HISTORY, JSON.stringify({num, time:new Date(), operator:op})).ltrim(KEYS.HISTORY,0,999);
-    if(delta>0) pipe.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, delta).expire(`${KEYS.HOURLY}${dateStr}`, 2592000);
+    if(delta>0) pipe.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, delta).expire(`${KEYS.HOURLY}${dateStr}`, 2592000); // 30 Days
     await pipe.exec(); calcWaitTime(true);
 }
 
@@ -142,9 +160,11 @@ const asyncHandler = fn => async(req, res, next) => {
     catch(e){ console.error(e); res.status(500).json({error:e.message}); }
 };
 const auth = async(req, res, next) => {
-    const u = req.body.token ? JSON.parse(await redis.get(`${KEYS.SESSION}${req.body.token}`)) : null;
-    if(!u) return res.status(403).json({error:"權限不足或過期"});
-    req.user = u; await redis.expire(`${KEYS.SESSION}${req.body.token}`, 28800); next();
+    try {
+        const u = req.body.token ? JSON.parse(await redis.get(`${KEYS.SESSION}${req.body.token}`)) : null;
+        if(!u) return res.status(403).json({error:"權限不足或過期"});
+        req.user = u; await redis.expire(`${KEYS.SESSION}${req.body.token}`, 28800); next();
+    } catch(e) { res.status(403).json({error:"Invalid Token"}); }
 };
 const superAuth = (req,res,next) => req.user.role==='super' ? next() : res.status(403).json({error:"權限不足"});
 
@@ -160,7 +180,7 @@ app.post("/login", rateLimit({windowMs:9e5,max:100}), asyncHandler(async req => 
     return { token, role: u==='superadmin'?'super':'normal', username: u, nickname: nick };
 }));
 
-app.post("/api/ticket/take", rateLimit({windowMs:36e5,max:10}), asyncHandler(async req => {
+app.post("/api/ticket/take", rateLimit({windowMs:36e5,max:20}), asyncHandler(async req => {
     if(await redis.get(KEYS.MODE)==='input') throw new Error("僅限手動輸入");
     const t = await redis.incr(KEYS.ISSUED); await broadcastQueue(); return { ticket: t };
 }));
@@ -176,7 +196,7 @@ app.post("/api/control/pass-current", auth, asyncHandler(async req => {
     await redis.zadd(KEYS.PASSED, c, c);
     const next = (await redis.safeNextNumber(KEYS.CURRENT, KEYS.ISSUED));
     const act = next===-1 ? c : next;
-    await logHistory(act, req.user.nickname, 1); checkLineNotify(act); await broadcastQueue();
+    await logHistory(act, req.user.nickname, 1); checkLineNotify(act).catch(()=>{}); await broadcastQueue();
     addLog(req.user.nickname, `⏩ 跳號至 ${act}`); broadcastList(KEYS.PASSED, "updatePassed"); return { next: act };
 }));
 
@@ -196,7 +216,7 @@ app.post("/api/featured/edit", auth, asyncHandler(async r=>{
 }));
 app.post("/api/featured/remove", auth, asyncHandler(async r=>{ await redis.lrem(KEYS.FEATURED, 1, JSON.stringify(r.body)); broadcastList(KEYS.FEATURED,"updateFeaturedContents",true); }));
 app.post("/api/featured/clear", auth, asyncHandler(async r=>{ await redis.del(KEYS.FEATURED); broadcastList(KEYS.FEATURED,"updateFeaturedContents",true); }));
-app.post("/api/featured/get", auth, asyncHandler(async r=>{ return (await redis.lrange(KEYS.FEATURED,0,-1)).map(JSON.parse); })); // [v39.1 fix] Added get API
+app.post("/api/featured/get", auth, asyncHandler(async r=>{ return (await redis.lrange(KEYS.FEATURED,0,-1)).map(JSON.parse); }));
 
 app.post("/set-sound-enabled", auth, asyncHandler(async r=>{ await redis.set(KEYS.SOUND, r.body.enabled?"1":"0"); io.emit("updateSoundSetting", r.body.enabled); }));
 app.post("/set-public-status", auth, asyncHandler(async r=>{ await redis.set(KEYS.PUBLIC, r.body.isPublic?"1":"0"); io.emit("updatePublicStatus", r.body.isPublic); }));
@@ -250,7 +270,7 @@ app.post("/api/admin/line-settings/:act", auth, superAuth, asyncHandler(async re
     if(act==='get-unlock-pass') return { password: await redis.get(KEYS.LINE.PWD)||"" };
 }));
 
-// LINE Bot
+// LINE Bot logic
 const lineMsgs = { approach:"🔔 叫號提醒！\n現已叫號至 {current}。\n您的 {target} 即將輪到 (剩 {diff} 組)。", arrival:"🎉 輪到您了！\n{current} 號請至櫃台。", status:"📊 叫號：{current}\n發號：{issued}{personal}" };
 async function checkLineNotify(curr) {
     if(!lineClient) return;
@@ -260,7 +280,7 @@ async function checkLineNotify(curr) {
         redis.smembers(`${KEYS.LINE.SUB}${target}`), redis.smembers(`${KEYS.LINE.SUB}${curr}`)
     ]);
     const send = (ids, txt) => ids.length && lineClient.multicast(ids, [{type:'text', text:txt}]);
-    await send(subs, (appT||lineMsgs.approach).replace('{current}',curr).replace('{target}',target).replace('{diff}',5));
+    if(subs.length) await send(subs, (appT||lineMsgs.approach).replace('{current}',curr).replace('{target}',target).replace('{diff}',5));
     if(exact.length) {
         await send(exact, (arrT||lineMsgs.arrival).replace('{current}',curr).replace('{target}',curr).replace('{diff}',0));
         const pipe = redis.multi().del(`${KEYS.LINE.SUB}${curr}`).srem(KEYS.LINE.ACTIVE, curr);
@@ -303,8 +323,10 @@ async function handleLine(e) {
 cron.schedule('0 4 * * *', () => performReset('系統自動'), { timezone: "Asia/Taipei" });
 io.on("connection", async s => {
     if(s.handshake.auth.token) {
-        const u = JSON.parse(await redis.get(`${KEYS.SESSION}${s.handshake.auth.token}`));
-        if(u) { s.join("admin"); s.emit("initAdminLogs", await redis.lrange(KEYS.LOGS,0,99)); }
+        try {
+            const u = JSON.parse(await redis.get(`${KEYS.SESSION}${s.handshake.auth.token}`));
+            if(u) { s.join("admin"); s.emit("initAdminLogs", await redis.lrange(KEYS.LOGS,0,99)); }
+        } catch(e) {}
     }
     s.join('public');
     const [c, i, p, f, u, snd, pub, m] = await Promise.all([
@@ -317,4 +339,4 @@ io.on("connection", async s => {
     s.emit("updateWaitTime", await calcWaitTime());
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v40.0 running on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v41.0 running on ${PORT}`));
