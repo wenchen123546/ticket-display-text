@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v49.1 Stats & Nickname Fix
+ * 後台邏輯 (admin.js) - v50.0 Stable
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
@@ -10,7 +10,6 @@ const i18n = {
         status_conn:"✅ 已連線", status_dis:"連線中斷...", saved:"✅ 已儲存", denied:"❌ 權限不足", expired:"Session 過期", login_fail:"登入失敗",
         confirm:"⚠️ 確認", recall:"↩️ 重呼", edit:"✎", del:"✕", save:"✓", cancel:"✕",
         btn_save:"儲存", btn_cancel:"取消",
-        // ... (保留其他常用的翻譯，為節省篇幅省略部分未變動字串)
     },
     "en": { 
         status_conn:"✅ Connected", status_dis:"Disconnected...", saved:"✅ Saved", denied:"❌ Denied", expired:"Expired", login_fail:"Failed",
@@ -29,9 +28,8 @@ function toast(msg, type='info') {
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
 }
 
-// --- Core API & UI ---
 function updateLangUI() {
-    T = i18n[curLang] || i18n["zh-TW"]; // Fallback
+    T = i18n[curLang] || i18n["zh-TW"];
     $$('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if(T[k]) el.textContent = T[k]; });
     $$('[data-i18n-ph]').forEach(el => { const k = el.getAttribute('data-i18n-ph'); if(T[k]) el.placeholder = T[k]; });
     loadUsers(); loadStats(); loadLineSettings();
@@ -119,7 +117,7 @@ socket.on("updatePassed", list => {
     });
 });
 
-// --- [修復] User Management (Edit Nickname + Role) ---
+// --- [Core] User Management (Edit Nickname + Role) ---
 async function loadUsers() {
     const ul = $("user-list-ui"); if(!ul) return;
     const d = await req("/api/admin/users");
@@ -130,13 +128,13 @@ async function loadUsers() {
     d.users.forEach(u => {
         const li = mk("li");
         
-        // 1. View Mode
+        // View Mode
         const view = mk("div", null, null, {style:"display:flex; justify-content:space-between; width:100%; align-items:center;"});
         const info = mk("div", null, null, {style:"display:flex; flex-direction:column;"});
         const roleLabel = roleOpts[u.role] || u.role;
         info.append(mk("span", null, `${u.role==='ADMIN'?'👑':'👤'} ${u.nickname}`, {style:"font-weight:600"}), mk("small", null, `${u.username} • ${roleLabel}`, {style:"color:#666;"}));
         
-        // 2. Edit Mode (Hidden by default)
+        // Edit Mode (Hidden by default)
         const editDiv = mk("div", null, null, {style:"display:none; width:100%; gap:5px; align-items:center;"});
         const inputNick = mk("input", null, null, {value:u.nickname, type:"text", placeholder:"Nickname"});
         const btnSave = mk("button", "btn-secondary success", T.save || "儲存");
@@ -151,13 +149,13 @@ async function loadUsers() {
         // Actions
         const acts = mk("div", null, null, {style:"display:flex; gap:5px; flex-shrink:0;"});
         
-        // Edit Button (Show for self or if Super Admin)
+        // Edit Button
         if(u.username === uniqueUser || userRole === 'super') {
             const btnEdit = mk("button", "btn-secondary", T.edit || "✎", { onclick:()=>{ view.style.display="none"; editDiv.style.display="flex"; inputNick.focus(); } });
             acts.appendChild(btnEdit);
         }
 
-        // Role Selector & Delete (Super Admin Only)
+        // Role Selector (Super Admin Only)
         if(u.username !== 'superadmin' && userRole === 'super') {
             const roleSel = mk("select", null, null, {style:"padding:2px; font-size:0.8rem;"});
             Object.keys(roleOpts).forEach(k => { const o = mk("option",null,roleOpts[k]); o.value=k; if(u.role===k) o.selected=true; roleSel.appendChild(o); });
@@ -169,36 +167,39 @@ async function loadUsers() {
             acts.appendChild(del);
         }
 
-        view.append(info, acts); 
-        li.append(view, editDiv); 
-        ul.appendChild(li);
+        view.append(info, acts); li.append(view, editDiv); ul.appendChild(li);
     });
 }
 
-// --- [修復] Load Stats ---
+// --- [Core] Load Stats (Robust Version) ---
 async function loadStats() {
-    const ul = $("stats-list-ui"); 
+    const ul = $("stats-list-ui");
     try {
         const d = await req("/api/admin/stats");
-        if(d && d.hourlyCounts) {
-            if($("stats-today-count")) $("stats-today-count").textContent = d.todayCount;
+        if (d && d.hourlyCounts) {
+            if ($("stats-today-count")) $("stats-today-count").textContent = d.todayCount || 0;
             renderChart(d.hourlyCounts, d.serverHour);
             
-            if(ul) {
-                // 確保 history 存在，否則顯示空
-                const hist = d.history || [];
-                if(hist.length === 0) {
-                    ul.innerHTML = `<li><span style="color:#999;">[ 尚無今日數據 ]</span></li>`;
+            if (ul) {
+                const hist = Array.isArray(d.history) ? d.history : [];
+                if (hist.length === 0) {
+                    ul.innerHTML = `<li style="text-align:center; color:#94a3b8; padding:20px;">[ 本日尚無操作紀錄 ]</li>`;
                 } else {
                     ul.innerHTML = hist.map(h => {
-                        const item = typeof h === 'string' ? JSON.parse(h) : h;
-                        return `<li><span>${new Date(item.time||item.timestamp).toLocaleTimeString('zh-TW',{hour12:false})} - <b>${item.num||item.number}</b> <small>(${item.operator})</small></span></li>`;
+                        try {
+                            const item = (typeof h === 'string') ? JSON.parse(h) : h;
+                            const timeStr = new Date(item.time || item.timestamp).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                            return `<li><span>${timeStr} - <b style="color:var(--primary);">${item.num || item.number}</b> <small style="color:#64748b;">(${item.operator})</small></span></li>`;
+                        } catch (err) { return ""; }
                     }).join("");
                 }
             }
+        } else {
+            if (ul) ul.innerHTML = `<li style="text-align:center; padding:20px; color:#cbd5e1;">等待數據...</li>`;
         }
-    } catch(e) {
-        if(ul) ul.innerHTML = `<li>Error loading stats</li>`;
+    } catch (e) {
+        console.error("Stats Error:", e);
+        if (ul) ul.innerHTML = `<li style="color:#ef4444; text-align:center; padding:10px;">載入失敗</li>`;
     }
 }
 
@@ -269,7 +270,6 @@ $("add-user-btn")?.addEventListener("click", async()=>{
     }
 });
 
-// LINE Settings (Partial)
 const lineSettingsConfig = { approach: { label: "快到了提醒", hint: "{current} {target} {diff}" }, arrival: { label: "正式到號提醒", hint: "{current} {target}" }, status: { label: "查詢狀態回覆", hint: "{current} {issued} {personal}" }, personal: { label: "個人追蹤資訊 (附加)", hint: "{target} {diff}" }, passed: { label: "過號查詢回覆", hint: "{list}" }, set_ok: { label: "設定追蹤成功", hint: "{target} {current} {diff}" }, cancel: { label: "取消追蹤成功", hint: "{target}" }, login_hint: { label: "後台登入提示", hint: "無變數" }, err_passed: { label: "錯誤：已過號", hint: "{target} {current}" }, err_no_sub: { label: "錯誤：無設定", hint: "無變數" }, set_hint: { label: "設定指令提示", hint: "無變數" } };
 async function loadLineSettings() {
     const ul = $("line-settings-list-ui"); if (!ul) return;
