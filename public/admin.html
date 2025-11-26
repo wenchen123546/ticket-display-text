@@ -66,7 +66,7 @@
                                 <button class="btn-secondary" id="quick-clear" style="background:#f3f4f6;">C</button>
                             </div>
                             <div class="input-group">
-                                <input type="number" id="manualNumber" placeholder="#" inputmode="numeric" pattern="\d*">
+                                <input type="number" id="manualNumber" placeholder="#" inputmode="numeric" pattern="\d*" min="0" oninput="validity.valid||(value='');">
                                 <button id="setNumber" class="btn-secondary" data-i18n="btn_exec">執行</button>
                             </div>
                         </div>
@@ -84,7 +84,7 @@
                         <div class="control-group" style="margin-top:auto;">
                             <label data-i18n="lbl_fix_issue">修正發號數</label>
                             <div class="input-group">
-                                <input type="number" id="manualIssuedNumber" placeholder="#" inputmode="numeric">
+                                <input type="number" id="manualIssuedNumber" placeholder="#" inputmode="numeric" min="0" oninput="validity.valid||(value='');">
                                 <button id="setIssuedNumber" class="btn-secondary" data-i18n="btn_fix">修正</button>
                             </div>
                         </div>
@@ -98,7 +98,7 @@
                         <div class="control-group list-editor">
                             <ul id="passed-list-ui"></ul>
                             <div class="input-group">
-                                <input type="number" id="new-passed-number" placeholder="No." inputmode="numeric">
+                                <input type="number" id="new-passed-number" placeholder="No." inputmode="numeric" min="0" oninput="validity.valid||(value='');">
                                 <button id="add-passed-btn" class="btn-add">+</button>
                             </div>
                         </div>
