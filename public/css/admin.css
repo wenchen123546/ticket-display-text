@@ -1,9 +1,5 @@
-{
-type: uploaded file
-fileName: admin.css
-fullContent:
 /* ==========================================
- * 後台樣式 (admin.css) - v44.0 Mobile Layout Fix
+ * 後台樣式 (admin.css) - v44.0 Clean & Fix
  * ========================================== */
 :root {
     --bg-body: #f3f4f6; --bg-surface: #ffffff; --bg-sidebar: #ffffff;
@@ -148,5 +144,4 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
     .input-group { flex-direction: column; }
     #btn-call-next { order: -1; min-width: 100%; }
     .btn-secondary { width: 100%; }
-}
 }
