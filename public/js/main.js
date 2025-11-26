@@ -1,396 +1,153 @@
-/*
- * ==========================================
- * 前端邏輯 (main.js) - v31.1 (Syntax Fix)
- * ==========================================
- */
+/* ==========================================
+ * 前端邏輯 (main.js) - v31.1 Compact
+ * ========================================== */
+const $ = i => document.getElementById(i);
+const on = (el, evt, fn) => el?.addEventListener(evt, fn);
+const show = (el, v) => el && (el.style.display = v ? 'block' : 'none');
 
-const i18nData = {
-    "zh-TW": {
-        "current_number": "目前叫號",
-        "issued_number": "已發至",
-        "online_ticket_title": "線上取號",
-        "help_take_ticket": "免排隊，手機領號",
-        "manual_input_title": "號碼提醒", 
-        "manual_input_placeholder": "輸入您的號碼開啟到號提醒", 
-        "take_ticket": "立即取號",
-        "set_reminder": "追蹤",
-        "my_number": "我的號碼",
-        "wait_count": "前方",
-        "status_wait": "⏳ 剩 %s 組",
-        "status_arrival": "🎉 輪到您了！",
-        "status_passed": "⚠️ 已過號",
-        "passed_list_title": "過號",
-        "passed_empty": "無",
-        "links_title": "精選連結",
-        "copy_link": "複製連結", 
-        "sound_enable": "音效",
-        "sound_on": "開啟",
-        "sound_mute": "靜音",
-        "scan_qr": "掃描追蹤",
-        "error_network": "連線中斷",
-        "take_success": "取號成功",
-        "take_fail": "失敗",
-        "input_empty": "請輸入號碼",
-        "cancel_confirm": "取消追蹤？",
-        "copy_success": "已複製",
-        "public_announcement": "📢 ",
-        "queue_notification": "還剩 %s 組！",
-        "estimated_wait": "約 %s 分",
-        "time_just_now": "剛剛",
-        "time_min_ago": "%s 分前",
-        "status_connected": "已連線",
-        "status_reconnecting": "連線中 (%s)..."
-    },
-    "en": {
-        "current_number": "Now Serving",
-        "issued_number": "Issued",
-        "online_ticket_title": "Get Ticket",
-        "help_take_ticket": "Digital ticket & notify",
-        "manual_input_title": "Number Alert", 
-        "manual_input_placeholder": "Enter number to get alerted",
-        "take_ticket": "Get Ticket",
-        "set_reminder": "Track",
-        "my_number": "Your #",
-        "wait_count": "Ahead",
-        "status_wait": "⏳ %s groups",
-        "status_arrival": "🎉 Your Turn!",
-        "status_passed": "⚠️ Passed",
-        "passed_list_title": "Passed",
-        "passed_empty": "None",
-        "links_title": "Links",
-        "copy_link": "Copy Link", 
-        "sound_enable": "Sound",
-        "sound_on": "On",
-        "sound_mute": "Mute",
-        "scan_qr": "Scan",
-        "error_network": "Offline",
-        "take_success": "Success",
-        "take_fail": "Failed",
-        "input_empty": "Enter #",
-        "cancel_confirm": "Stop tracking?",
-        "copy_success": "Copied",
-        "public_announcement": "📢 ",
-        "queue_notification": "%s groups left!",
-        "estimated_wait": "~%s min",
-        "time_just_now": "Now",
-        "time_min_ago": "%s m ago",
-        "status_connected": "Online",
-        "status_reconnecting": "Retry (%s)..."
-    }
+// --- I18n Data ---
+const i18n = {
+    "zh-TW": { cur:"目前叫號", iss:"已發至", online:"線上取號", help:"免排隊，手機領號", man_t:"號碼提醒", man_p:"輸入您的號碼開啟到號提醒", take:"立即取號", track:"追蹤", my:"我的號碼", ahead:"前方", wait:"⏳ 剩 %s 組", arr:"🎉 輪到您了！", pass:"⚠️ 已過號", p_list:"過號", none:"無", links:"精選連結", copy:"複製連結", sound:"音效", s_on:"開啟", s_off:"靜音", scan:"掃描追蹤", off:"連線中斷", ok:"取號成功", fail:"失敗", no_in:"請輸入號碼", cancel:"取消追蹤？", copied:"已複製", notice:"📢 ", q_left:"還剩 %s 組！", est:"約 %s 分", just:"剛剛", ago:"%s 分前", conn:"已連線", retry:"連線中 (%s)..." },
+    "en": { cur:"Now Serving", iss:"Issued", online:"Get Ticket", help:"Digital ticket & notify", man_t:"Number Alert", man_p:"Enter number to get alerted", take:"Get Ticket", track:"Track", my:"Your #", ahead:"Ahead", wait:"⏳ %s groups", arr:"🎉 Your Turn!", pass:"⚠️ Passed", p_list:"Passed", none:"None", links:"Links", copy:"Copy Link", sound:"Sound", s_on:"On", s_off:"Mute", scan:"Scan", off:"Offline", ok:"Success", fail:"Failed", no_in:"Enter #", cancel:"Stop tracking?", copied:"Copied", notice:"📢 ", q_left:"%s groups left!", est:"~%s min", just:"Now", ago:"%s m ago", conn:"Online", retry:"Retry (%s)..." }
 };
-
-// --- DOM Cache ---
-const DOM = {
-    number: document.getElementById("number"),
-    issuedNumberMain: document.getElementById("issued-number-main"),
-    passedList: document.getElementById("passedList"),
-    passedCount: document.getElementById("passed-count"),
-    passedEmptyMsg: document.getElementById("passed-empty-msg"),
-    featuredContainer: document.getElementById("featured-container"),
-    statusBar: document.getElementById("status-bar"),
-    notifySound: document.getElementById("notify-sound"),
-    lastUpdated: document.getElementById("last-updated"),
-    soundPrompt: document.getElementById("sound-prompt"),
-    copyLinkPrompt: document.getElementById("copy-link-prompt"),
-    
-    ticketingModeContainer: document.getElementById("ticketing-mode-container"),
-    inputModeContainer: document.getElementById("input-mode-container"),
-    
-    btnTakeTicket: document.getElementById("btn-take-ticket"),
-    btnTrackTicket: document.getElementById("btn-track-ticket"),
-    manualTicketInput: document.getElementById("manual-ticket-input"),
-    btnCancelTicket: document.getElementById("btn-cancel-ticket"),
-    
-    myTicketView: document.getElementById("my-ticket-view"),
-    myTicketNum: document.getElementById("my-ticket-num"),
-    ticketWaitingCount: document.getElementById("ticket-waiting-count"),
-    ticketStatusText: document.getElementById("ticket-status-text"),
-    ticketWaitTime: document.getElementById("ticket-wait-time"),
-};
-
-const langSelector = document.getElementById('language-selector');
-let currentLang = localStorage.getItem('callsys_lang') || 'zh-TW';
-let T = i18nData[currentLang];
 
 // --- State ---
-let isSoundEnabled = false; 
-let isLocallyMuted = false; 
-let lastUpdateTime = null;
-let currentSystemMode = 'ticketing'; 
-let avgServiceTime = 0;
-let audioPermissionGranted = false;
-let ttsEnabled = false;
-let myTicket = localStorage.getItem('callsys_ticket') ? parseInt(localStorage.getItem('callsys_ticket')) : null;
-let audioContext = null;
-
-// --- Helpers ---
-function unlockAudioContext() {
-    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-            const buffer = audioContext.createBuffer(1, 1, 22050);
-            const source = audioContext.createBufferSource();
-            source.buffer = buffer; source.connect(audioContext.destination); source.start(0);
-            audioPermissionGranted = true; ttsEnabled = true; updateMuteUI(false);
-        });
-    }
-}
-
-function showToast(msg, type = 'info') {
-    let container = document.getElementById('toast-container');
-    if (!container) { container = document.createElement('div'); container.id = 'toast-container'; document.body.appendChild(container); }
-    const el = document.createElement('div'); el.className = `toast-message ${type}`; el.textContent = msg;
-    container.appendChild(el); 
-    requestAnimationFrame(() => el.classList.add('show'));
-    if (navigator.vibrate) navigator.vibrate(50); 
-    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 3000);
-}
-
-function vibratePattern(pattern) { if (navigator.vibrate) navigator.vibrate(pattern); }
-
-function speakText(text, rate) {
-    if (!ttsEnabled || !('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel(); 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'zh-TW'; utterance.rate = rate || 0.9;
-    window.speechSynthesis.speak(utterance);
-}
-
-function playNotificationSound() {
-    if (!DOM.notifySound) return;
-    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
-    const playPromise = DOM.notifySound.play();
-    if (playPromise !== undefined) {
-        playPromise.then(() => {
-            audioPermissionGranted = true; updateMuteUI(false);
-            if (!isSoundEnabled || isLocallyMuted) { DOM.notifySound.pause(); DOM.notifySound.currentTime = 0; }
-        }).catch(() => { audioPermissionGranted = false; updateMuteUI(true, true); });
-    }
-}
-
-function applyI18n() {
-    document.querySelectorAll('[data-i18n]').forEach(el => { 
-        const key = el.getAttribute('data-i18n'); 
-        if(T[key]) el.textContent = T[key]; 
-    });
-    if(DOM.manualTicketInput) DOM.manualTicketInput.placeholder = T["manual_input_placeholder"];
-}
-
-function updateTimeText() {
-    if (!lastUpdateTime) return;
-    const diff = Math.floor((new Date() - lastUpdateTime) / 60000);
-    DOM.lastUpdated.textContent = diff < 1 ? T["time_just_now"] : T["time_min_ago"].replace("%s", diff);
-}
-setInterval(updateTimeText, 10000);
-
-if(langSelector) {
-    langSelector.value = currentLang;
-    langSelector.addEventListener('change', (e) => {
-        currentLang = e.target.value; localStorage.setItem('callsys_lang', currentLang); T = i18nData[currentLang];
-        applyI18n(); updateTicketUI(parseInt(DOM.number.textContent) || 0); updateMuteUI(isLocallyMuted); updateTimeText();
-    });
-}
-
-// --- Socket.io ---
+let lang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[lang];
+let myTicket = localStorage.getItem('callsys_ticket'), sysMode = 'ticketing';
+let sndEnabled = false, localMute = false, avgTime = 0, lastUpd = null, audioCtx = null, ttsOk = false;
 const socket = io({ autoConnect: false, reconnection: true });
-socket.on("connect", () => { 
-    socket.emit('joinRoom', 'public'); 
-    DOM.statusBar.textContent = T["status_connected"]; DOM.statusBar.style.backgroundColor = "#10b981"; 
-    setTimeout(() => { if (socket.connected) DOM.statusBar.classList.remove("visible"); }, 1500); 
-});
-socket.on("disconnect", () => { DOM.statusBar.classList.add("visible"); DOM.statusBar.textContent = T["error_network"]; DOM.statusBar.style.backgroundColor = "#dc2626"; });
-socket.on("reconnect_attempt", (attempt) => { DOM.statusBar.classList.add("visible"); DOM.statusBar.style.backgroundColor = "#d97706"; DOM.statusBar.textContent = T["status_reconnecting"].replace("%s", attempt); });
 
-socket.on("updateQueue", (data) => { 
-    if(DOM.issuedNumberMain) DOM.issuedNumberMain.textContent = data.issued; 
-    handleNewNumber(data.current); 
-    updateTicketUI(data.current); 
-});
-socket.on("adminBroadcast", (msg) => { if (!isLocallyMuted) { speakText(msg, 1.0); showToast(`${T["public_announcement"]}${msg}`, "info"); } });
-socket.on("updateWaitTime", (time) => { avgServiceTime = time; updateTicketUI(parseInt(DOM.number.textContent) || 0); });
-socket.on("updateSoundSetting", (isEnabled) => { isSoundEnabled = isEnabled; });
-socket.on("updatePublicStatus", (status) => { document.body.classList.toggle("is-closed", !status); if (status) socket.connect(); else socket.disconnect(); });
-socket.on("updateSystemMode", (mode) => { currentSystemMode = mode; switchSystemModeUI(mode); });
-socket.on("updatePassed", (numbers) => renderPassed(numbers));
-socket.on("updateFeaturedContents", (contents) => renderFeatured(contents));
-socket.on("updateTimestamp", (ts) => { lastUpdateTime = new Date(ts); updateTimeText(); });
-
-function handleNewNumber(num) {
-    if (DOM.number.textContent !== String(num)) {
-        playNotificationSound();
-        setTimeout(() => { if (DOM.number.textContent !== String(num) && isSoundEnabled && !isLocallyMuted) speakText(`現在號碼，${num}號`, 0.9); }, 800);
-        DOM.number.textContent = num; document.title = `${num} - ${document.title.split('-')[1] || 'Queue'}`;
+// --- Core Helpers ---
+const toast = (msg, type='info') => {
+    const c = $('toast-container') || document.body.appendChild(Object.assign(document.createElement('div'),{id:'toast-container'}));
+    const el = document.createElement('div'); el.className = `toast-message ${type} show`; el.textContent = msg;
+    c.appendChild(el); if(navigator.vibrate) navigator.vibrate(50);
+    setTimeout(() => { el.classList.remove('show'); setTimeout(()=>el.remove(), 300); }, 3000);
+};
+const unlockAudio = () => {
+    if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume().then(() => { ttsOk=true; updateMuteUI(false); });
+};
+const speak = (txt) => {
+    if(ttsOk && !localMute && sndEnabled && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(txt); u.lang='zh-TW'; u.rate=0.9; window.speechSynthesis.speak(u);
     }
-}
+};
+const playDing = () => {
+    if($("notify-sound") && !localMute) $("notify-sound").play().then(()=>updateMuteUI(false)).catch(()=>updateMuteUI(true, true));
+};
 
-function renderPassed(numbers) {
-    DOM.passedList.innerHTML = ""; const isEmpty = !numbers || numbers.length === 0;
-    DOM.passedCount.textContent = numbers ? numbers.length : 0;
-    if (isEmpty) {
-        DOM.passedEmptyMsg.style.display = 'block'; DOM.passedList.style.display = 'none';
-    } else {
-        DOM.passedEmptyMsg.style.display = 'none'; DOM.passedList.style.display = 'flex';
-        const frag = document.createDocumentFragment(); 
-        numbers.forEach(n => { const li = document.createElement("li"); li.textContent = n; frag.appendChild(li); }); 
-        DOM.passedList.appendChild(frag);
-    }
-}
-
-function renderFeatured(contents) {
-    DOM.featuredContainer.innerHTML = "";
-    if (!contents || contents.length === 0) { return; }
-    const frag = document.createDocumentFragment();
-    contents.forEach(c => {
-        const a = document.createElement("a");
-        a.className = "link-chip";
-        a.href = c.linkUrl; a.target = "_blank"; a.textContent = c.linkText;
-        a.addEventListener('click', (e) => e.stopPropagation());
-        frag.appendChild(a);
+// --- UI Logic ---
+function applyText() {
+    document.querySelectorAll('[data-i18n]').forEach(e => {
+        const k = e.getAttribute('data-i18n'), map = {
+            current_number:'cur', issued_number:'iss', online_ticket_title:'online', help_take_ticket:'help', manual_input_title:'man_t', 
+            take_ticket:'take', set_reminder:'track', my_number:'my', wait_count:'ahead', passed_list_title:'p_list', passed_empty:'none', 
+            links_title:'links', copy_link:'copy', sound_enable:'sound', scan_qr:'scan'
+        }; // Map old keys to short keys
+        if(map[k] && T[map[k]]) e.textContent = T[map[k]];
     });
-    DOM.featuredContainer.appendChild(frag);
+    if($("manual-ticket-input")) $("manual-ticket-input").placeholder = T.man_p;
 }
 
-function switchSystemModeUI(mode) {
-    const isTicketing = mode === 'ticketing';
-    DOM.ticketingModeContainer.style.display = isTicketing ? "block" : "none";
-    DOM.inputModeContainer.style.display = isTicketing ? "none" : "block";
-    if (myTicket) showMyTicketMode();
+function renderMode() {
+    const isT = sysMode === 'ticketing', hasT = !!myTicket;
+    show($("ticketing-mode-container"), isT && !hasT);
+    show($("input-mode-container"), !isT && !hasT);
+    show($("my-ticket-view"), hasT);
+    if(hasT) { $("my-ticket-num").textContent = myTicket; updateTicket(parseInt($("number").textContent)||0); }
 }
 
-function showMyTicketMode() { 
-    DOM.ticketingModeContainer.style.display = "none";
-    DOM.inputModeContainer.style.display = "none";
-    DOM.myTicketView.style.display = "block"; 
-    DOM.myTicketNum.textContent = myTicket; 
-}
-
-function showTakeTicketMode() { 
-    DOM.myTicketView.style.display = "none"; 
-    switchSystemModeUI(currentSystemMode);
-}
-
-function updateTicketUI(currentNum) {
+function updateTicket(curr) {
     if (!myTicket) return;
-    const diff = myTicket - currentNum;
-    let statusText = T["status_wait"].replace("%s", diff); let waitTimeDisplay = "none";
+    const diff = myTicket - curr, wEl = $("ticket-wait-time");
+    $("ticket-waiting-count").textContent = diff > 0 ? diff : (diff===0 ? "0" : "-");
+    $("ticket-status-text").textContent = diff > 0 ? T.wait.replace("%s",diff) : (diff===0 ? T.arr : T.pass);
     
-    if (diff > 0) {
-        DOM.ticketWaitingCount.textContent = diff;
-        if (avgServiceTime > 0) { 
-            const min = Math.ceil(diff * avgServiceTime); 
-            DOM.ticketWaitTime.textContent = T["estimated_wait"].replace("%s", min); 
-            waitTimeDisplay = "block"; 
-        }
-        if (diff <= 3 && document.hidden && Notification.permission === "granted") {
-            new Notification("Queue Update", { body: T["queue_notification"].replace("%s", diff) });
-        }
-    } else if (diff === 0) {
-        DOM.ticketWaitingCount.textContent = "0"; statusText = T["status_arrival"];
-        if (typeof confetti !== 'undefined') confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-        vibratePattern([200, 100, 200]);
-    } else { 
-        DOM.ticketWaitingCount.textContent = "-"; statusText = T["status_passed"]; 
+    if(diff > 0 && avgTime > 0) { wEl.textContent = T.est.replace("%s", Math.ceil(diff*avgTime)); show(wEl, true); } 
+    else show(wEl, false);
+
+    if(diff === 0) { if(typeof confetti!=='undefined') confetti({particleCount:100, spread:70, origin:{y:0.6}}); if(navigator.vibrate) navigator.vibrate([200,100,200]); }
+    if(diff <= 3 && diff > 0 && document.hidden && Notification.permission==="granted") new Notification("Queue", {body:T.q_left.replace("%s",diff)});
+}
+
+function updateMuteUI(mute, forceIcon=false) {
+    localMute = mute; const b = $("sound-prompt"); if(!b) return;
+    b.querySelector('span:first-child').textContent = (forceIcon||mute) ? '🔇' : '🔊';
+    b.querySelector('span:last-child').textContent = (forceIcon||mute) ? T.s_off : T.s_on;
+    b.classList.toggle("is-active", !forceIcon && !mute);
+}
+
+function feedback(btn, msgKey) {
+    const i = btn.querySelector('span:first-child'), t = btn.querySelector('span:last-child'), oi = i.textContent, ot = t.textContent;
+    btn.classList.add('is-feedback'); i.textContent='✔'; t.textContent=T[msgKey];
+    setTimeout(() => { btn.classList.remove('is-feedback'); i.textContent=oi; t.textContent=ot; if(btn.id==='sound-prompt') updateMuteUI(localMute); }, 1500);
+}
+
+// --- Socket Events ---
+socket.on("connect", () => { socket.emit('joinRoom', 'public'); $("status-bar").textContent = T.conn; $("status-bar").classList.remove("visible"); });
+socket.on("disconnect", () => { $("status-bar").textContent = T.off; $("status-bar").classList.add("visible"); });
+socket.on("reconnect_attempt", a => $("status-bar").textContent = T.retry.replace("%s",a));
+
+socket.on("updateQueue", d => {
+    if($("issued-number-main")) $("issued-number-main").textContent = d.issued;
+    if($("number").textContent !== String(d.current)) {
+        playDing(); setTimeout(()=>speak(`現在號碼，${d.current}號`), 800);
+        $("number").textContent = d.current; document.title = `${d.current} - Queue`;
     }
-    DOM.ticketStatusText.textContent = statusText; 
-    DOM.ticketWaitTime.style.display = waitTimeDisplay;
-}
+    updateTicket(d.current);
+});
+socket.on("adminBroadcast", m => { if(!localMute) speak(m); toast(T.notice+m); });
+socket.on("updateWaitTime", t => { avgTime = t; updateTicket(parseInt($("number").textContent)||0); });
+socket.on("updateSoundSetting", b => sndEnabled = b);
+socket.on("updatePublicStatus", b => { document.body.classList.toggle("is-closed", !b); if(b) socket.connect(); else socket.disconnect(); });
+socket.on("updateSystemMode", m => { sysMode = m; renderMode(); });
+socket.on("updatePassed", list => {
+    const ul = $("passedList"), mt = $("passed-empty-msg");
+    $("passed-count").textContent = list?list.length:0;
+    if(!list || !list.length) { show(ul, false); show(mt, true); }
+    else { show(ul, true); show(mt, false); ul.innerHTML = list.map(n=>`<li>${n}</li>`).join(""); }
+});
+socket.on("updateFeaturedContents", list => {
+    $("featured-container").innerHTML = list.map(c=>`<a class="link-chip" href="${c.linkUrl}" target="_blank">${c.linkText}</a>`).join("");
+});
+socket.on("updateTimestamp", ts => { lastUpd = new Date(ts); updTime(); });
 
-function handleUserInteraction(callback) { unlockAudioContext(); callback(); }
+const updTime = () => { if(lastUpd) { const m = Math.floor((new Date()-lastUpd)/60000); $("last-updated").textContent = m<1?T.just:T.ago.replace("%s",m); }};
+setInterval(updTime, 10000);
 
-function showButtonFeedback(buttonEl, messageKey) {
-    const iconSpan = buttonEl.querySelector('span:first-child');
-    const textSpan = buttonEl.querySelector('span:last-child');
-    const originalIcon = iconSpan.textContent;
-    const originalText = textSpan.textContent;
-    
-    buttonEl.classList.add('is-feedback');
-    iconSpan.textContent = '✔';
-    textSpan.textContent = T[messageKey]; 
-
-    setTimeout(() => {
-        buttonEl.classList.remove('is-feedback');
-        iconSpan.textContent = originalIcon;
-        textSpan.textContent = originalText;
-        if(buttonEl.id === 'sound-prompt') {
-            updateMuteUI(isLocallyMuted); 
-        } else {
-            applyI18n(); 
-        }
-    }, 1500);
-}
-
-if(DOM.btnTakeTicket) DOM.btnTakeTicket.addEventListener("click", () => handleUserInteraction(async () => {
-    if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
-    DOM.btnTakeTicket.disabled = true;
-    try { 
-        const res = await fetch("/api/ticket/take", { method: "POST" }); 
-        const data = await res.json(); 
-        if (data.success) { 
-            myTicket = data.ticket; localStorage.setItem('callsys_ticket', myTicket); 
-            showMyTicketMode(); updateTicketUI(parseInt(DOM.number.textContent) || 0); 
-            showToast(T["take_success"], "success"); 
-        } else showToast(data.error || T["take_fail"], "error"); 
-    } catch (e) { showToast(T["error_network"], "error"); } 
-    finally { DOM.btnTakeTicket.disabled = false; }
-}));
-
-if(DOM.btnTrackTicket) DOM.btnTrackTicket.addEventListener("click", () => handleUserInteraction(() => {
-    const val = DOM.manualTicketInput.value; if (!val) return showToast(T["input_empty"], "error");
-    if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
-    myTicket = parseInt(val); localStorage.setItem('callsys_ticket', myTicket); 
-    DOM.manualTicketInput.value = ""; showMyTicketMode(); updateTicketUI(parseInt(DOM.number.textContent) || 0);
-}));
-
-if(DOM.btnCancelTicket) DOM.btnCancelTicket.addEventListener("click", () => { 
-    if(confirm(T["cancel_confirm"])) { 
-        localStorage.removeItem('callsys_ticket'); myTicket = null; showTakeTicketMode(); 
-    } 
+// --- Interactions ---
+on($("btn-take-ticket"), "click", async () => {
+    unlockAudio(); if(Notification.permission!=='granted') Notification.requestPermission();
+    $("btn-take-ticket").disabled = true;
+    try {
+        const r = await fetch("/api/ticket/take", {method:"POST"}).then(d=>d.json());
+        if(r.success) { myTicket = r.ticket; localStorage.setItem('callsys_ticket', myTicket); renderMode(); toast(T.ok, "success"); }
+        else toast(r.error||T.fail, "error");
+    } catch(e) { toast(T.off, "error"); }
+    $("btn-take-ticket").disabled = false;
 });
 
-function updateMuteUI(isMuted, needsPermission = false) { 
-    isLocallyMuted = isMuted; 
-    if (!DOM.soundPrompt) return; 
-    
-    const iconSpan = DOM.soundPrompt.querySelector('span:first-child');
-    const textSpan = DOM.soundPrompt.querySelector('span:last-child');
-
-    const icon = needsPermission || isMuted ? '🔇' : '🔊'; 
-    const text = needsPermission || isMuted ? T["sound_mute"] : T["sound_on"]; // 直接顯示狀態文字
-    
-    const isActive = !needsPermission && !isMuted;
-    
-    if(iconSpan) iconSpan.textContent = icon;
-    if(textSpan) textSpan.textContent = text;
-    
-    DOM.soundPrompt.classList.toggle("is-active", isActive); 
-}
-
-// 複製連結 - 使用 Feedback
-if (DOM.copyLinkPrompt) DOM.copyLinkPrompt.addEventListener("click", () => { 
-    if (!navigator.clipboard) return; 
-    navigator.clipboard.writeText(window.location.href).then(() => { 
-        showButtonFeedback(DOM.copyLinkPrompt, 'copy_success');
-    }); 
+on($("btn-track-ticket"), "click", () => {
+    unlockAudio(); const v = $("manual-ticket-input").value;
+    if(!v) return toast(T.no_in, "error");
+    if(Notification.permission!=='granted') Notification.requestPermission();
+    myTicket = parseInt(v); localStorage.setItem('callsys_ticket', myTicket);
+    $("manual-ticket-input").value = ""; renderMode();
 });
 
-// 音效按鈕
-if (DOM.soundPrompt) DOM.soundPrompt.addEventListener("click", () => {
-    handleUserInteraction(() => { 
-        if (!audioPermissionGranted) {
-            playNotificationSound(); 
-        } else {
-            updateMuteUI(!isLocallyMuted); 
-        }
-    });
+on($("btn-cancel-ticket"), "click", () => { if(confirm(T.cancel)) { localStorage.removeItem('callsys_ticket'); myTicket=null; renderMode(); }});
+on($("sound-prompt"), "click", () => { unlockAudio(); if(audioCtx?.state==='running') updateMuteUI(!localMute); else playDing(); });
+on($("copy-link-prompt"), "click", () => { navigator.clipboard?.writeText(location.href).then(()=>feedback($("copy-link-prompt"), 'copied')); });
+
+on($("language-selector"), "change", e => {
+    lang = e.target.value; localStorage.setItem('callsys_lang', lang); T = i18n[lang];
+    applyText(); renderMode(); updateMuteUI(localMute); updTime();
 });
 
-document.addEventListener("DOMContentLoaded", () => { 
-    applyI18n(); 
-    if (myTicket) showMyTicketMode(); else showTakeTicketMode(); 
-    socket.connect(); 
-    document.body.addEventListener('click', unlockAudioContext, { once: true });
-    try { 
-        const qrEl = document.getElementById("qr-code-placeholder"); 
-        if (qrEl) new QRCode(qrEl, { text: window.location.href, width: 120, height: 120 }); 
-    } catch (e) {}
+// Init
+document.addEventListener("DOMContentLoaded", () => {
+    $("language-selector").value = lang; applyText(); renderMode(); socket.connect();
+    document.body.addEventListener('click', unlockAudio, {once:true});
+    if($("qr-code-placeholder")) try{ new QRCode($("qr-code-placeholder"), {text:location.href, width:120, height:120}); }catch(e){}
 });
