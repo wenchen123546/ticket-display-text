@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台樣式 (admin.css) - v55.0 Mobile Fix
+ * 後台樣式 (admin.css) - v56.1 Mobile UI Fix
  * ========================================== */
 :root {
     --bg-body: #f3f4f6; --bg-surface: #ffffff; --bg-sidebar: #ffffff;
@@ -97,6 +97,11 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 #passed-list-ui .delete-item-btn { background: transparent; color: #ef4444; font-weight: bold; font-size: 1.1rem; padding: 4px 10px; margin: 0; border-radius: 4px; }
 #passed-list-ui .delete-item-btn:hover { background: #fee2e2; }
 
+/* Stats Header & Line Settings Fix */
+.stats-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
+.line-setting-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; gap: 10px; }
+.line-setting-info { flex: 1; min-width: 0; }
+
 /* Chart */
 .chart-container { min-height: 180px; flex: 1; display: flex; align-items: flex-end; gap: 2px; padding: 10px 0; margin-bottom: 10px; width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .chart-col { flex: 0 0 auto; min-width: 20px; display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: 0.7; transition: 0.2s; }
@@ -116,7 +121,7 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .sec-icon { font-size: 2rem; background: #fff; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 50%; box-shadow: 0 2px 5px rgba(234, 88, 12, 0.2); }
 .sec-content { flex: 1; }
 .sec-title { font-weight: 800; color: #c2410c; margin-bottom: 5px; display: block; font-size: 1rem; }
-.line-msg-preview { display: block; font-family: monospace; line-height: 1.3; max-height: 80px; overflow-y: auto; color: #475569; font-size: 0.8rem; padding: 6px 10px !important; background: #f1f5f9; border-radius: 6px; margin-top: 4px; white-space: pre-wrap; }
+.line-msg-preview { display: block; font-family: monospace; line-height: 1.3; max-height: 80px; overflow-y: auto; color: #475569; font-size: 0.8rem; padding: 6px 10px !important; background: #f1f5f9; border-radius: 6px; margin-top: 4px; white-space: pre-wrap; word-break: break-all; }
 
 /* Overlays */
 #status-bar { position: fixed; top: 0; width: 100%; background: var(--danger); color: white; text-align: center; padding: 8px; transform: translateY(-100%); transition: 0.3s; z-index: 9999; } #status-bar.visible { transform: translateY(0); }
@@ -146,8 +151,17 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
     .big-action-row { flex-direction: column; }
     .input-group { flex-direction: column; }
     #btn-call-next { order: -1; min-width: 100%; }
-    .btn-secondary { width: 100%; }
+    /* [修正] 移除全域按鈕 100% 寬度，避免破壞 inline 按鈕佈局 */
+    /* .btn-secondary { width: 100%; } */
     
+    /* [新增] 流量分析標題手機版設定 */
+    .stats-header { flex-direction: column; align-items: flex-start; }
+    .stats-header > div { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+    .stats-header .input-group { flex-direction: row; width: auto; }
+    
+    /* [新增] LINE 修改按鈕手機版大小微調 */
+    .line-setting-row .btn-secondary { padding: 6px 12px; font-size: 0.85rem; }
+
     /* [新增] 手機版顯示設定區塊 */
     .mobile-only-settings { display: block; }
 }
