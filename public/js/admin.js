@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v54.0 Efficiency
+ * 後台邏輯 (admin.js) - v55.0 Mobile & Efficiency
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
@@ -22,6 +22,10 @@ function updateLangUI() {
     T = i18n[curLang] || i18n["zh-TW"];
     $$('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if(T[k]) el.textContent = T[k]; });
     $$('[data-i18n-ph]').forEach(el => { const k = el.getAttribute('data-i18n-ph'); if(T[k]) el.placeholder = T[k]; });
+    
+    // [新增] 同步手機版選單
+    if($("admin-lang-selector-mobile")) $("admin-lang-selector-mobile").value = curLang;
+
     loadUsers(); loadStats(); loadLineSettings();
     req("/api/featured/get").then(res => { if(res) socket.emit("updateFeaturedContents", res); });
 }
@@ -216,4 +220,17 @@ document.addEventListener("DOMContentLoaded", () => {
     $$('.nav-btn').forEach(b => b.addEventListener('click', () => { $$('.nav-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); $$('.section-group').forEach(s=>s.classList.remove('active')); $(b.dataset.target)?.classList.add('active'); if(b.dataset.target === 'section-stats') loadStats(); }));
     const enter = (id, btnId) => { $(id)?.addEventListener("keyup", e => { if(e.key==="Enter") $(btnId)?.click(); }); };
     enter("username-input", "login-button"); enter("password-input", "login-button"); enter("manualNumber", "setNumber"); enter("manualIssuedNumber", "setIssuedNumber"); enter("new-passed-number", "add-passed-btn"); enter("broadcast-msg", "btn-broadcast");
+
+    // [新增] 手機版選單初始值與事件
+    if($("admin-lang-selector-mobile")) {
+        $("admin-lang-selector-mobile").value = curLang;
+        $("admin-lang-selector-mobile").addEventListener("change", e => {
+            curLang = e.target.value;
+            localStorage.setItem('callsys_lang', curLang);
+            $("admin-lang-selector").value = curLang; // 同步桌面版
+            updateLangUI();
+        });
+    }
+    // [新增] 手機版登出
+    $("btn-logout-mobile")?.addEventListener("click", logout);
 });
