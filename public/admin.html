@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>管理後台</title>
 <script src="/socket.io/socket.io.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/zh-tw.js"></script>
+
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/admin.css"> 
 </head>
@@ -34,7 +38,7 @@
         </div>
         <nav class="sidebar-nav">
             <button class="nav-btn active" data-target="section-live"><span class="nav-icon">🎮</span> <span data-i18n="nav_live">現場控台</span></button>
-            <button class="nav-btn" data-target="section-booking"><span class="nav-icon">📅</span> <span data-i18n="nav_booking">預約管理</span></button>
+            <button class="nav-btn" data-target="section-booking" id="nav-btn-booking" style="display:none;"><span class="nav-icon">📅</span> <span data-i18n="nav_booking">預約管理</span></button>
             <button class="nav-btn" data-target="section-stats"><span class="nav-icon">📈</span> <span data-i18n="nav_stats">數據報表</span></button>
             <button class="nav-btn" data-target="section-settings"><span class="nav-icon">⚙️</span> <span data-i18n="nav_settings">系統設定</span></button>
             <button class="nav-btn" data-target="section-line"><span class="nav-icon">💬</span> <span data-i18n="nav_line">LINE設定</span></button>
@@ -149,7 +153,7 @@
                             <div class="add-row">
                                 <input type="number" id="appt-number" placeholder="號碼 (例如 10)" style="flex:1;">
                                 <div class="join-group" style="flex:2;">
-                                    <input type="datetime-local" id="appt-time" style="flex:1;">
+                                    <input type="text" id="appt-time" placeholder="選擇日期與時間..." style="flex:1; background-color: var(--input-bg);">
                                     <button id="btn-add-appt" class="btn-add">+</button>
                                 </div>
                             </div>
