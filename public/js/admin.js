@@ -1,11 +1,11 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v61.1 i18n Fixed
+ * 後台邏輯 (admin.js) - v65.0 Optimized & Fixed
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}) => { const e = document.createElement(t); if(c) e.className=c; if(txt) e.textContent=txt; Object.entries(ev).forEach(([k,v])=>e[k]=v); return e; };
 
-// [關鍵修正] 補全所有 HTML 中用到的 data-i18n 鍵值
+// 完整翻譯字典
 const i18n = {
     "zh-TW": { 
         // 狀態與動態訊息
@@ -105,6 +105,8 @@ let curLang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[curLang];
 let token="", userRole="normal", username="", uniqueUser="", toastTimer;
 let currentSystemMode = 'ticketing'; 
 let isDark = localStorage.getItem('callsys_admin_theme') === 'dark';
+// [新增] Line 設定快取變數
+let cachedLineSettings = null; 
 
 const socket = io({ autoConnect: false, auth: { token: "" } });
 
@@ -129,12 +131,16 @@ function updateLangUI() {
     // 更新 Placeholder
     $$('[data-i18n-ph]').forEach(el => { const k = el.getAttribute('data-i18n-ph'); if(T[k]) el.placeholder = T[k]; });
     
-    // 確保下拉選單顯示正確語言
     if($("admin-lang-selector-mobile")) $("admin-lang-selector-mobile").value = curLang;
     if($("admin-lang-selector")) $("admin-lang-selector").value = curLang;
 
-    // 重新載入動態內容以應用語言設定 (例如刪除按鈕的文字)
-    loadUsers(); loadStats(); loadLineSettings();
+    // 重新載入動態內容
+    loadUsers(); 
+    loadStats(); 
+    
+    // [優化] 使用 render 函式而非重新請求，避免閃爍
+    renderLineSettings(); 
+    
     req("/api/featured/get").then(res => { if(res) socket.emit("updateFeaturedContents", res); });
 }
 
@@ -355,7 +361,75 @@ $("btn-save-unlock-pwd")?.addEventListener("click", async()=>{ if(await req("/ap
 $("add-user-btn")?.addEventListener("click", async()=>{ const u=$("new-user-username").value, p=$("new-user-password").value, n=$("new-user-nickname").value, r=$("new-user-role")?.value; if(await req("/api/admin/add-user", {newUsername:u, newPassword:p, newNickname:n, newRole:r})) { toast("Saved","success"); $("new-user-username").value=""; $("new-user-password").value=""; $("new-user-nickname").value=""; loadUsers(); } });
 const lineSettingsConfig = { approach: { label: "快到了", hint: "{current} {target}" }, arrival: { label: "正式到號", hint: "{current} {target}" }, status: { label: "狀態回覆", hint: "{current} {issued}" }, personal: { label: "個人資訊", hint: "{target}" }, passed: { label: "過號回覆", hint: "{list}" }, set_ok: { label: "設定成功", hint: "{target}" }, cancel: { label: "取消成功", hint: "{target}" }, login_hint: { label: "登入提示", hint: "" }, err_passed: { label: "已過號錯誤", hint: "" }, err_no_sub: { label: "無設定錯誤", hint: "" }, set_hint: { label: "設定提示", hint: "" } };
 
-async function loadLineSettings() { const ul = $("line-settings-list-ui"); if (!ul) return; const data = await req("/api/admin/line-settings/get"); if(!data) return; ul.innerHTML=""; if($("line-unlock-pwd")) $("line-unlock-pwd").value = (await req("/api/admin/line-settings/get-unlock-pass"))?.password||""; Object.keys(lineSettingsConfig).forEach(key => { const config = lineSettingsConfig[key], val = data[key] || ""; const li = mk("li"); const view = mk("div", "line-setting-row"); const infoDiv = mk("div", "line-setting-info"); infoDiv.innerHTML = `<span style="font-weight:bold;">${config.label}</span><span class="line-msg-preview">${val||"(未設定)"}</span>`; const btn = mk("button","btn-secondary",T.edit||"Edit",{onclick:()=>{view.style.display="none";edit.style.display="flex"}}); view.append(infoDiv, btn); const edit = mk("div",null,null,{style:"display:none;flex-direction:column;gap:5px;width:100%;"}); const ta = mk("textarea",null,null,{value:val,rows:3}); const save = mk("button","btn-secondary success",T.save||"Save",{onclick:async()=>{if(await req("/api/admin/line-settings/save",{[key]:ta.value})) loadLineSettings();}}); const cancel = mk("button","btn-secondary",T.cancel||"X",{onclick:()=>{edit.style.display="none";view.style.display="flex";ta.value=val;}}); const row = mk("div",null,null,{style:"display:flex;gap:5px;justify-content:flex-end;"}); row.append(cancel,save); edit.append(mk("div",null,config.hint,{style:"font-size:0.8rem;color:var(--text-sub)"}),ta,row); li.append(view,edit); ul.appendChild(li); }); }
+// [優化] 讀取設定 (只抓資料，不渲染)
+async function loadLineSettings() { 
+    const ul = $("line-settings-list-ui"); 
+    if (!ul) return;
+    
+    // 向伺服器請求資料
+    const data = await req("/api/admin/line-settings/get"); 
+    if(!data) return;
+    
+    // 將資料存入快取
+    cachedLineSettings = data;
+    
+    // 渲染畫面
+    renderLineSettings();
+}
+
+// [優化] 渲染設定 (使用快取資料，不請求網路)
+function renderLineSettings() {
+    const ul = $("line-settings-list-ui"); 
+    if (!ul || !cachedLineSettings) return; 
+    
+    ul.innerHTML=""; 
+    
+    // 設定解鎖密碼欄位 (如果有)
+    req("/api/admin/line-settings/get-unlock-pass").then(res => {
+        if($("line-unlock-pwd") && res) $("line-unlock-pwd").value = res.password || "";
+    });
+
+    Object.keys(lineSettingsConfig).forEach(key => { 
+        const config = lineSettingsConfig[key];
+        const val = cachedLineSettings[key] || ""; 
+        
+        const li = mk("li"); 
+        const view = mk("div", "line-setting-row"); 
+        const infoDiv = mk("div", "line-setting-info"); 
+        
+        // T.edit 會自動讀取當前語言
+        infoDiv.innerHTML = `<span style="font-weight:bold;">${config.label}</span><span class="line-msg-preview">${val||"(未設定)"}</span>`; 
+        
+        const btn = mk("button","btn-secondary", T.edit || "Edit", {
+            onclick:()=>{ view.style.display="none"; edit.style.display="flex" }
+        }); 
+        
+        view.append(infoDiv, btn); 
+        
+        const edit = mk("div",null,null,{style:"display:none;flex-direction:column;gap:5px;width:100%;"}); 
+        const ta = mk("textarea",null,null,{value:val, rows:3}); 
+        
+        const save = mk("button","btn-secondary success", T.save || "Save", {
+            onclick: async()=>{ 
+                if(await req("/api/admin/line-settings/save", {[key]:ta.value})) {
+                    cachedLineSettings[key] = ta.value; // 更新快取
+                    renderLineSettings(); // 重新渲染
+                }
+            }
+        }); 
+        
+        const cancel = mk("button","btn-secondary", T.cancel || "X", {
+            onclick:()=>{ edit.style.display="none"; view.style.display="flex"; ta.value=val; }
+        }); 
+        
+        const row = mk("div",null,null,{style:"display:flex;gap:5px;justify-content:flex-end;"}); 
+        row.append(cancel, save); 
+        
+        edit.append(mk("div",null,config.hint,{style:"font-size:0.8rem;color:var(--text-sub)"}), ta, row); 
+        li.append(view, edit); 
+        ul.appendChild(li); 
+    }); 
+}
 
 // Init
 document.addEventListener("DOMContentLoaded", () => {
