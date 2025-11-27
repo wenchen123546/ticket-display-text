@@ -1,5 +1,5 @@
 /* ==========================================
- * 前台樣式 (style.css) - v61.0 Layout Fix
+ * 前台樣式 (style.css) - v61.1 Compact & Fixed
  * ========================================== */
 :root {
     /* Light Mode */
@@ -41,7 +41,7 @@ body {
 .orb-2 { width: 250px; height: 250px; background: radial-gradient(circle, #e2e8f0 0%, transparent 70%); bottom: -50px; right: -50px; }
 @keyframes float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(20px, -20px); } }
 
-/* Main Container - 關鍵佈局修正 */
+/* Main Container */
 .app-container { 
     width: 100%; max-width: 500px; 
     /* 使用 dvh 確保內容在手機瀏覽器中不會被工具列遮擋 */
@@ -73,13 +73,12 @@ body {
 .hero-label { font-size: 0.85rem; font-weight: 700; color: var(--text-light); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 0; }
 
 #number { 
-    /* [關鍵修正] 使用 clamp 限制最大最小字體，避免手機版爆版 */
+    /* 使用 clamp 限制最大最小字體，避免手機版爆版 */
     font-size: clamp(5rem, 22vw, 9rem); 
     font-weight: 900; line-height: 1.1; margin: 0 0 16px 0; 
     background: linear-gradient(180deg, var(--num-gradient-start) 0%, var(--num-gradient-end) 100%); 
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
-    /* Fallback for older browsers */
-    color: var(--primary);
+    color: var(--primary); /* Fallback */
 }
 @keyframes pop-in { 0% { transform: scale(0.9); opacity: 0.8; } 60% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
 .number-change-anim { animation: pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
@@ -141,13 +140,20 @@ body.dark-mode .my-num { color: white; }
 
 .scroll-view { overflow-y: auto; max-height: 150px; -webkit-overflow-scrolling: touch; }
 
-.tag-list { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
+/* [Tag List - Compact Fix] */
+.tag-list { 
+    display: flex; flex-wrap: wrap; gap: 4px; /* 間距縮小 */
+    list-style: none; padding: 0; margin: 0; 
+}
 .tag-list li { 
     font-size: 0.85rem; font-weight: 700; color: var(--accent-red); 
-    background: var(--accent-bg-red); padding: 4px 10px; border-radius: 12px; 
+    background: var(--accent-bg-red); 
+    padding: 3px 10px; /* 內距縮小 */
+    border-radius: 12px; 
     border: 1px solid rgba(244, 63, 94, 0.2);
-    /* [修正] 防止長文字撐開 */
-    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    /* 緊湊設定 */
+    max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
+    flex-shrink: 0;
 }
 .empty-state { color: var(--text-light); font-size: 0.85rem; text-align: center; padding: 10px; font-style: italic; }
 
