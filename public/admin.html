@@ -34,6 +34,7 @@
         </div>
         <nav class="sidebar-nav">
             <button class="nav-btn active" data-target="section-live"><span class="nav-icon">🎮</span> <span data-i18n="nav_live">現場控台</span></button>
+            <button class="nav-btn" data-target="section-booking"><span class="nav-icon">📅</span> <span data-i18n="nav_booking">預約管理</span></button>
             <button class="nav-btn" data-target="section-stats"><span class="nav-icon">📈</span> <span data-i18n="nav_stats">數據報表</span></button>
             <button class="nav-btn" data-target="section-settings"><span class="nav-icon">⚙️</span> <span data-i18n="nav_settings">系統設定</span></button>
             <button class="nav-btn" data-target="section-line"><span class="nav-icon">💬</span> <span data-i18n="nav_line">LINE設定</span></button>
@@ -69,16 +70,13 @@
                 <div class="card-wrapper full-width-mobile">
                     <div class="admin-card control-deck">
                         <h3><span class="card-icon">📢</span> <span data-i18n="card_call">指揮中心</span></h3>
-                        
                         <div class="hero-control-row">
                              <button id="btn-call-next" class="btn-hero" data-i18n="btn_next">下一號 ▶</button>
                         </div>
-
                         <div class="secondary-actions-row">
                             <button id="btn-call-prev" class="btn-glass" data-i18n="btn_prev">◀ 上一號</button>
                             <button id="btn-mark-passed" class="btn-warn" data-i18n="btn_pass">過號</button>
                         </div>
-
                         <div class="control-group compact-group">
                             <label data-i18n="lbl_assign">指定 / 插隊</label>
                             <div class="input-group">
@@ -128,6 +126,34 @@
                             </div>
                         </div>
                         <button id="resetPassed" class="btn-reset-single" data-i18n="btn_clear_passed">清空過號</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="section-booking" class="section-group">
+            <div class="card-container">
+                <div class="card-wrapper full-width-card" style="grid-column: 1 / -1;">
+                    <div class="admin-card">
+                        <h3><span class="card-icon">📅</span> <span data-i18n="card_booking">預約管理</span></h3>
+                        <p style="color:var(--text-sub); margin-bottom:15px; font-size:0.9rem;">設定預約號碼與時間，系統將在下一號叫號時自動優先處理到期的預約。</p>
+                        
+                        <div class="list-container" style="min-height: 250px;">
+                            <ul id="appointment-list-ui" class="scroll-list">
+                                <li style="text-align:center; padding:20px; color:var(--text-sub);">Loading...</li>
+                            </ul>
+                        </div>
+
+                        <div class="add-section" style="background:var(--bg-body); margin-top:15px; border-radius:12px; border:1px solid var(--border-color);">
+                            <label class="add-label" data-i18n="lbl_add_appt">新增預約</label>
+                            <div class="add-row">
+                                <input type="number" id="appt-number" placeholder="號碼 (例如 10)" style="flex:1;">
+                                <div class="join-group" style="flex:2;">
+                                    <input type="datetime-local" id="appt-time" style="flex:1;">
+                                    <button id="btn-add-appt" class="btn-add">+</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
