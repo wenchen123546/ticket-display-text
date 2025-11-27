@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台樣式 (admin.css) - v86.0 Layout Fixed
+ * 後台樣式 (admin.css) - v87.0 Stats Layout Fix
  * ========================================== */
 :root {
     /* [Light Mode] */
@@ -70,23 +70,24 @@ body { margin: 0; width: 100%; min-height: 100vh; font-family: 'Inter', system-u
 /* Grid Layout */
 .card-container { display: grid; gap: 24px; grid-template-columns: repeat(1, minmax(0, 1fr)); align-items: stretch; }
 @media (min-width: 768px) { .card-container { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1200px) { .card-container { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* [Fix] Desktop Grid Settings */
+@media (min-width: 1200px) { 
+    .card-container { grid-template-columns: repeat(3, minmax(0, 1fr)); } 
+    /* [Fix] 流量分析區塊強制 2 欄並排 */
+    #section-stats .card-container { grid-template-columns: 1fr 1fr; }
+}
 .full-width-card { grid-column: 1 / -1 !important; }
 .card-wrapper { height: 100%; }
 
 .admin-card { background: var(--bg-surface); border-radius: 20px; padding: 24px; box-shadow: var(--shadow-md); height: 100%; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color); }
 .admin-card h3 { margin: 0 0 20px 0; border-bottom: 1px solid var(--border-color); padding-bottom: 16px; display: flex; align-items: center; gap: 10px; font-size: 1.15rem; color: var(--text-main); font-weight: 700; }
 
-/* ==========================================
- * [Fix] 輸入框與按鈕 Layout System
- * ========================================== */
+/* Inputs & Buttons */
 .control-group { margin-bottom: 20px; }
 .control-group label { display: block; margin-bottom: 8px; font-size: 0.9rem; font-weight: 600; color: var(--text-sub); }
 
-/* 通用輸入框 */
 input, textarea, select { 
-    flex: 1 1 auto; /* 自動填滿 */
-    padding: 0 14px; height: 46px; 
+    flex: 1 1 auto; padding: 0 14px; height: 46px; 
     border: 1px solid var(--border-color); border-radius: 10px; 
     background: var(--input-bg); color: var(--text-main); 
     font-size: 1rem; min-width: 100px; 
@@ -94,66 +95,41 @@ input, textarea, select {
 }
 input:focus, textarea:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }
 
-/* 一般橫向群組 */
 .input-group { display: flex; gap: 10px; width: 100%; align-items: stretch; flex-wrap: wrap; }
 .input-group.vertical { flex-direction: column; }
 .quick-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
 
-/* [New] 新增區塊專用佈局 */
 .add-section { background: var(--bg-body); border-top: 1px solid var(--border-color); padding: 16px; border-radius: 0 0 12px 12px; display: flex; flex-direction: column; gap: 12px; }
 .add-label { font-size: 0.85rem; font-weight: 700; color: var(--text-sub); margin-bottom: 0; display: block; }
-
-/* 多欄位容器 (Flex Grid) */
-.add-row { 
-    display: flex; gap: 10px; width: 100%; flex-wrap: wrap; 
-}
-/* 單獨輸入框：彈性寬度，最小140px，不足則換行 */
+.add-row { display: flex; gap: 10px; width: 100%; flex-wrap: wrap; }
 .add-row > input { flex: 1 1 140px; min-width: 140px; }
+.join-group { display: flex; gap: 8px; flex: 1 1 180px; min-width: 180px; align-items: center; }
+.join-group select, .join-group input { flex: 1; } .join-group button { flex: 0 0 46px; }
 
-/* [Fix] 組合群組 (例如: 權限選單 + 新增按鈕) */
-.join-group { 
-    display: flex; gap: 8px; flex: 1 1 180px; min-width: 180px; align-items: center; 
-}
-.join-group select, .join-group input { flex: 1; } /* 內容佔滿 */
-.join-group button { flex: 0 0 46px; } /* 按鈕固定寬度 */
-
-/* ==========================================
- * [Fix] 按鈕樣式修正
- * ========================================== */
 .hero-control-row { margin-bottom: 16px; width: 100%; }
 .btn-hero { width: 100%; padding: 24px; border-radius: 16px; border: none; background: var(--primary-grad); color: white; font-size: 1.8rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.4); transition: transform 0.1s; }
 .btn-hero:active { transform: scale(0.98); }
 
-.secondary-actions-row, .big-action-row { 
-    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; 
-}
+.secondary-actions-row, .big-action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
 
-/* 統一按鈕基礎 */
 .btn-glass, .btn-warn, .btn-success, .btn-secondary, .btn-big, .btn-add {
-    height: 46px; /* 強制高度與輸入框一致 */
-    border-radius: 10px; font-weight: 700; cursor: pointer; 
+    height: 46px; border-radius: 10px; font-weight: 700; cursor: pointer; 
     font-size: 0.95rem; display: flex; align-items: center; justify-content: center; 
     transition: 0.2s; border: 1px solid transparent; gap: 6px; box-shadow: var(--shadow-sm);
 }
-
 .btn-glass { background: var(--bg-body); color: var(--text-main); border-color: var(--border-color); }
 .btn-glass:hover { background: #e2e8f0; } body.dark-mode .btn-glass:hover { background: #334155; }
-
 .btn-warn { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; } 
 body.dark-mode .btn-warn { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
-
 .btn-success { background: #d1fae5; color: #065f46; border-color: #6ee7b7; } 
 body.dark-mode .btn-success { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border-color: rgba(16, 185, 129, 0.3); }
-
 .btn-secondary { background: #e0e7ff; color: #4f46e5; padding: 0 18px; } 
 body.dark-mode .btn-secondary { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; }
-
 .btn-add { background: var(--primary); color: white; width: 46px; font-size: 1.4rem; padding: 0; flex-shrink: 0; }
-
 .btn-reset-single { width: 100%; padding: 12px; border: 1px dashed var(--border-color); background: transparent; color: var(--text-sub); margin-top: auto; cursor: pointer; border-radius: 12px; transition: 0.2s; font-size: 0.9rem; display: block; text-align: center; }
 .btn-reset-single:hover { border-style: solid; color: var(--danger); border-color: var(--danger); background: rgba(239, 68, 68, 0.05); }
 
-/* List Containers */
+/* List & Edit */
 .list-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; margin-bottom: 16px; border: 1px solid var(--border-color); border-radius: 12px; }
 .scroll-list { max-height: 320px; overflow-y: auto; list-style: none; margin: 0; padding: 0; background: var(--bg-body); -webkit-overflow-scrolling: touch; }
 .list-item { padding: 14px; border-bottom: 1px solid var(--border-color); background: var(--bg-surface); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
@@ -162,8 +138,6 @@ body.dark-mode .btn-secondary { background: rgba(99, 102, 241, 0.15); color: #a5
 .list-main-text { font-weight: 700; font-size: 1rem; color: var(--text-main); line-height: 1.4; }
 .list-sub-text { font-size: 0.85rem; color: var(--text-sub); margin-top: 4px; line-height: 1.4; }
 .list-actions { display: flex; gap: 8px; flex-shrink: 0; margin-left: auto; }
-
-/* Edit Forms */
 .edit-form-wrapper { display: flex; width: 100%; gap: 10px; flex-wrap: wrap; margin-top: 5px; }
 .edit-form-wrapper input, .edit-form-wrapper select { flex: 1 1 150px; }
 .edit-form-actions { display: flex; gap: 8px; justify-content: flex-end; flex: 1 1 100%; margin-top: 5px; }
@@ -200,11 +174,7 @@ body.dark-mode .btn-secondary { background: rgba(99, 102, 241, 0.15); color: #a5
     .dashboard-header { grid-template-columns: 1fr 1fr; gap: 12px; } .dashboard-item:last-child { grid-column: 1 / -1; } .dashboard-item { min-height: auto; padding: 16px; } .big-number { font-size: 2.8rem; }
     .card-container { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }
     .mobile-only-settings { display: block; }
-    
-    /* [Fix] 手機版優化 */
-    .add-row > input { min-width: 100%; } /* 輸入框強制佔滿 */
-    .join-group { min-width: 100%; } /* 組合包強制佔滿 */
-    .quick-actions { width: 100%; margin-bottom: 5px; }
+    .add-row > input { min-width: 100%; } .join-group { min-width: 100%; } .quick-actions { width: 100%; margin-bottom: 5px; }
     input, textarea, select { font-size: 16px; } 
 }
 
