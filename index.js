@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v57.0 Optimized
+ * 伺服器 (index.js) - v66.0 Stats Fixed
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http");
@@ -28,10 +28,9 @@ const DEFAULT_ROLES = {
 };
 
 const app = express();
-app.disable('x-powered-by'); // [安全] 隱藏 Express 標頭
+app.disable('x-powered-by'); 
 
 const server = Server(app);
-// [安全] 限制 CORS (建議生產環境指定 origin)
 const io = socketio(server, { cors: { origin: "*", methods: ["GET", "POST"] }, pingTimeout: 60000 });
 
 const LOG_DIR = path.join(__dirname, 'user_logs');
@@ -44,7 +43,6 @@ const db = new sqlite3.Database(path.join(__dirname, 'callsys.db'), (err) => {
     }
 });
 
-// [優化] SQLite Promisify Wrappers
 const dbRun = (sql, params) => new Promise((resolve, reject) => db.run(sql, params, function(err){ if(err)reject(err); else resolve(this); }));
 const dbAll = (sql, params) => new Promise((resolve, reject) => db.all(sql, params, (err, rows)=>{ if(err)reject(err); else resolve(rows); }));
 const dbGet = (sql, params) => new Promise((resolve, reject) => db.get(sql, params, (err, row)=>{ if(err)reject(err); else resolve(row); }));
@@ -64,7 +62,6 @@ const KEYS = {
 async function initRoles() {
     if (!(await redis.exists(KEYS.ROLES_CONFIG))) {
         await redis.set(KEYS.ROLES_CONFIG, JSON.stringify(DEFAULT_ROLES));
-        console.log("Initialized default roles");
     }
 }
 initRoles();
@@ -83,7 +80,6 @@ const addLog = async (nick, msg) => {
     io.to("admin").emit("newAdminLog", `[${time}] [${nick}] ${msg}`);
 };
 
-// [優化] Broadcast Debounce (防止廣播風暴)
 let broadcastTimer = null;
 const broadcastQueue = async () => {
     if (broadcastTimer) clearTimeout(broadcastTimer);
@@ -120,6 +116,7 @@ async function handleControl(type, { body, user }) {
     const { direction, number } = body;
     const curr = parseInt(await redis.get(KEYS.CURRENT))||0;
     let issued = parseInt(await redis.get(KEYS.ISSUED))||0, newNum=0, logMsg='';
+    const { dateStr, hour } = getTWTime();
 
     if(['call', 'issue'].includes(type) && BUSINESS_HOURS.enabled) {
         const h = new Date().getHours(); if(h < BUSINESS_HOURS.start || h >= BUSINESS_HOURS.end) return { error: "非營業時間" };
@@ -138,9 +135,20 @@ async function handleControl(type, { body, user }) {
             }
         } else { newNum = await redis.decrIfPositive(KEYS.CURRENT); logMsg = `號碼回退為 ${newNum}`; }
         checkLineNotify(newNum).catch(()=>{});
+        
+        // [修正] 叫號不影響統計，因為發號時已經算過一次了
     } else if(type === 'issue') {
-        if(direction==='next') { newNum = await redis.incr(KEYS.ISSUED); logMsg = `手動發號 ${newNum}`; }
-        else if(issued > curr) { newNum = await redis.decr(KEYS.ISSUED); logMsg = `手動回退 ${newNum}`; }
+        if(direction==='next') { 
+            newNum = await redis.incr(KEYS.ISSUED); logMsg = `手動發號 ${newNum}`; 
+            // [修正] 發號時統計 +1
+            await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, 1);
+            await redis.expire(`${KEYS.HOURLY}${dateStr}`, 172800);
+        }
+        else if(issued > curr) { 
+            newNum = await redis.decr(KEYS.ISSUED); logMsg = `手動回退 ${newNum}`; 
+            // [修正] 回退發號統計 -1
+            await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, -1);
+        }
         else return { error: "錯誤" };
     } else if(type.startsWith('set')) {
         newNum = parseInt(number); if(isNaN(newNum)||newNum<0) return { error: "無效號碼" };
@@ -151,11 +159,7 @@ async function handleControl(type, { body, user }) {
 
     if(logMsg) {
         addLog(user.nickname, logMsg);
-        const { dateStr, hour } = getTWTime();
         await dbRun(`INSERT INTO history (date_str, timestamp, number, action, operator, wait_time_min) VALUES (?, ?, ?, ?, ?, ?)`, [dateStr, Date.now(), newNum||curr, type, user.nickname, await calcWaitTime()]);
-        if(['call','issue','pass'].includes(type) || type.startsWith('set')) {
-            await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, 1); await redis.expire(`${KEYS.HOURLY}${dateStr}`, 172800);
-        }
     }
     await broadcastQueue(); return { number: newNum };
 }
@@ -208,8 +212,13 @@ app.post("/api/ticket/take", rateLimit({windowMs:36e5,max:20}), asyncHandler(asy
     if(await redis.get(KEYS.MODE)==='input') throw new Error("手動模式");
     if(BUSINESS_HOURS.enabled) { const h=new Date().getHours(); if(h<BUSINESS_HOURS.start||h>=BUSINESS_HOURS.end) throw new Error("非營業時間"); }
     const t = await redis.incr(KEYS.ISSUED); 
-    await dbRun(`INSERT INTO history (date_str, timestamp, number, action, operator, wait_time_min) VALUES (?, ?, ?, ?, ?, ?)`, [getTWTime().dateStr, Date.now(), t, 'online_take', 'User', await calcWaitTime()]);
-    const {dateStr, hour} = getTWTime(); await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, 1);
+    const { dateStr, hour } = getTWTime();
+    
+    // [修正] 線上取號時，統計 +1
+    await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, 1);
+    await redis.expire(`${KEYS.HOURLY}${dateStr}`, 172800);
+
+    await dbRun(`INSERT INTO history (date_str, timestamp, number, action, operator, wait_time_min) VALUES (?, ?, ?, ?, ?, ?)`, [dateStr, Date.now(), t, 'online_take', 'User', await calcWaitTime()]);
     await broadcastQueue(); return { ticket: t };
 }));
 
@@ -221,7 +230,11 @@ ctrls.forEach(c => app.post(`/api/control/${c}`, auth, checkPermission(c.startsW
 app.post("/api/control/pass-current", auth, checkPermission('pass'), asyncHandler(async req => {
     const c = parseInt(await redis.get(KEYS.CURRENT))||0; if(!c) throw new Error("無叫號");
     await redis.zadd(KEYS.PASSED, c, c); const act = (await redis.safeNextNumber(KEYS.CURRENT, KEYS.ISSUED) === -1 ? c : await redis.get(KEYS.CURRENT));
-    const {dateStr, hour} = getTWTime(); await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, 1);
+    
+    const {dateStr, hour} = getTWTime(); 
+    // [修正] 過號時，統計 -1
+    await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, -1);
+    
     await dbRun(`INSERT INTO history (date_str, timestamp, number, action, operator, wait_time_min) VALUES (?, ?, ?, ?, ?, ?)`, [dateStr, Date.now(), c, 'pass', req.user.nickname, await calcWaitTime()]);
     checkLineNotify(act).catch(()=>{}); await broadcastQueue(); io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number)); return { next: act };
 }));
@@ -306,7 +319,6 @@ app.post("/api/featured/clear", auth, checkPermission('settings'), asyncHandler(
 app.post("/api/featured/get", auth, asyncHandler(async r=>{ return (await redis.lrange(KEYS.FEATURED,0,-1)).map(JSON.parse); }));
 app.post("/api/admin/line-settings/:act", auth, checkPermission('settings'), asyncHandler(async req => { const act=req.params.act, keys=['approach','arrival','status','personal','passed','set_ok','cancel','login_hint','err_passed','err_no_sub','set_hint'].map(k=>`callsys:line:msg:${k}`); if(act==='get') return (await redis.mget(keys)).reduce((a,v,i)=>(a[keys[i].split(':').pop()]=v||"",a),{}); if(act==='save') { const p=redis.multi(); Object.keys(req.body).forEach(k=>p.set(`callsys:line:msg:${k}`,sanitize(req.body[k]))); await p.exec(); } if(act==='reset') await redis.del(keys); if(act==='set-unlock-pass') await redis.set(KEYS.LINE.PWD, req.body.password); if(act==='get-unlock-pass') return { password: await redis.get(KEYS.LINE.PWD)||"" }; }));
 
-// [優化] LINE Batching (分批發送)
 async function checkLineNotify(curr) { 
     if(!lineClient) return; 
     const t=curr+5, [a,r,s,e]=await Promise.all([redis.get('callsys:line:msg:approach'),redis.get('callsys:line:msg:arrival'),redis.smembers(`${KEYS.LINE.SUB}${t}`),redis.smembers(`${KEYS.LINE.SUB}${curr}`)]);
@@ -360,4 +372,4 @@ io.on("connection", async s => {
     s.on("disconnect", () => { setTimeout(broadcastOnlineAdmins, 1000); });
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v57.0 running on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v66.0 running on ${PORT}`));
