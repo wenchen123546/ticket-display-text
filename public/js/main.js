@@ -1,5 +1,5 @@
 /* ==========================================
- * 前端邏輯 (main.js) - v59.0 Complete Optimized
+ * 前端邏輯 (main.js) - v59.1 Stable
  * ========================================== */
 const $ = i => document.getElementById(i);
 const on = (el, evt, fn) => el?.addEventListener(evt, fn);
@@ -137,8 +137,6 @@ socket.on("reconnect_attempt", a => $("status-bar").textContent = T.retry.replac
 
 socket.on("updateQueue", d => {
     if($("issued-number-main")) $("issued-number-main").textContent = d.issued;
-    
-    // [New] Update Hero Waiting Count
     const waitCount = Math.max(0, d.issued - d.current);
     if($("hero-waiting-count")) $("hero-waiting-count").textContent = waitCount;
 
