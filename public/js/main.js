@@ -1,5 +1,5 @@
 /* ==========================================
- * 前端邏輯 (main.js) - v57.0 Optimized
+ * 前端邏輯 (main.js) - v58.0 Dark Mode & Fixes
  * ========================================== */
 const $ = i => document.getElementById(i);
 const on = (el, evt, fn) => el?.addEventListener(evt, fn);
@@ -15,8 +15,10 @@ const i18n = {
 let lang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[lang];
 let myTicket = localStorage.getItem('callsys_ticket'), sysMode = 'ticketing';
 let sndEnabled = true, localMute = false, avgTime = 0, lastUpd = null, audioCtx = null;
-let connTimer;
-let wakeLock = null; // Screen Wake Lock
+let connTimer, wakeLock = null;
+// [新增] 讀取深色模式設定，預設為 'light' (false)
+let isDarkMode = localStorage.getItem('callsys_theme') === 'dark';
+
 const socket = io({ autoConnect: false, reconnection: true });
 
 // --- Core Helpers ---
@@ -27,37 +29,29 @@ const toast = (msg, type='info', duration=3000) => {
     setTimeout(() => { el.classList.remove('show'); setTimeout(()=>el.remove(), 300); }, duration);
 };
 
-// [新增] 螢幕恆亮 (防止斷線)
+// Wake Lock
 const toggleWakeLock = async (active) => {
     if ('wakeLock' in navigator) {
         try {
             if (active && !wakeLock) {
                 wakeLock = await navigator.wakeLock.request('screen');
                 wakeLock.addEventListener('release', () => { wakeLock = null; });
-                console.log("Wake Lock active");
             } else if (!active && wakeLock) {
                 await wakeLock.release();
                 wakeLock = null;
-                console.log("Wake Lock released");
             }
         } catch (err) { console.error("Wake Lock error:", err); }
     }
 };
+document.addEventListener('visibilitychange', () => { if (wakeLock !== null && document.visibilityState === 'visible') toggleWakeLock(true); });
 
-document.addEventListener('visibilitychange', () => {
-    if (wakeLock !== null && document.visibilityState === 'visible') toggleWakeLock(true);
-});
-
-// [優化] iOS 音效解鎖
+// Audio
 const unlockAudio = () => {
     if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') {
-        // 播放極短靜音 Buffer 來解鎖 iOS AudioContext
         const buffer = audioCtx.createBuffer(1, 1, 22050);
         const source = audioCtx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioCtx.destination);
-        source.start(0);
+        source.buffer = buffer; source.connect(audioCtx.destination); source.start(0);
         audioCtx.resume().then(() => updateMuteUI(false));
     }
     if ('speechSynthesis' in window) window.speechSynthesis.getVoices();
@@ -74,12 +68,21 @@ const speak = (txt) => {
         window.speechSynthesis.speak(u);
     }
 };
-
-const playDing = () => {
-    if($("notify-sound") && !localMute) $("notify-sound").play().then(()=>updateMuteUI(false)).catch(()=>updateMuteUI(true, true));
-};
+const playDing = () => { if($("notify-sound") && !localMute) $("notify-sound").play().then(()=>updateMuteUI(false)).catch(()=>updateMuteUI(true, true)); };
 
 // --- UI Logic ---
+// [新增] 應用主題
+function applyTheme() {
+    if (isDarkMode) {
+        document.body.classList.add('dark-mode');
+        $('theme-toggle').textContent = '☀️';
+    } else {
+        document.body.classList.remove('dark-mode');
+        $('theme-toggle').textContent = '🌙';
+    }
+    localStorage.setItem('callsys_theme', isDarkMode ? 'dark' : 'light');
+}
+
 function applyText() {
     document.querySelectorAll('[data-i18n]').forEach(e => {
         const k = e.getAttribute('data-i18n'), map = {
@@ -100,7 +103,7 @@ function renderMode() {
     if(hasT) { 
         $("my-ticket-num").textContent = myTicket; 
         updateTicket(parseInt($("number").textContent)||0); 
-        toggleWakeLock(true); // 有號碼時保持喚醒
+        toggleWakeLock(true);
     } else {
         toggleWakeLock(false);
     }
@@ -111,17 +114,13 @@ function updateTicket(curr) {
     const diff = myTicket - curr, wEl = $("ticket-wait-time");
     $("ticket-waiting-count").textContent = diff > 0 ? diff : (diff===0 ? "0" : "-");
     $("ticket-status-text").textContent = diff > 0 ? T.wait.replace("%s",diff) : (diff===0 ? T.arr : T.pass);
-    
     if(diff > 0 && avgTime >= 0) { 
         const min = Math.ceil(diff * avgTime);
         const etaTime = new Date(Date.now() + min * 60000);
         const etaStr = etaTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
-        const timeText = (min <= 1) ? T.est_less : T.est.replace("%s", min); 
-        wEl.innerHTML = `${timeText}<br><small style="opacity:0.8; font-size:0.8em">預計 ${etaStr} 到號</small>`;
+        wEl.innerHTML = `${(min <= 1) ? T.est_less : T.est.replace("%s", min)}<br><small style="opacity:0.8; font-size:0.8em">預計 ${etaStr} 到號</small>`;
         show(wEl, true); 
-    } 
-    else show(wEl, false);
-
+    } else show(wEl, false);
     if(diff === 0) { if(typeof confetti!=='undefined') confetti({particleCount:100, spread:70, origin:{y:0.6}}); if(navigator.vibrate) navigator.vibrate([200,100,200]); }
     if(diff <= 3 && diff > 0 && document.hidden && Notification.permission==="granted") new Notification("Queue", {body:T.q_left.replace("%s",diff)});
 }
@@ -140,39 +139,20 @@ function feedback(btn, msgKey) {
 }
 
 // --- Socket Events ---
-socket.on("connect", () => { 
-    socket.emit('joinRoom', 'public'); 
-    clearTimeout(connTimer); 
-    $("status-bar").textContent = T.conn; 
-    $("status-bar").classList.remove("visible"); 
-});
-socket.on("disconnect", () => { 
-    connTimer = setTimeout(() => { $("status-bar").textContent = T.off; $("status-bar").classList.add("visible"); }, 1000);
-});
+socket.on("connect", () => { socket.emit('joinRoom', 'public'); clearTimeout(connTimer); $("status-bar").textContent = T.conn; $("status-bar").classList.remove("visible"); });
+socket.on("disconnect", () => { connTimer = setTimeout(() => { $("status-bar").textContent = T.off; $("status-bar").classList.add("visible"); }, 1000); });
 socket.on("reconnect_attempt", a => $("status-bar").textContent = T.retry.replace("%s",a));
-
 socket.on("updateQueue", d => {
     if($("issued-number-main")) $("issued-number-main").textContent = d.issued;
     const numEl = $("number");
     if(numEl.textContent !== String(d.current)) {
         playDing(); setTimeout(()=>speak(`現在號碼，${d.current}號`), 800);
-        
-        // [新增] 數字跳動動畫
-        numEl.classList.remove("number-change-anim");
-        void numEl.offsetWidth; // Trigger reflow
-        numEl.classList.add("number-change-anim");
-        
-        numEl.textContent = d.current; 
-        document.title = `${d.current} - Queue`;
+        numEl.classList.remove("number-change-anim"); void numEl.offsetWidth; numEl.classList.add("number-change-anim");
+        numEl.textContent = d.current; document.title = `${d.current} - Queue`;
     }
     updateTicket(d.current);
 });
-
-socket.on("adminBroadcast", m => { 
-    if(!localMute) speak(m); 
-    toast(T.notice+m, 'info', 10000); 
-});
-
+socket.on("adminBroadcast", m => { if(!localMute) speak(m); toast(T.notice+m, 'info', 10000); });
 socket.on("updateWaitTime", t => { avgTime = t; updateTicket(parseInt($("number").textContent)||0); });
 socket.on("updateSoundSetting", b => sndEnabled = b);
 socket.on("updatePublicStatus", b => { document.body.classList.toggle("is-closed", !b); if(b) socket.connect(); else socket.disconnect(); });
@@ -183,18 +163,14 @@ socket.on("updatePassed", list => {
     if(!list || !list.length) { show(ul, false); show(mt, true); }
     else { show(ul, true); show(mt, false); ul.innerHTML = list.map(n=>`<li>${n}</li>`).join(""); }
 });
-socket.on("updateFeaturedContents", list => {
-    $("featured-container").innerHTML = list.map(c=>`<a class="link-chip" href="${c.linkUrl}" target="_blank">${c.linkText}</a>`).join("");
-});
+socket.on("updateFeaturedContents", list => { $("featured-container").innerHTML = list.map(c=>`<a class="link-chip" href="${c.linkUrl}" target="_blank">${c.linkText}</a>`).join(""); });
 socket.on("updateTimestamp", ts => { lastUpd = new Date(ts); updTime(); });
-
 const updTime = () => { if(lastUpd) { const m = Math.floor((new Date()-lastUpd)/60000); $("last-updated").textContent = m<1?T.just:T.ago.replace("%s",m); }};
 setInterval(updTime, 10000);
 
 // --- Interactions ---
 on($("btn-take-ticket"), "click", async () => {
-    if($("btn-take-ticket").disabled) return;
-    unlockAudio(); if(Notification.permission!=='granted') Notification.requestPermission();
+    if($("btn-take-ticket").disabled) return; unlockAudio(); if(Notification.permission!=='granted') Notification.requestPermission();
     $("btn-take-ticket").disabled = true;
     try {
         const r = await fetch("/api/ticket/take", {method:"POST"}).then(d=>d.json());
@@ -203,27 +179,23 @@ on($("btn-take-ticket"), "click", async () => {
     } catch(e) { toast(T.off, "error"); }
     setTimeout(() => $("btn-take-ticket").disabled = false, 1000);
 });
-
 on($("btn-track-ticket"), "click", () => {
     unlockAudio(); const v = $("manual-ticket-input").value;
-    if(!v) return toast(T.no_in, "error");
-    if(Notification.permission!=='granted') Notification.requestPermission();
-    myTicket = parseInt(v); localStorage.setItem('callsys_ticket', myTicket);
-    $("manual-ticket-input").value = ""; renderMode();
+    if(!v) return toast(T.no_in, "error"); if(Notification.permission!=='granted') Notification.requestPermission();
+    myTicket = parseInt(v); localStorage.setItem('callsys_ticket', myTicket); $("manual-ticket-input").value = ""; renderMode();
 });
-
 on($("btn-cancel-ticket"), "click", () => { if(confirm(T.cancel)) { localStorage.removeItem('callsys_ticket'); myTicket=null; renderMode(); }});
 on($("sound-prompt"), "click", () => { unlockAudio(); if(audioCtx?.state==='running') updateMuteUI(!localMute); else playDing(); });
 on($("copy-link-prompt"), "click", () => { navigator.clipboard?.writeText(location.href).then(()=>feedback($("copy-link-prompt"), 'copied')); });
-
-on($("language-selector"), "change", e => {
-    lang = e.target.value; localStorage.setItem('callsys_lang', lang); T = i18n[lang];
-    applyText(); renderMode(); updateMuteUI(localMute); updTime();
-});
+on($("language-selector"), "change", e => { lang = e.target.value; localStorage.setItem('callsys_lang', lang); T = i18n[lang]; applyText(); renderMode(); updateMuteUI(localMute); updTime(); });
+// [新增] 主題切換監聽
+on($("theme-toggle"), "click", () => { isDarkMode = !isDarkMode; applyTheme(); });
 
 // Init
 document.addEventListener("DOMContentLoaded", () => {
-    $("language-selector").value = lang; applyText(); renderMode(); socket.connect();
+    $("language-selector").value = lang; 
+    applyTheme(); // 應用主題
+    applyText(); renderMode(); socket.connect();
     document.body.addEventListener('click', unlockAudio);
     if($("qr-code-placeholder")) try{ new QRCode($("qr-code-placeholder"), {text:location.href, width:120, height:120}); }catch(e){}
 });
