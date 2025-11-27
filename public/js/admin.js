@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v71.0 UI Fix
+ * 後台邏輯 (admin.js) - v83.0 Permission & Layout
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
@@ -62,7 +62,6 @@ let cachedLineSettings = null;
 
 const socket = io({ autoConnect: false, auth: { token: "" } });
 
-// --- Theme Logic ---
 function applyAdminTheme() {
     if (isDark) { document.body.classList.add('dark-mode'); if($('admin-theme-toggle')) $('admin-theme-toggle').textContent = '☀️'; if($('admin-theme-toggle-mobile')) $('admin-theme-toggle-mobile').textContent = '☀️ Light'; }
     else { document.body.classList.remove('dark-mode'); if($('admin-theme-toggle')) $('admin-theme-toggle').textContent = '🌙'; if($('admin-theme-toggle-mobile')) $('admin-theme-toggle-mobile').textContent = '🌙 Dark'; }
@@ -86,7 +85,6 @@ function updateLangUI() {
 
     loadUsers(); 
     loadStats(); 
-    
     if (!cachedLineSettings) loadLineSettings(); else renderLineSettings();
     req("/api/featured/get").then(res => { if(res) socket.emit("updateFeaturedContents", res); });
 }
@@ -119,6 +117,22 @@ function checkSession() {
 }
 function logout() { localStorage.removeItem('callsys_token'); token=""; location.reload(); }
 function showLogin() { $("login-container").style.display="block"; $("admin-panel").style.display="none"; socket.disconnect(); }
+
+// [New] 權限控管函式
+function applyRolePermissions() {
+    const isAdmin = (userRole === 'ADMIN' || userRole === 'super');
+    // 定義所有需要隱藏的按鈕 ID
+    const resetButtons = [
+        'resetNumber', 'resetIssued', 'resetPassed', 
+        'resetFeaturedContents', 'btn-clear-logs', 
+        'btn-clear-stats', 'btn-reset-line-msg', 'resetAll'
+    ];
+    resetButtons.forEach(id => {
+        const el = $(id);
+        if(el) el.style.display = isAdmin ? 'block' : 'none';
+    });
+}
+
 async function showPanel() {
     $("login-container").style.display="none"; $("admin-panel").style.display="flex";
     if($("sidebar-user-info")) $("sidebar-user-info").textContent = `${username}`;
@@ -126,6 +140,10 @@ async function showPanel() {
     ["card-user-management", "btn-export-csv", "mode-switcher-group", "unlock-pwd-group"].forEach(id => { if($(id)) $(id).style.display = isSuper ? "block" : "none"; });
     if($('button[data-target="section-line"]')) $('button[data-target="section-line"]').style.display = isSuper?"flex":"none";
     if(isSuper) { $("role-editor-container").style.display = "block"; loadRoles(); }
+    
+    // 應用權限隱藏按鈕
+    applyRolePermissions();
+    
     socket.auth.token = token; socket.connect(); updateLangUI(); 
 }
 
@@ -139,12 +157,7 @@ $("login-button").onclick = async () => {
 // --- Socket Events ---
 socket.on("connect", () => { $("status-bar").classList.remove("visible"); toast(`${T.status_conn} (${username})`, "success"); });
 socket.on("disconnect", () => { $("status-bar").classList.add("visible"); });
-socket.on("updateQueue", d => { 
-    if($("number")) $("number").textContent=d.current; 
-    if($("issued-number")) $("issued-number").textContent=d.issued; 
-    if($("waiting-count")) $("waiting-count").textContent=Math.max(0, d.issued-d.current); 
-    loadStats(); 
-});
+socket.on("updateQueue", d => { if($("number")) $("number").textContent=d.current; if($("issued-number")) $("issued-number").textContent=d.issued; if($("waiting-count")) $("waiting-count").textContent=Math.max(0, d.issued-d.current); loadStats(); });
 socket.on("update", n => { if($("number")) $("number").textContent=n; loadStats(); });
 socket.on("initAdminLogs", l => renderLogs(l, true));
 socket.on("newAdminLog", l => renderLogs([l], false));
@@ -152,36 +165,37 @@ socket.on("updatePublicStatus", b => { if($("public-toggle")) $("public-toggle")
 socket.on("updateSoundSetting", b => { if($("sound-toggle")) $("sound-toggle").checked=b; });
 socket.on("updateSystemMode", m => { currentSystemMode = m; $$('input[name="systemMode"]').forEach(r => r.checked = (r.value === m)); });
 
-// [UI 修正] 渲染連結管理列表
+// [UI Fix] 連結列表渲染 - 加入編輯表單結構修正
 socket.on("updateFeaturedContents", list => {
     const ul = $("featured-list-ui"); if(!ul) return; ul.innerHTML="";
     if(!list) return;
     list.forEach(item => {
         const li = mk("li", "list-item");
         
-        // View Mode
         const viewInfo = mk("div", "list-info");
         viewInfo.innerHTML = `<span class="list-main-text">${item.linkText}</span><span class="list-sub-text">${item.linkUrl}</span>`;
         
         const actions = mk("div", "list-actions");
-        const btnEdit = mk("button", "btn-secondary", T.edit, { onclick:()=>{ li.classList.add('editing'); form.style.display="flex"; viewInfo.style.display="none"; actions.style.display="none"; } });
+        const btnEdit = mk("button", "btn-secondary", T.edit, { onclick:()=>{ form.style.display="flex"; viewInfo.style.display="none"; actions.style.display="none"; } });
         const btnDel = mk("button", "btn-secondary", T.del, { onclick:()=>req("/api/featured/remove", item) });
         actions.append(btnEdit, btnDel);
 
-        // Edit Mode
-        const form = mk("div", null, null, { style: "display:none; width:100%; gap:8px; flex-wrap:wrap;" });
-        const i1 = mk("input", null, null, {value:item.linkText, style:"flex:1; min-width:100px;"});
-        const i2 = mk("input", null, null, {value:item.linkUrl, style:"flex:2; min-width:150px;"});
+        // Edit Mode Structure - Updated for CSS wrap
+        const form = mk("div", "edit-form-wrapper", null, { style: "display:none;" });
+        const i1 = mk("input", null, null, {value:item.linkText, placeholder:"Name"});
+        const i2 = mk("input", null, null, {value:item.linkUrl, placeholder:"URL"});
+        
+        const formActs = mk("div", "edit-form-actions");
         const btnSave = mk("button", "btn-secondary success", T.save, { onclick: async()=>{ if(await req("/api/featured/edit",{oldLinkText:item.linkText,oldLinkUrl:item.linkUrl,newLinkText:i1.value,newLinkUrl:i2.value})) toast(T.saved,"success"); }});
         const btnCancel = mk("button", "btn-secondary", T.cancel, { onclick:()=>{ form.style.display="none"; viewInfo.style.display="flex"; actions.style.display="flex"; } });
-        form.append(i1, i2, btnSave, btnCancel);
+        formActs.append(btnCancel, btnSave);
+        form.append(i1, i2, formActs);
 
         li.append(viewInfo, actions, form);
         ul.appendChild(li);
     });
 });
 
-// [UI 修正] 渲染過號名單
 socket.on("updatePassed", list => {
     const ul = $("passed-list-ui"); if(!ul) return; ul.innerHTML="";
     if(!list) return;
@@ -189,12 +203,10 @@ socket.on("updatePassed", list => {
         const li = mk("li", "list-item");
         const info = mk("div", "list-info");
         info.innerHTML = `<span class="list-main-text" style="font-size:1.2rem; color:var(--primary);">${n} 號</span>`;
-        
         const actions = mk("div", "list-actions");
         const btnRecall = mk("button", "btn-secondary", T.recall, {onclick:()=>{ if(confirm(`Recall ${n}?`)) req("/api/control/recall-passed",{number:n}); }});
         const btnDel = mk("button", "btn-secondary", T.del); 
         confirmBtn(btnDel, T.del, ()=>req("/api/passed/remove",{number:n}));
-        
         actions.append(btnRecall, btnDel);
         li.append(info, actions);
         ul.appendChild(li);
@@ -202,8 +214,7 @@ socket.on("updatePassed", list => {
 });
 
 socket.on("updateOnlineAdmins", list => {
-    const ul = $("online-users-list"); if(!ul) return; 
-    ul.innerHTML = "";
+    const ul = $("online-users-list"); if(!ul) return; ul.innerHTML = "";
     if(!list || !list.length) { ul.innerHTML = `<li class="list-item" style="justify-content:center; color:var(--text-sub);">Waiting...</li>`; return; }
     list.sort((a,b)=>(a.role==='super'?-1:1)).forEach(u => {
         const li = mk("li", "list-item");
@@ -212,27 +223,28 @@ socket.on("updateOnlineAdmins", list => {
     });
 });
 
-// [UI 修正] 渲染使用者列表
+// [UI Fix] 帳號列表渲染 - 加入編輯表單結構修正
 async function loadUsers() {
     const ul = $("user-list-ui"); if(!ul) return; const d = await req("/api/admin/users"); if(!d || !d.users) return; ul.innerHTML="";
     const roleOpts = { 'VIEWER':'Viewer', 'OPERATOR':'Operator', 'MANAGER':'Manager', 'ADMIN':'Admin' };
     d.users.forEach(u => {
         const li = mk("li", "list-item");
         
-        // View
         const info = mk("div", "list-info");
         info.innerHTML = `<span class="list-main-text">${u.role==='ADMIN'?'👑':(u.role==='MANAGER'?'🛡️':'👤')} ${u.nickname}</span><span class="list-sub-text">${u.username} (${roleOpts[u.role]||u.role})</span>`;
         
         const actions = mk("div", "list-actions");
         
-        // Edit Form
-        const form = mk("div", null, null, { style: "display:none; width:100%; gap:8px; flex-wrap:wrap;" });
-        const iNick = mk("input", null, null, {value:u.nickname});
+        // Edit Form Structure
+        const form = mk("div", "edit-form-wrapper", null, { style: "display:none;" });
+        const iNick = mk("input", null, null, {value:u.nickname, placeholder:"Nickname"});
+        
+        const formActs = mk("div", "edit-form-actions");
         const btnSave = mk("button", "btn-secondary success", T.save);
         btnSave.onclick = async () => { if(await req("/api/admin/set-nickname", {targetUsername:u.username, nickname:iNick.value})) { toast("Saved", "success"); loadUsers(); } };
         const btnCancel = mk("button", "btn-secondary", T.cancel, { onclick:()=>{ form.style.display="none"; info.style.display="flex"; actions.style.display="flex"; } });
-        
-        form.append(iNick, btnSave, btnCancel);
+        formActs.append(btnCancel, btnSave);
+        form.append(iNick, formActs);
 
         if(u.username === uniqueUser || userRole === 'super') {
             const btnEdit = mk("button", "btn-secondary", T.edit, { onclick:()=>{ info.style.display="none"; actions.style.display="none"; form.style.display="flex"; } });
@@ -240,7 +252,7 @@ async function loadUsers() {
         }
 
         if(u.username !== 'superadmin' && userRole === 'super') {
-            const roleSel = mk("select", "role-select", null, {style:"padding:2px; height:36px;"});
+            const roleSel = mk("select", "role-select", null, {style:"padding:2px; height:46px;"});
             Object.keys(roleOpts).forEach(k => { const o = mk("option",null,roleOpts[k]); o.value=k; if(u.role===k) o.selected=true; roleSel.appendChild(o); });
             roleSel.onchange = async () => { if(await req("/api/admin/set-role", {targetUsername:u.username, newRole:roleSel.value})) toast("Role Saved", "success"); };
             actions.appendChild(roleSel);
@@ -256,8 +268,7 @@ async function loadUsers() {
 }
 
 async function loadRoles() {
-    const rolesConfig = await req("/api/admin/roles/get");
-    if(!rolesConfig) return;
+    const rolesConfig = await req("/api/admin/roles/get"); if(!rolesConfig) return;
     const container = $("role-editor-content"); if(!container) return; container.innerHTML = "";
     const wrapper = mk("div", "role-table-wrapper");
     const table = mk("table", "role-table"), thead = mk("thead"), trHead = mk("tr");
@@ -292,7 +303,7 @@ async function loadStats() {
                     try { const item = (typeof h === 'string') ? JSON.parse(h) : h; const timeStr = new Date(item.time || item.timestamp).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' }); return `<li><span>${timeStr} - <b style="color:var(--primary);">${item.num || item.number}</b> <small style="color:var(--text-sub);">(${item.operator})</small></span></li>`; } catch (err) { return ""; }
                 }).join("");
             }
-        } else { if (ul) ul.innerHTML = `<li style="text-align:center; padding:20px; color:var(--text-sub);">等待數據...</li>`; }
+        }
     } catch (e) { if (ul) ul.innerHTML = `<li style="color:var(--danger); text-align:center; padding:10px;">載入失敗</li>`; }
 }
 
@@ -355,13 +366,7 @@ $("btn-save-unlock-pwd")?.addEventListener("click", async()=>{ if(await req("/ap
 $("add-user-btn")?.addEventListener("click", async()=>{ const u=$("new-user-username").value, p=$("new-user-password").value, n=$("new-user-nickname").value, r=$("new-user-role")?.value; if(await req("/api/admin/add-user", {newUsername:u, newPassword:p, newNickname:n, newRole:r})) { toast("Saved","success"); $("new-user-username").value=""; $("new-user-password").value=""; $("new-user-nickname").value=""; loadUsers(); } });
 const lineSettingsConfig = { approach: { label: "快到了", hint: "{current} {target}" }, arrival: { label: "正式到號", hint: "{current} {target}" }, status: { label: "狀態回覆", hint: "{current} {issued}" }, personal: { label: "個人資訊", hint: "{target}" }, passed: { label: "過號回覆", hint: "{list}" }, set_ok: { label: "設定成功", hint: "{target}" }, cancel: { label: "取消成功", hint: "{target}" }, login_hint: { label: "登入提示", hint: "" }, err_passed: { label: "已過號錯誤", hint: "" }, err_no_sub: { label: "無設定錯誤", hint: "" }, set_hint: { label: "設定提示", hint: "" } };
 
-async function loadLineSettings() { 
-    const ul = $("line-settings-list-ui"); if (!ul) return;
-    const data = await req("/api/admin/line-settings/get"); 
-    if(!data) return;
-    cachedLineSettings = data;
-    renderLineSettings();
-}
+async function loadLineSettings() { const ul = $("line-settings-list-ui"); if (!ul) return; const data = await req("/api/admin/line-settings/get"); if(!data) return; cachedLineSettings = data; renderLineSettings(); }
 
 function renderLineSettings() {
     const ul = $("line-settings-list-ui"); if (!ul || !cachedLineSettings) return; ul.innerHTML=""; 
@@ -370,7 +375,6 @@ function renderLineSettings() {
         const config = lineSettingsConfig[key], val = cachedLineSettings[key] || ""; 
         const li = mk("li", "list-item"); 
         
-        // View Mode
         const view = mk("div", "line-setting-row"); 
         const infoDiv = mk("div", "line-setting-info"); 
         const label = mk("span", "line-setting-label", config.label);
@@ -380,7 +384,6 @@ function renderLineSettings() {
         const btnEdit = mk("button","btn-secondary", T.edit || "Edit", { onclick:()=>{ view.style.display="none"; editContainer.style.display="flex"; } }); 
         view.append(infoDiv, btnEdit); 
         
-        // Edit Mode
         const editContainer = mk("div", "line-edit-box", null, {style:"display:none;"});
         const hint = mk("div", "line-edit-hint", `可用變數: ${config.hint || "無"}`);
         const ta = mk("textarea", null, null, {value:val, placeholder:"請輸入訊息內容..."});
