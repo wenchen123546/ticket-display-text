@@ -1,22 +1,22 @@
 /* ==========================================
- * 後台樣式 (admin.css) - v80.0 Professional
+ * 後台樣式 (admin.css) - v81.0 Uniform Grid
  * ========================================== */
 :root {
     /* [Light Mode - 舒適辦公] */
-    --bg-body: #f1f5f9;       /* 淺灰藍背景 */
-    --bg-surface: #ffffff;    /* 純白卡片 */
+    --bg-body: #f1f5f9;       
+    --bg-surface: #ffffff;    
     --bg-sidebar: #ffffff;
     
-    --text-main: #334155;     /* 深石灰 */
-    --text-sub: #64748b;      /* 次要灰 */
+    --text-main: #334155;     
+    --text-sub: #64748b;      
     
     --border-color: #e2e8f0; 
-    --input-bg: #f8fafc;      /* 輸入框微灰，增加層次 */
+    --input-bg: #f8fafc;      
     
-    --primary: #6366f1;       /* 靛藍 */
-    --success: #10b981;       /* 翡翠綠 */
-    --warning: #f59e0b;       /* 琥珀色 */
-    --danger: #ef4444;        /* 赤紅 */
+    --primary: #6366f1;       
+    --success: #10b981;       
+    --warning: #f59e0b;       
+    --danger: #ef4444;        
     
     --primary-grad: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
     
@@ -25,24 +25,23 @@
     --sidebar-w: 260px;
     --header-h: 64px; 
     
-    /* 柔和的卡片陰影 */
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }
 
 body.dark-mode {
     /* [Dark Mode - 專業暗色] */
-    --bg-body: #0f172a;       /* 深藍黑 */
-    --bg-surface: #1e293b;    /* 較亮的藍灰卡片 */
+    --bg-body: #0f172a;       
+    --bg-surface: #1e293b;    
     --bg-sidebar: #1e293b;
     
-    --text-main: #e2e8f0;     /* 亮灰白 */
-    --text-sub: #94a3b8;      /* 灰藍 */
+    --text-main: #e2e8f0;     
+    --text-sub: #94a3b8;      
     
-    --border-color: rgba(255, 255, 255, 0.08); /* 極細邊框 */
-    --input-bg: #020617;      /* 深色輸入框 */
+    --border-color: rgba(255, 255, 255, 0.08); 
+    --input-bg: #020617;      
     
-    --primary: #818cf8;       /* 亮靛藍 */
+    --primary: #818cf8;       
     --primary-grad: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
     
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
@@ -58,7 +57,7 @@ body {
     transition: background 0.3s, color 0.3s;
 }
 
-/* Login - 優化卡片質感 */
+/* Login */
 #login-container { 
     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
     width: 90%; max-width: 420px; 
@@ -77,7 +76,7 @@ body {
 /* Layout */
 #admin-panel { display: flex; width: 100%; min-height: 100vh; isolation: isolate; }
 
-/* Sidebar - 增加呼吸感 */
+/* Sidebar */
 .sidebar { 
     width: var(--sidebar-w); background: var(--bg-sidebar); border-right: 1px solid var(--border-color); 
     display: flex; flex-direction: column; height: 100vh; position: sticky; top: 0; flex-shrink: 0; z-index: 100; 
@@ -102,7 +101,7 @@ body.dark-mode .nav-btn.active { background: rgba(99, 102, 241, 0.15); color: #8
 .section-group.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Dashboard Headers - 儀表板數據卡 */
+/* Dashboard Headers */
 .dashboard-header { 
     display: grid; 
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); 
@@ -122,15 +121,28 @@ body.dark-mode .nav-btn.active { background: rgba(99, 102, 241, 0.15); color: #8
 .sub-number { font-size: 2.2rem; font-weight: 800; color: var(--text-main); line-height: 1.1; margin-top: 5px; }
 .label { font-size: 0.85rem; color: var(--text-sub); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; }
 
-/* Grid Cards */
-.card-container { display: grid; gap: 24px; grid-template-columns: repeat(1, 1fr); align-items: stretch; }
-@media (min-width: 768px) { .card-container { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 1200px) { 
-    .card-container { grid-template-columns: repeat(3, 1fr); } 
-    #section-stats .card-container { grid-template-columns: 2fr 1fr; } 
-    #section-stats .full-width-card { grid-column: auto !important; }
+/* =========================================
+   [修正] 統一卡片寬度網格系統
+   ========================================= */
+.card-container { 
+    display: grid; gap: 24px; 
+    /* 預設 1 欄 (Mobile) */
+    grid-template-columns: repeat(1, minmax(0, 1fr)); 
+    align-items: stretch; /* 強制等高 */
 }
-.full-width-card { grid-column: 1 / -1; }
+
+@media (min-width: 768px) { 
+    /* Tablet: 2 欄等寬 */
+    .card-container { grid-template-columns: repeat(2, minmax(0, 1fr)); } 
+}
+
+@media (min-width: 1200px) { 
+    /* Desktop: 3 欄等寬 (強制 minmax(0, 1fr) 防止撐開) */
+    .card-container { grid-template-columns: repeat(3, minmax(0, 1fr)); } 
+}
+
+/* 全寬卡片 (跨越所有欄位) */
+.full-width-card { grid-column: 1 / -1 !important; }
 .card-wrapper { height: 100%; }
 
 .admin-card { 
@@ -188,7 +200,7 @@ body.dark-mode .btn-secondary.success { background: rgba(16, 185, 129, 0.15); co
 .btn-reset-single { width: 100%; padding: 12px; border: 1px dashed var(--border-color); background: transparent; color: var(--text-sub); margin-top: auto; cursor: pointer; border-radius: 12px; transition: 0.2s; font-size: 0.9rem; }
 .btn-reset-single:hover { border-style: solid; color: var(--danger); border-color: var(--danger); background: rgba(239, 68, 68, 0.05); }
 
-/* List Containers - 優化閱讀性 */
+/* List Containers */
 .list-container {
     flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;
     margin-bottom: 16px; border: 1px solid var(--border-color); border-radius: 12px;
@@ -240,7 +252,7 @@ body.dark-mode .list-item:hover { background: rgba(255,255,255,0.02); }
 .chart-col:hover .chart-bar { opacity: 0.8; }
 .chart-col.current .chart-bar { background: var(--warning); opacity: 1; }
 
-/* LINE Settings - 氣泡式預覽 */
+/* LINE Settings */
 .line-setting-row { display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 10px; }
 .line-setting-info { display: flex; flex-direction: column; gap: 6px; flex: 1; padding-right: 12px; min-width: 200px; }
 .line-setting-label { font-weight: 700; color: var(--text-main); font-size: 1rem; }
@@ -305,7 +317,7 @@ body.dark-mode .line-edit-hint { background: rgba(255,255,255,0.05); }
     .dashboard-item { min-height: auto; padding: 16px; }
     .big-number { font-size: 2.8rem; }
     
-    .card-container { grid-template-columns: 1fr !important; } 
+    .card-container { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; } 
     .mobile-only-settings { display: block; }
     .add-row { flex-wrap: wrap; }
     .add-row input { min-width: 100%; }
