@@ -121,8 +121,10 @@
                         <div class="add-section">
                             <label class="add-label">手動加入過號</label>
                             <div class="add-row">
-                                <input type="number" id="new-passed-number" placeholder="輸入號碼 (例如 5)" inputmode="numeric" min="0">
-                                <button id="add-passed-btn" class="btn-add">+</button>
+                                <div class="join-group" style="width:100%;">
+                                    <input type="number" id="new-passed-number" placeholder="輸入號碼 (例如 5)" inputmode="numeric" min="0">
+                                    <button id="add-passed-btn" class="btn-add">+</button>
+                                </div>
                             </div>
                         </div>
                         <button id="resetPassed" class="btn-reset-single" data-i18n="btn_clear_passed">清空過號</button>
@@ -193,10 +195,7 @@
                         <div class="mobile-only-settings">
                             <div class="control-group" style="display:flex; gap:10px;">
                                 <button id="admin-theme-toggle-mobile" class="btn-secondary" style="flex:1;">🌙 Theme</button>
-                                <select id="admin-lang-selector-mobile" class="lang-select" style="flex:2;">
-                                    <option value="zh-TW">繁體中文</option>
-                                    <option value="en">English</option>
-                                </select>
+                                <select id="admin-lang-selector-mobile" class="lang-select" style="flex:2;"><option value="zh-TW">繁體中文</option><option value="en">English</option></select>
                             </div>
                             <button id="btn-logout-mobile" class="btn-reset-single" style="color:var(--danger); border-color:var(--danger); margin-top:10px;" data-i18n="logout">登出</button>
                         </div>
@@ -222,8 +221,8 @@
                             <label class="add-label">新增連結</label>
                             <div class="add-row">
                                 <input type="text" id="new-link-text" data-i18n-ph="ph_link_name" placeholder="名稱 (如: 菜單)">
-                                <div class="input-wrapper-inner" style="flex:2;">
-                                    <input type="text" id="new-link-url" placeholder="URL (https://...)" style="flex:1;">
+                                <div class="join-group">
+                                    <input type="text" id="new-link-url" placeholder="URL (https://...)">
                                     <button id="add-featured-btn" class="btn-add">+</button>
                                 </div>
                             </div>
@@ -241,12 +240,10 @@
                         <div class="add-section">
                             <label class="add-label" data-i18n="lbl_add_user">新增帳號</label>
                             <div class="add-row">
-                                <div class="input-wrapper-inner" style="flex:1;">
-                                    <input type="text" id="new-user-username" data-i18n-ph="ph_account" placeholder="帳號">
-                                    <input type="text" id="new-user-nickname" data-i18n-ph="ph_nick" placeholder="暱稱">
-                                </div>
-                                <div class="input-wrapper-inner" style="flex:1;">
-                                    <input type="password" id="new-user-password" data-i18n-ph="ph_password" placeholder="密碼">
+                                <input type="text" id="new-user-username" data-i18n-ph="ph_account" placeholder="帳號">
+                                <input type="text" id="new-user-password" data-i18n-ph="ph_password" placeholder="密碼">
+                                <input type="text" id="new-user-nickname" data-i18n-ph="ph_nick" placeholder="暱稱">
+                                <div class="join-group">
                                     <select id="new-user-role" class="role-select">
                                         <option value="VIEWER">Viewer</option>
                                         <option value="OPERATOR" selected>Operator</option>
