@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v67.0 Manual Stats Fixed
+ * 伺服器 (index.js) - v68.0 Passed Stats Fixed
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http");
@@ -151,7 +151,7 @@ async function handleControl(type, { body, user }) {
         newNum = parseInt(number); if(isNaN(newNum)||newNum<0) return { error: "無效號碼" };
         if(type==='set_issue' && newNum===0) { await performReset(user.nickname); return {}; }
         
-        // [修正] 手動設定發號時，自動補齊統計差額
+        // 手動設定發號時，自動補齊統計差額
         if(type==='set_issue') {
             const diff = newNum - issued;
             if (diff !== 0) {
@@ -162,7 +162,7 @@ async function handleControl(type, { body, user }) {
             logMsg = `修正發號 ${newNum}`; 
         }
         
-        // [修正] 手動設定叫號時，如果超過發號，自動補齊統計
+        // 手動設定叫號時，如果超過發號，自動補齊統計
         if(type==='set_call') { 
             if (newNum > issued) {
                 const diff = newNum - issued;
@@ -298,9 +298,36 @@ app.post("/api/admin/roles/update", auth, checkPermission('settings'), asyncHand
     addLog(r.user.nickname, "🔧 修改了角色權限表");
 }));
 
-app.post("/api/passed/add", auth, checkPermission('pass'), asyncHandler(async r=>{ await redis.zadd(KEYS.PASSED, r.body.number, r.body.number); io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number)); }));
-app.post("/api/passed/remove", auth, checkPermission('pass'), asyncHandler(async r=>{ await redis.zrem(KEYS.PASSED, r.body.number); io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number)); }));
-app.post("/api/passed/clear", auth, checkPermission('pass'), asyncHandler(async r=>{ await redis.del(KEYS.PASSED); io.emit("updatePassed", []); }));
+// 1. 手動加入過號 (修正：納入統計扣除)
+app.post("/api/passed/add", auth, checkPermission('pass'), asyncHandler(async r => {
+    const { number } = r.body;
+    await redis.zadd(KEYS.PASSED, number, number);
+    
+    // 手動加入過號時，該時段統計 -1
+    const { dateStr, hour } = getTWTime();
+    await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, -1);
+    
+    io.emit("updatePassed", (await redis.zrange(KEYS.PASSED, 0, -1)).map(Number));
+}));
+
+// 2. 移除過號 (修正：加回統計)
+app.post("/api/passed/remove", auth, checkPermission('pass'), asyncHandler(async r => {
+    const { number } = r.body;
+    await redis.zrem(KEYS.PASSED, number);
+    
+    // 從過號名單移除時 (視為恢復)，該時段統計 +1
+    const { dateStr, hour } = getTWTime();
+    await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, hour, 1);
+    
+    io.emit("updatePassed", (await redis.zrange(KEYS.PASSED, 0, -1)).map(Number));
+}));
+
+// 3. 清空過號
+app.post("/api/passed/clear", auth, checkPermission('pass'), asyncHandler(async r => {
+    await redis.del(KEYS.PASSED);
+    io.emit("updatePassed", []);
+}));
+
 app.post("/api/appointment/add", auth, checkPermission('appointment'), asyncHandler(async req => { await dbRun("INSERT INTO appointments (number, scheduled_time) VALUES (?, ?)", [req.body.number, new Date(req.body.timeStr).getTime()]); addLog(req.user.nickname, `📅 預約: ${req.body.number}號`); }));
 app.post("/api/appointment/list", auth, checkPermission('appointment'), asyncHandler(async req => { return { appointments: await dbAll("SELECT * FROM appointments WHERE status='pending' ORDER BY scheduled_time ASC", []) }; }));
 app.post("/api/appointment/remove", auth, checkPermission('appointment'), asyncHandler(async req => { await dbRun("DELETE FROM appointments WHERE id = ?", [req.body.id]); addLog(req.user.nickname, `🗑️ 刪除預約 ID: ${req.body.id}`); }));
@@ -390,4 +417,4 @@ io.on("connection", async s => {
     s.on("disconnect", () => { setTimeout(broadcastOnlineAdmins, 1000); });
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v67.0 running on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v68.0 running on ${PORT}`));
