@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v65.0 Optimized & Fixed
+ * 後台邏輯 (admin.js) - v65.1 Fixed Init
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
@@ -8,95 +8,49 @@ const mk = (t, c, txt, ev={}) => { const e = document.createElement(t); if(c) e.
 // 完整翻譯字典
 const i18n = {
     "zh-TW": { 
-        // 狀態與動態訊息
         status_conn:"✅ 已連線", status_dis:"⚠️ 連線中斷...", saved:"✅ 已儲存", denied:"❌ 權限不足", 
         expired:"Session 過期", login_fail:"登入失敗", confirm:"⚠️ 確認", recall:"↩️ 重呼", 
         edit:"✎", del:"✕", save:"✓", cancel:"✕",
-        
-        // 登入頁
         login_title: "請登入管理系統", ph_account: "帳號", ph_password: "密碼", login_btn: "登入",
-        
-        // 側邊欄
         admin_panel: "管理後台", nav_live: "現場控台", nav_stats: "數據報表", 
         nav_settings: "系統設定", nav_line: "LINE設定", logout: "登出",
-        
-        // Dashboard
         dash_curr: "目前叫號", dash_issued: "已發號至", dash_wait: "等待組數",
-        
-        // 現場控台卡片
         card_call: "指揮中心", btn_next: "下一號 ▶", btn_prev: "◀ 上一號", btn_pass: "過號", 
         lbl_assign: "指定 / 插隊", btn_exec: "GO", btn_reset_call: "↺ 重置叫號",
-        
-        // 發號管理卡片
         card_issue: "發號管理", btn_recall: "➖ 收回", btn_issue: "發號 ➕", 
         lbl_fix_issue: "修正發號數", btn_fix: "修正", btn_reset_issue: "↺ 重置發號",
-        
-        // 過號名單
         card_passed: "過號名單", btn_clear_passed: "清空過號",
-        
-        // 統計
         card_stats: "流量分析", lbl_today: "今日人次", btn_refresh: "重整", btn_clear_stats: "🗑️ 清空統計",
         card_logs: "操作日誌", btn_clear_logs: "清除日誌",
-        
-        // 系統設定
         card_sys: "系統", lbl_public: "開放前台", lbl_sound: "提示音效", 
         lbl_tts: "TTS 語音廣播", btn_play: "播放", 
         lbl_mode: "取號模式", mode_online: "線上取號", mode_manual: "手動輸入", btn_reset_all: "💥 全域重置",
-        
-        // 其他卡片
         card_online: "在線管理", card_links: "連結管理", ph_link_name: "名稱", btn_clear_links: "清空連結",
         card_users: "帳號管理", lbl_add_user: "新增帳號", ph_nick: "暱稱",
-        
-        // Line設定
         btn_save: "儲存", btn_restore: "恢復預設值",
-        
-        // Modal
         modal_edit: "編輯數據", btn_done: "完成"
     },
     "en": { 
-        // Status & Dynamic
         status_conn:"✅ Connected", status_dis:"⚠️ Disconnected...", saved:"✅ Saved", denied:"❌ Denied", 
         expired:"Session Expired", login_fail:"Login Failed", confirm:"⚠️ Confirm", recall:"↩️ Recall", 
         edit:"Edit", del:"Del", save:"Save", cancel:"Cancel",
-        
-        // Login
         login_title: "Login to Admin Panel", ph_account: "Username", ph_password: "Password", login_btn: "Login",
-        
-        // Sidebar
         admin_panel: "Admin Panel", nav_live: "Live Console", nav_stats: "Statistics", 
         nav_settings: "Settings", nav_line: "Line Config", logout: "Logout",
-        
-        // Dashboard
         dash_curr: "Current Serving", dash_issued: "Last Issued", dash_wait: "Waiting",
-        
-        // Live Console
         card_call: "Command Center", btn_next: "Next ▶", btn_prev: "◀ Prev", btn_pass: "Pass", 
         lbl_assign: "Assign / Jump", btn_exec: "GO", btn_reset_call: "↺ Reset Call",
-        
-        // Issue Mgmt
         card_issue: "Ticketing", btn_recall: "➖ Recall", btn_issue: "Issue ➕", 
         lbl_fix_issue: "Fix Issued #", btn_fix: "Fix", btn_reset_issue: "↺ Reset Issue",
-        
-        // Passed List
         card_passed: "Passed List", btn_clear_passed: "Clear Passed",
-        
-        // Stats
         card_stats: "Analytics", lbl_today: "Today's Count", btn_refresh: "Refresh", btn_clear_stats: "🗑️ Clear Stats",
         card_logs: "Action Logs", btn_clear_logs: "Clear Logs",
-        
-        // System Settings
         card_sys: "System", lbl_public: "Public Access", lbl_sound: "Sound FX", 
         lbl_tts: "TTS Broadcast", btn_play: "Play", 
         lbl_mode: "Mode", mode_online: "Online Ticket", mode_manual: "Manual Input", btn_reset_all: "💥 Factory Reset",
-        
-        // Other Cards
         card_online: "Online Users", card_links: "Links Manager", ph_link_name: "Name", btn_clear_links: "Clear Links",
         card_users: "User Manager", lbl_add_user: "Add User", ph_nick: "Nickname",
-        
-        // Line Settings
         btn_save: "Save", btn_restore: "Restore Defaults",
-        
-        // Modal
         modal_edit: "Edit Data", btn_done: "Done"
     }
 };
@@ -105,8 +59,7 @@ let curLang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[curLang];
 let token="", userRole="normal", username="", uniqueUser="", toastTimer;
 let currentSystemMode = 'ticketing'; 
 let isDark = localStorage.getItem('callsys_admin_theme') === 'dark';
-// [新增] Line 設定快取變數
-let cachedLineSettings = null; 
+let cachedLineSettings = null; // Line 設定快取
 
 const socket = io({ autoConnect: false, auth: { token: "" } });
 
@@ -126,20 +79,21 @@ function toast(msg, type='info') {
 
 function updateLangUI() {
     T = i18n[curLang] || i18n["zh-TW"];
-    // 更新一般文字
     $$('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if(T[k]) el.textContent = T[k]; });
-    // 更新 Placeholder
     $$('[data-i18n-ph]').forEach(el => { const k = el.getAttribute('data-i18n-ph'); if(T[k]) el.placeholder = T[k]; });
     
     if($("admin-lang-selector-mobile")) $("admin-lang-selector-mobile").value = curLang;
     if($("admin-lang-selector")) $("admin-lang-selector").value = curLang;
 
-    // 重新載入動態內容
     loadUsers(); 
     loadStats(); 
     
-    // [優化] 使用 render 函式而非重新請求，避免閃爍
-    renderLineSettings(); 
+    // [關鍵修正] 如果還沒有資料(第一次載入)，就去抓；如果有資料(切換語言)，直接畫
+    if (!cachedLineSettings) {
+        loadLineSettings();
+    } else {
+        renderLineSettings();
+    }
     
     req("/api/featured/get").then(res => { if(res) socket.emit("updateFeaturedContents", res); });
 }
