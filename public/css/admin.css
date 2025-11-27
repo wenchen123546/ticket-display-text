@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台樣式 (admin.css) - v47.0 List View Restore
+ * 後台樣式 (admin.css) - v55.0 Mobile Fix
  * ========================================== */
 :root {
     --bg-body: #f3f4f6; --bg-surface: #ffffff; --bg-sidebar: #ffffff;
@@ -87,75 +87,18 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .var-hint { display: block; font-size: 0.8rem; color: #666; margin-bottom: 4px; font-family: monospace; background: #eee; padding: 2px 5px; border-radius: 4px; width: fit-content; }
 .form-group-boxed { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
 
-/* -----------------------------------------------------------
- * [修改] 後台過號名單 (回歸條列式 List View)
- * ----------------------------------------------------------- */
-#passed-list-ui {
-    display: block; /* 取消 Grid */
-    background: #f9fafb;
-    border: 1px solid #f3f4f6;
-    padding: 0;
-    max-height: 280px; /* 限制高度，超過出現卷軸 */
-    overflow-y: auto;
-}
-#passed-list-ui li {
-    display: flex;
-    flex-direction: row; /* 左右排列 */
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 15px;
-    border-bottom: 1px solid #e5e7eb;
-    background: white;
-    box-shadow: none;
-    height: auto;
-    gap: 10px;
-    margin: 0;
-}
-#passed-list-ui li:last-child {
-    border-bottom: none;
-}
-/* 左側區塊：號碼+按鈕 */
-#passed-list-ui li > div {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 12px !important;
-    width: auto !important;
-    margin: 0 !important;
-}
-/* 號碼樣式 */
-#passed-list-ui li span {
-    font-size: 1.2rem !important;
-    font-weight: 700 !important;
-    color: var(--text-main) !important;
-    margin: 0 !important;
-    min-width: 40px;
-}
-/* 按鈕 */
-#passed-list-ui button {
-    width: auto;
-    margin: 0;
-    padding: 4px 12px;
-}
-/* 刪除按鈕 */
-#passed-list-ui .delete-item-btn {
-    background: transparent;
-    color: #ef4444;
-    font-weight: bold;
-    font-size: 1.1rem;
-    padding: 4px 10px;
-    margin: 0;
-    border-radius: 4px;
-}
-#passed-list-ui .delete-item-btn:hover {
-    background: #fee2e2;
-}
+/* List View Restore */
+#passed-list-ui { display: block; background: #f9fafb; border: 1px solid #f3f4f6; padding: 0; max-height: 280px; overflow-y: auto; }
+#passed-list-ui li { display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px solid #e5e7eb; background: white; box-shadow: none; height: auto; gap: 10px; margin: 0; }
+#passed-list-ui li:last-child { border-bottom: none; }
+#passed-list-ui li > div { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 12px !important; width: auto !important; margin: 0 !important; }
+#passed-list-ui li span { font-size: 1.2rem !important; font-weight: 700 !important; color: var(--text-main) !important; margin: 0 !important; min-width: 40px; }
+#passed-list-ui button { width: auto; margin: 0; padding: 4px 12px; }
+#passed-list-ui .delete-item-btn { background: transparent; color: #ef4444; font-weight: bold; font-size: 1.1rem; padding: 4px 10px; margin: 0; border-radius: 4px; }
+#passed-list-ui .delete-item-btn:hover { background: #fee2e2; }
 
 /* Chart */
-.chart-container { 
-    min-height: 180px; flex: 1; display: flex; align-items: flex-end; gap: 2px; padding: 10px 0; margin-bottom: 10px;
-    width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; 
-}
+.chart-container { min-height: 180px; flex: 1; display: flex; align-items: flex-end; gap: 2px; padding: 10px 0; margin-bottom: 10px; width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .chart-col { flex: 0 0 auto; min-width: 20px; display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: 0.7; transition: 0.2s; }
 .chart-col:hover, .chart-col.current { opacity: 1; }
 .chart-bar { width: 100%; background: var(--primary); border-radius: 4px 4px 0 0; min-height: 4px; }
@@ -173,22 +116,7 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .sec-icon { font-size: 2rem; background: #fff; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 50%; box-shadow: 0 2px 5px rgba(234, 88, 12, 0.2); }
 .sec-content { flex: 1; }
 .sec-title { font-weight: 800; color: #c2410c; margin-bottom: 5px; display: block; font-size: 1rem; }
-
-/* LINE 訊息預覽 (緊湊版) */
-.line-msg-preview { 
-    display: block; 
-    font-family: monospace; 
-    line-height: 1.3; 
-    max-height: 80px; 
-    overflow-y: auto; 
-    color: #475569; 
-    font-size: 0.8rem; 
-    padding: 6px 10px !important; 
-    background: #f1f5f9; 
-    border-radius: 6px;
-    margin-top: 4px;
-    white-space: pre-wrap; 
-}
+.line-msg-preview { display: block; font-family: monospace; line-height: 1.3; max-height: 80px; overflow-y: auto; color: #475569; font-size: 0.8rem; padding: 6px 10px !important; background: #f1f5f9; border-radius: 6px; margin-top: 4px; white-space: pre-wrap; }
 
 /* Overlays */
 #status-bar { position: fixed; top: 0; width: 100%; background: var(--danger); color: white; text-align: center; padding: 8px; transform: translateY(-100%); transition: 0.3s; z-index: 9999; } #status-bar.visible { transform: translateY(0); }
@@ -199,6 +127,9 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .btn-circle { width: 40px; height: 40px; border-radius: 50%; font-weight: bold; border:none; color:white; cursor:pointer; font-size: 1.2rem; }
 .modal-actions { display: flex; justify-content: center; align-items: center; gap: 20px; margin: 20px 0; }
 .delete-item-btn { background: transparent; color: #9ca3af; border:none; cursor:pointer; padding:4px; font-weight: bold; } .delete-item-btn:hover { color: #ef4444; }
+
+/* [新增] 手機版專用設定區塊 (預設隱藏) */
+.mobile-only-settings { display: none; margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--border-color); }
 
 /* Responsive Mobile */
 @media (max-width: 768px) {
@@ -216,4 +147,7 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
     .input-group { flex-direction: column; }
     #btn-call-next { order: -1; min-width: 100%; }
     .btn-secondary { width: 100%; }
+    
+    /* [新增] 手機版顯示設定區塊 */
+    .mobile-only-settings { display: block; }
 }
