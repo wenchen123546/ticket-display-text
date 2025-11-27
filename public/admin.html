@@ -115,10 +115,13 @@
                 <div class="card-wrapper" id="card-editor">
                     <div class="admin-card">
                         <h3><span class="card-icon">📝</span> <span data-i18n="card_passed">過號名單</span></h3>
-                        <div class="control-group list-editor">
-                            <ul id="passed-list-ui"></ul>
-                            <div class="input-group">
-                                <input type="number" id="new-passed-number" placeholder="No." inputmode="numeric" min="0" oninput="validity.valid||(value='');">
+                        <div class="list-container">
+                            <ul id="passed-list-ui" class="scroll-list"></ul>
+                        </div>
+                        <div class="add-section">
+                            <label class="add-label">手動加入過號</label>
+                            <div class="add-row">
+                                <input type="number" id="new-passed-number" placeholder="輸入號碼 (例如 5)" inputmode="numeric" min="0">
                                 <button id="add-passed-btn" class="btn-add">+</button>
                             </div>
                         </div>
@@ -203,8 +206,8 @@
                 <div class="card-wrapper">
                     <div class="admin-card">
                         <h3><span class="card-icon">🟢</span> <span data-i18n="card_online">在線管理</span></h3>
-                        <div class="control-group list-editor" style="flex:1;">
-                            <ul id="online-users-list" style="min-height:100px;"><li>Loading...</li></ul>
+                        <div class="list-container">
+                            <ul id="online-users-list" class="scroll-list"><li>Loading...</li></ul>
                         </div>
                     </div>
                 </div>
@@ -212,11 +215,17 @@
                 <div class="card-wrapper">
                     <div class="admin-card">
                         <h3><span class="card-icon">🔗</span> <span data-i18n="card_links">連結管理</span></h3>
-                        <div class="control-group list-editor">
-                            <ul id="featured-list-ui"></ul>
-                            <div class="input-group vertical">
-                                <input type="text" id="new-link-text" data-i18n-ph="ph_link_name" placeholder="名稱">
-                                <div class="input-group"><input type="text" id="new-link-url" placeholder="URL"><button id="add-featured-btn" class="btn-add">+</button></div>
+                        <div class="list-container">
+                            <ul id="featured-list-ui" class="scroll-list"></ul>
+                        </div>
+                        <div class="add-section">
+                            <label class="add-label">新增連結</label>
+                            <div class="add-row" style="flex-wrap:wrap;">
+                                <input type="text" id="new-link-text" data-i18n-ph="ph_link_name" placeholder="名稱 (如: 菜單)" style="flex:1;">
+                                <div style="display:flex; gap:8px; width:100%;">
+                                    <input type="text" id="new-link-url" placeholder="URL (https://...)" style="flex:1;">
+                                    <button id="add-featured-btn" class="btn-add">+</button>
+                                </div>
                             </div>
                         </div>
                         <button id="resetFeaturedContents" class="btn-reset-single" data-i18n="btn_clear_links">清空連結</button>
@@ -226,15 +235,17 @@
                 <div class="card-wrapper" id="card-user-management" style="display:none;">
                     <div class="admin-card">
                         <h3><span class="card-icon">👥</span> <span data-i18n="card_users">帳號管理</span></h3>
-                        <div class="control-group list-editor">
-                            <ul id="user-list-ui"></ul>
-                            <label data-i18n="lbl_add_user">新增帳號</label>
-                            <div class="input-group vertical">
-                                <div class="input-group">
+                        <div class="list-container">
+                            <ul id="user-list-ui" class="scroll-list"></ul>
+                        </div>
+                        <div class="add-section">
+                            <label class="add-label" data-i18n="lbl_add_user">新增帳號</label>
+                            <div class="add-row" style="flex-wrap:wrap;">
+                                <div style="display:flex; gap:8px; width:100%;">
                                     <input type="text" id="new-user-username" data-i18n-ph="ph_account" placeholder="帳號">
                                     <input type="text" id="new-user-nickname" data-i18n-ph="ph_nick" placeholder="暱稱">
                                 </div>
-                                <div class="input-group">
+                                <div style="display:flex; gap:8px; width:100%;">
                                     <input type="password" id="new-user-password" data-i18n-ph="ph_password" placeholder="密碼">
                                     <select id="new-user-role" class="role-select">
                                         <option value="VIEWER">Viewer</option>
@@ -272,8 +283,8 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="control-group list-editor">
-                            <ul id="line-settings-list-ui"><li>Loading settings...</li></ul>
+                        <div class="list-container" style="min-height:300px;">
+                            <ul id="line-settings-list-ui" class="scroll-list"><li>Loading settings...</li></ul>
                         </div>
                         <div class="control-group" style="margin-top:20px; display:flex; gap:10px; justify-content: flex-end;">
                             <button id="btn-reset-line-msg" class="btn-reset-single" style="width:auto;" data-i18n="btn_restore">恢復預設值</button>
