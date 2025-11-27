@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v53.1 Mode Switch Fix
+ * 後台邏輯 (admin.js) - v54.0 Efficiency
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
@@ -12,7 +12,6 @@ const i18n = {
 
 let curLang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[curLang];
 let token="", userRole="normal", username="", uniqueUser="", toastTimer;
-// [新增] 記錄當前系統模式的真實狀態
 let currentSystemMode = 'ticketing'; 
 
 const socket = io({ autoConnect: false, auth: { token: "" } });
@@ -27,14 +26,15 @@ function updateLangUI() {
     req("/api/featured/get").then(res => { if(res) socket.emit("updateFeaturedContents", res); });
 }
 
-async function req(url, data={}, lockBtn=null) {
+// [優化] 增加 delay 參數，提升連按效率
+async function req(url, data={}, lockBtn=null, delay=300) {
     if(lockBtn) lockBtn.disabled=true;
     try {
         const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...data, token }) });
         const res = await r.json();
         if(!r.ok) { if(r.status===403) { toast(res.error?.includes("權限")?T.denied:T.expired, "error"); if(!res.error?.includes("權限")) logout(); } else toast(`❌ ${res.error||'Error'}`, "error"); return null; }
         return res;
-    } catch(e) { toast(`❌ ${e.message}`, "error"); return null; } finally { if(lockBtn) setTimeout(()=>lockBtn.disabled=false, 300); }
+    } catch(e) { toast(`❌ ${e.message}`, "error"); return null; } finally { if(lockBtn) setTimeout(()=>lockBtn.disabled=false, delay); }
 }
 
 function confirmBtn(el, origTxt, action) {
@@ -79,9 +79,8 @@ socket.on("newAdminLog", l => renderLogs([l], false));
 socket.on("updatePublicStatus", b => { if($("public-toggle")) $("public-toggle").checked = b; });
 socket.on("updateSoundSetting", b => { if($("sound-toggle")) $("sound-toggle").checked=b; });
 
-// [修正] 模式切換監聽：記住伺服器狀態，確保 UI 同步
 socket.on("updateSystemMode", m => {
-    currentSystemMode = m; // 更新真實狀態
+    currentSystemMode = m; 
     $$('input[name="systemMode"]').forEach(r => r.checked = (r.value === m));
 });
 
@@ -172,32 +171,30 @@ function renderLogs(logs, init) {
     logs.forEach(msg => { const li=mk("li", null, msg); init ? ul.appendChild(li) : ul.insertBefore(li, ul.firstChild); });
 }
 
-const act = (id, api, data={}) => $(id)?.addEventListener("click", () => req(api, data, $(id)));
+// [優化] 使用 100ms delay for 高頻按鈕
+const act = (id, api, data={}) => $(id)?.addEventListener("click", () => req(api, data, $(id), 100));
 act("btn-call-prev", "/api/control/call", {direction:"prev"}); act("btn-call-next", "/api/control/call", {direction:"next"}); act("btn-mark-passed", "/api/control/pass-current"); act("btn-issue-prev", "/api/control/issue", {direction:"prev"}); act("btn-issue-next", "/api/control/issue", {direction:"next"});
+
 $("setNumber")?.addEventListener("click", async()=>{ const n=$("manualNumber").value; if(n>0 && await req("/api/control/set-call",{number:n})) { $("manualNumber").value=""; toast("Saved","success"); } });
 $("setIssuedNumber")?.addEventListener("click", async()=>{ const n=$("manualIssuedNumber").value; if(n>=0 && await req("/api/control/set-issue",{number:n})) { $("manualIssuedNumber").value=""; toast("Saved","success"); } });
 $("add-passed-btn")?.addEventListener("click", async()=>{ const n=$("new-passed-number").value; if(n>0 && await req("/api/passed/add",{number:n})) $("new-passed-number").value=""; });
 $("add-featured-btn")?.addEventListener("click", async()=>{ const t=$("new-link-text").value, u=$("new-link-url").value; if(t&&u && await req("/api/featured/add",{linkText:t, linkUrl:u})) { $("new-link-text").value=""; $("new-link-url").value=""; } });
 $("btn-broadcast")?.addEventListener("click", async()=>{ const m=$("broadcast-msg").value; if(m && await req("/api/admin/broadcast",{message:m})) { toast("📢 Sent","success"); $("broadcast-msg").value=""; } });
-$("quick-add-1")?.addEventListener("click", async()=>{ await req("/api/control/call", {direction:"next"}); }); 
+$("quick-add-1")?.addEventListener("click", async()=>{ await req("/api/control/call", {direction:"next"}, $("quick-add-1"), 100); }); 
 $("quick-add-5")?.addEventListener("click", async()=>{ const c=parseInt($("number").textContent)||0; $("manualNumber").value = c + 5; });
 $("quick-clear")?.addEventListener("click", ()=>{ $("manualNumber").value=""; });
+
 confirmBtn($("resetNumber"), "↺ 重置叫號", ()=>req("/api/control/set-call",{number:0})); confirmBtn($("resetIssued"), "↺ 重置發號", ()=>req("/api/control/set-issue",{number:0})); confirmBtn($("resetPassed"), "清空列表", ()=>req("/api/passed/clear")); confirmBtn($("resetFeaturedContents"), "清空連結", ()=>req("/api/featured/clear")); confirmBtn($("resetAll"), "💥 全域重置", ()=>req("/reset")); confirmBtn($("btn-clear-logs"), "清除日誌", ()=>req("/api/logs/clear")); confirmBtn($("btn-clear-stats"), "🗑️ 清空統計", ()=>req("/api/admin/stats/clear").then(()=>loadStats())); confirmBtn($("btn-reset-line-msg"), "↺ 恢復預設", ()=>req("/api/admin/line-settings/reset").then(d=>{if(d)loadLineSettings();}));
 $("sound-toggle")?.addEventListener("change", e => req("/set-sound-enabled", {enabled:e.target.checked})); $("public-toggle")?.addEventListener("change", e => req("/set-public-status", {isPublic:e.target.checked}));
 
-// [修正] Mode 切換邏輯：失敗或取消時，強制還原為 currentSystemMode
 $$('input[name="systemMode"]').forEach(r => r.addEventListener("change", async (e) => {
-    // 先阻止預設的「已經勾選」狀態是不可能的 (change event happens after check)
-    // 所以我們用邏輯判斷：如果用戶確認 -> 發請求 -> 失敗 -> 轉回舊的
     if(confirm(T.confirm + " Switch Mode?")) {
         const res = await req("/set-system-mode", {mode: r.value});
         if(!res) {
-            // API 失敗，還原勾選
             const old = document.querySelector(`input[name="systemMode"][value="${currentSystemMode}"]`);
             if(old) old.checked = true;
         }
     } else {
-        // 用戶取消，還原勾選
         const old = document.querySelector(`input[name="systemMode"][value="${currentSystemMode}"]`);
         if(old) old.checked = true;
     }
