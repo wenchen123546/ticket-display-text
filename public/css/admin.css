@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台樣式 (admin.css) - v81.0 Uniform Grid
+ * 後台樣式 (admin.css) - v82.0 Text Fix
  * ========================================== */
 :root {
     /* [Light Mode - 舒適辦公] */
@@ -121,27 +121,15 @@ body.dark-mode .nav-btn.active { background: rgba(99, 102, 241, 0.15); color: #8
 .sub-number { font-size: 2.2rem; font-weight: 800; color: var(--text-main); line-height: 1.1; margin-top: 5px; }
 .label { font-size: 0.85rem; color: var(--text-sub); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; }
 
-/* =========================================
-   [修正] 統一卡片寬度網格系統
-   ========================================= */
+/* Grid Layout */
 .card-container { 
     display: grid; gap: 24px; 
-    /* 預設 1 欄 (Mobile) */
     grid-template-columns: repeat(1, minmax(0, 1fr)); 
-    align-items: stretch; /* 強制等高 */
+    align-items: stretch;
 }
+@media (min-width: 768px) { .card-container { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1200px) { .card-container { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
-@media (min-width: 768px) { 
-    /* Tablet: 2 欄等寬 */
-    .card-container { grid-template-columns: repeat(2, minmax(0, 1fr)); } 
-}
-
-@media (min-width: 1200px) { 
-    /* Desktop: 3 欄等寬 (強制 minmax(0, 1fr) 防止撐開) */
-    .card-container { grid-template-columns: repeat(3, minmax(0, 1fr)); } 
-}
-
-/* 全寬卡片 (跨越所有欄位) */
 .full-width-card { grid-column: 1 / -1 !important; }
 .card-wrapper { height: 100%; }
 
@@ -200,7 +188,9 @@ body.dark-mode .btn-secondary.success { background: rgba(16, 185, 129, 0.15); co
 .btn-reset-single { width: 100%; padding: 12px; border: 1px dashed var(--border-color); background: transparent; color: var(--text-sub); margin-top: auto; cursor: pointer; border-radius: 12px; transition: 0.2s; font-size: 0.9rem; }
 .btn-reset-single:hover { border-style: solid; color: var(--danger); border-color: var(--danger); background: rgba(239, 68, 68, 0.05); }
 
-/* List Containers */
+/* ==========================================
+ * [Fix] 列表內容擠壓修正
+ * ========================================== */
 .list-container {
     flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;
     margin-bottom: 16px; border: 1px solid var(--border-color); border-radius: 12px;
@@ -212,18 +202,30 @@ body.dark-mode .btn-secondary.success { background: rgba(16, 185, 129, 0.15); co
 }
 .list-item {
     padding: 14px; border-bottom: 1px solid var(--border-color); background: var(--bg-surface);
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+    display: flex; flex-wrap: wrap; /* 關鍵：允許換行 */
+    align-items: center; justify-content: space-between; gap: 12px;
 }
 .list-item:hover { background: rgba(0,0,0,0.01); }
 body.dark-mode .list-item:hover { background: rgba(255,255,255,0.02); }
 .list-item:last-child { border-bottom: none; }
+
+/* [Fix] 文字區域設定 */
 .list-info { 
-    display: flex; flex-direction: column; flex: 1; min-width: 0; 
-    padding-right: 12px; word-break: break-all;
+    display: flex; flex-direction: column; 
+    flex: 1 1 auto; /* 允許伸展 */
+    min-width: 140px; /* 設定最小寬度，空間不足時強迫按鈕換行 */
+    padding-right: 12px; 
+    word-break: break-word; /* [Fix] 修正中文與單字斷行問題 (取代 break-all) */
 }
-.list-main-text { font-weight: 700; font-size: 1rem; color: var(--text-main); }
-.list-sub-text { font-size: 0.85rem; color: var(--text-sub); margin-top: 3px; }
-.list-actions { display: flex; gap: 8px; flex-shrink: 0; margin-left: auto; }
+.list-main-text { font-weight: 700; font-size: 1rem; color: var(--text-main); line-height: 1.4; /* 增加行高 */ }
+.list-sub-text { font-size: 0.85rem; color: var(--text-sub); margin-top: 4px; line-height: 1.4; }
+
+/* [Fix] 按鈕區域設定 */
+.list-actions { 
+    display: flex; gap: 8px; 
+    flex-shrink: 0; /* 防止按鈕被壓縮 */
+    margin-left: auto; /* 在同一行時靠右 */
+}
 
 .add-section {
     background: var(--bg-body); border-top: 1px solid var(--border-color);
