@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v55.0 Mobile & Efficiency
+ * 後台邏輯 (admin.js) - v56.0 Roles & Fixes
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
@@ -13,6 +13,15 @@ const i18n = {
 let curLang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[curLang];
 let token="", userRole="normal", username="", uniqueUser="", toastTimer;
 let currentSystemMode = 'ticketing'; 
+// [新增] 權限列表定義
+const PERMISSIONS_LIST = [
+    { key: 'call', label: '叫號' },
+    { key: 'pass', label: '過號' },
+    { key: 'recall', label: '重呼' },
+    { key: 'issue', label: '發號' },
+    { key: 'settings', label: '設定' },
+    { key: 'appointment', label: '預約' }
+];
 
 const socket = io({ autoConnect: false, auth: { token: "" } });
 
@@ -22,15 +31,11 @@ function updateLangUI() {
     T = i18n[curLang] || i18n["zh-TW"];
     $$('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if(T[k]) el.textContent = T[k]; });
     $$('[data-i18n-ph]').forEach(el => { const k = el.getAttribute('data-i18n-ph'); if(T[k]) el.placeholder = T[k]; });
-    
-    // [新增] 同步手機版選單
     if($("admin-lang-selector-mobile")) $("admin-lang-selector-mobile").value = curLang;
-
     loadUsers(); loadStats(); loadLineSettings();
     req("/api/featured/get").then(res => { if(res) socket.emit("updateFeaturedContents", res); });
 }
 
-// [優化] 增加 delay 參數，提升連按效率
 async function req(url, data={}, lockBtn=null, delay=300) {
     if(lockBtn) lockBtn.disabled=true;
     try {
@@ -62,6 +67,13 @@ async function showPanel() {
     const isSuper = userRole === 'super';
     ["card-user-management", "btn-export-csv", "mode-switcher-group", "unlock-pwd-group"].forEach(id => { if($(id)) $(id).style.display = isSuper ? "block" : "none"; });
     if($('button[data-target="section-line"]')) $('button[data-target="section-line"]').style.display = isSuper?"flex":"none";
+    
+    // [新增] 只有超級管理員顯示權限編輯區塊
+    if(isSuper) {
+        $("role-editor-container").style.display = "block";
+        loadRoles();
+    }
+
     socket.auth.token = token; socket.connect();
     updateLangUI(); 
 }
@@ -142,6 +154,68 @@ async function loadUsers() {
     });
 }
 
+// [新增] 載入並渲染權限表格
+async function loadRoles() {
+    const rolesConfig = await req("/api/admin/roles/get");
+    if(!rolesConfig) return;
+    const container = $("role-editor-content");
+    container.innerHTML = "";
+    
+    const table = mk("table", "role-table");
+    const thead = mk("thead");
+    const trHead = mk("tr");
+    trHead.appendChild(mk("th", null, "Role"));
+    PERMISSIONS_LIST.forEach(p => trHead.appendChild(mk("th", null, p.label)));
+    thead.appendChild(trHead);
+    table.appendChild(thead);
+    
+    const tbody = mk("tbody");
+    // 定義要顯示的角色 (排除 ADMIN 因為全開，或可以顯示但禁用)
+    const rolesToShow = ['VIEWER', 'OPERATOR', 'MANAGER'];
+    
+    rolesToShow.forEach(role => {
+        const config = rolesConfig[role] || { can: [] };
+        const tr = mk("tr");
+        tr.appendChild(mk("td", null, role, {style:"font-weight:bold"}));
+        
+        PERMISSIONS_LIST.forEach(p => {
+            const td = mk("td");
+            const chk = mk("input", "role-chk", null, {
+                type: "checkbox",
+                dataset: { role: role, perm: p.key },
+                checked: config.can.includes(p.key)
+            });
+            td.appendChild(chk);
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+}
+
+// [新增] 儲存權限
+$("btn-save-roles")?.addEventListener("click", async () => {
+    const newConfig = {
+        VIEWER: { level: 0, can: [] },
+        OPERATOR: { level: 1, can: [] },
+        MANAGER: { level: 2, can: [] },
+        ADMIN: { level: 9, can: ['*'] } // Admin 保持預設
+    };
+    
+    $$(".role-chk").forEach(chk => {
+        if(chk.checked) {
+            const r = chk.dataset.role;
+            const p = chk.dataset.perm;
+            if(newConfig[r]) newConfig[r].can.push(p);
+        }
+    });
+    
+    if(await req("/api/admin/roles/update", { rolesConfig: newConfig })) {
+        toast("Permissions Updated", "success");
+    }
+});
+
 async function loadStats() {
     const ul = $("stats-list-ui");
     try {
@@ -175,7 +249,6 @@ function renderLogs(logs, init) {
     logs.forEach(msg => { const li=mk("li", null, msg); init ? ul.appendChild(li) : ul.insertBefore(li, ul.firstChild); });
 }
 
-// [優化] 使用 100ms delay for 高頻按鈕
 const act = (id, api, data={}) => $(id)?.addEventListener("click", () => req(api, data, $(id), 100));
 act("btn-call-prev", "/api/control/call", {direction:"prev"}); act("btn-call-next", "/api/control/call", {direction:"next"}); act("btn-mark-passed", "/api/control/pass-current"); act("btn-issue-prev", "/api/control/issue", {direction:"prev"}); act("btn-issue-next", "/api/control/issue", {direction:"next"});
 
@@ -221,16 +294,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const enter = (id, btnId) => { $(id)?.addEventListener("keyup", e => { if(e.key==="Enter") $(btnId)?.click(); }); };
     enter("username-input", "login-button"); enter("password-input", "login-button"); enter("manualNumber", "setNumber"); enter("manualIssuedNumber", "setIssuedNumber"); enter("new-passed-number", "add-passed-btn"); enter("broadcast-msg", "btn-broadcast");
 
-    // [新增] 手機版選單初始值與事件
     if($("admin-lang-selector-mobile")) {
         $("admin-lang-selector-mobile").value = curLang;
         $("admin-lang-selector-mobile").addEventListener("change", e => {
             curLang = e.target.value;
             localStorage.setItem('callsys_lang', curLang);
-            $("admin-lang-selector").value = curLang; // 同步桌面版
+            $("admin-lang-selector").value = curLang; 
             updateLangUI();
         });
     }
-    // [新增] 手機版登出
     $("btn-logout-mobile")?.addEventListener("click", logout);
 });
