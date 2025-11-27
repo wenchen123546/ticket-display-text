@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v84.0 Fixed & Full Features
+ * 後台邏輯 (admin.js) - v85.0 SuperAdmin Booking & DatePicker
  * ========================================== */
 const $ = i => document.getElementById(i);
 const $$ = s => document.querySelectorAll(s);
@@ -87,7 +87,7 @@ function updateLangUI() {
 
     loadUsers(); 
     loadStats(); 
-    loadAppointments(); // 新增：載入預約
+    loadAppointments(); 
     if (!cachedLineSettings) loadLineSettings(); else renderLineSettings();
     req("/api/featured/get").then(res => { if(res) socket.emit("updateFeaturedContents", res); });
 }
@@ -130,10 +130,18 @@ function applyRolePermissions() {
 async function showPanel() {
     $("login-container").style.display="none"; $("admin-panel").style.display="flex";
     if($("sidebar-user-info")) $("sidebar-user-info").textContent = `${username}`;
+    
+    // [MODIFIED] Role Checks
     const isSuper = userRole === 'super';
+    
+    // 預約功能僅限 Super Admin
+    if($("nav-btn-booking")) $("nav-btn-booking").style.display = isSuper ? "flex" : "none";
+    if(!isSuper && $("section-booking")) $("section-booking").style.display = "none";
+
     ["card-user-management", "btn-export-csv", "mode-switcher-group", "unlock-pwd-group"].forEach(id => { if($(id)) $(id).style.display = isSuper ? "block" : "none"; });
     if($('button[data-target="section-line"]')) $('button[data-target="section-line"]').style.display = isSuper?"flex":"none";
     if(isSuper) { $("role-editor-container").style.display = "block"; loadRoles(); }
+    
     applyRolePermissions();
     socket.auth.token = token; socket.connect(); updateLangUI(); 
 }
@@ -155,7 +163,7 @@ socket.on("newAdminLog", l => renderLogs([l], false));
 socket.on("updatePublicStatus", b => { if($("public-toggle")) $("public-toggle").checked = b; });
 socket.on("updateSoundSetting", b => { if($("sound-toggle")) $("sound-toggle").checked=b; });
 socket.on("updateSystemMode", m => { currentSystemMode = m; $$('input[name="systemMode"]').forEach(r => r.checked = (r.value === m)); });
-socket.on("updateAppointments", list => renderAppointments(list)); // 新增：即時同步預約
+socket.on("updateAppointments", list => renderAppointments(list)); 
 
 // 預約系統邏輯
 async function loadAppointments() {
@@ -181,7 +189,7 @@ function renderAppointments(list) {
         
         const actions = mk("div", "list-actions");
         const btnDel = mk("button", "btn-secondary", T.del);
-        confirmBtn(btnDel, T.del, async () => { await req("/api/appointment/remove", {id: a.id}); }); // 移除時後端會廣播更新
+        confirmBtn(btnDel, T.del, async () => { await req("/api/appointment/remove", {id: a.id}); });
         
         actions.appendChild(btnDel);
         li.append(info, actions);
@@ -191,13 +199,13 @@ function renderAppointments(list) {
 
 $("btn-add-appt")?.addEventListener("click", async () => {
     const n = $("appt-number").value;
-    const t = $("appt-time").value;
+    const t = $("appt-time").value; // Flatpickr puts the formatted value here
     if(!n || !t) return toast("請輸入號碼與時間", "error");
     
     if(await req("/api/appointment/add", {number: parseInt(n), timeStr: t})) {
         toast("預約已新增", "success");
         $("appt-number").value = "";
-        // 後端會廣播 updateAppointments，所以不需要手動 reload
+        if($("appt-time")._flatpickr) $("appt-time")._flatpickr.clear();
     }
 });
 
@@ -422,11 +430,25 @@ document.addEventListener("DOMContentLoaded", () => {
     $("admin-lang-selector").value = curLang; 
     if($("admin-lang-selector-mobile")) $("admin-lang-selector-mobile").value = curLang;
     checkSession(); applyAdminTheme();
+
+    // [NEW] 初始化 Flatpickr 時間選擇器
+    if ($("#appt-time")) {
+        flatpickr("#appt-time", {
+            enableTime: true,
+            dateFormat: "Y-m-d H:i",
+            time_24hr: true,
+            locale: "zh_tw",
+            minDate: "today",
+            disableMobile: "true",
+            minuteIncrement: 5
+        });
+    }
+
     $$('.nav-btn').forEach(b => b.addEventListener('click', () => { 
         $$('.nav-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); 
         $$('.section-group').forEach(s=>s.classList.remove('active')); $(b.dataset.target)?.classList.add('active'); 
         if(b.dataset.target === 'section-stats') loadStats();
-        if(b.dataset.target === 'section-booking') loadAppointments(); // 新增：切換到預約時載入
+        if(b.dataset.target === 'section-booking') loadAppointments(); 
     }));
     const enter = (id, btnId) => { $(id)?.addEventListener("keyup", e => { if(e.key==="Enter") $(btnId)?.click(); }); };
     enter("username-input", "login-button"); enter("password-input", "login-button"); enter("manualNumber", "setNumber"); enter("manualIssuedNumber", "setIssuedNumber"); enter("new-passed-number", "add-passed-btn"); enter("broadcast-msg", "btn-broadcast");
