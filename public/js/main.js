@@ -1,5 +1,5 @@
 /* ==========================================
- * 前台邏輯 (main.js) - v105.0 UX & Audio
+ * 前台邏輯 (main.js) - v109.0 UX/Kiosk
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const on = (el, ev, fn) => el?.addEventListener(ev, fn), show = (el, v) => el && (el.style.display = v ? 'block' : 'none');
@@ -31,7 +31,7 @@ const toggleWakeLock = async (act) => {
     try { 
         if(act) {
             if(!wakeLock) wakeLock = await navigator.wakeLock.request('screen');
-            wakeLock.addEventListener('release', () => { wakeLock = null; if(doc.visibilityState==='visible' && myTicket) toggleWakeLock(true); });
+            wakeLock.addEventListener('release', () => { wakeLock = null; if(doc.visibilityState==='visible' && (myTicket || isKioskMode())) toggleWakeLock(true); });
         } else if(wakeLock) { await wakeLock.release(); wakeLock=null; } 
     } catch(e){}
 };
@@ -45,6 +45,8 @@ const unlockAudio = () => {
     const source = audioCtx.createBufferSource(); 
     source.buffer = buffer; source.connect(audioCtx.destination); source.start(0);
     if('speechSynthesis' in window) window.speechSynthesis.getVoices();
+    // [Opt] Pre-load notify sound
+    if($("notify-sound")) $("notify-sound").load();
 };
 const speak = (txt) => {
     if(!localMute && sndEnabled && 'speechSynthesis' in window) {
@@ -53,7 +55,7 @@ const speak = (txt) => {
         if(v) u.voice = v; window.speechSynthesis.speak(u);
     }
 };
-const playDing = () => { if($("notify-sound") && !localMute) { $("notify-sound").play().then(()=>updateMuteUI(false)).catch(()=>updateMuteUI(true, true)); } };
+const playDing = () => { if($("notify-sound") && !localMute) { $("notify-sound").currentTime = 0; $("notify-sound").play().then(()=>updateMuteUI(false)).catch(()=>updateMuteUI(true, true)); } };
 
 // --- UI Logic ---
 const applyTheme = () => { doc.body.classList.toggle('dark-mode', isDarkMode); if($('theme-toggle')) $('theme-toggle').textContent = isDarkMode ? '☀️' : '🌙'; ls.setItem('callsys_theme', isDarkMode ? 'dark' : 'light'); };
@@ -67,7 +69,7 @@ const applyText = () => {
 const renderMode = () => {
     const isT = sysMode==='ticketing', hasT = !!myTicket;
     show($("ticketing-mode-container"), isT && !hasT); show($("input-mode-container"), !isT && !hasT); show($("my-ticket-view"), hasT);
-    if(hasT) { $("my-ticket-num").textContent = myTicket; updateTicket(parseInt($("number").textContent)||0); toggleWakeLock(true); } else toggleWakeLock(false);
+    if(hasT) { $("my-ticket-num").textContent = myTicket; updateTicket(parseInt($("number").textContent)||0); toggleWakeLock(true); } else if(!isKioskMode()) toggleWakeLock(false);
 };
 const updateTicket = (curr) => {
     if (!myTicket) return;
@@ -121,7 +123,7 @@ socket.on("connect", () => { socket.emit('joinRoom', 'public'); clearTimeout(con
         const s = b ? '1' : '0';
         if(cachedPublic !== s) ls.setItem('callsys_public_cache', s);
         cachedPublic = s;
-        toggleClosedOverlay(!b); // Show overlay if not public
+        toggleClosedOverlay(!b); 
     })
     .on("updateSystemMode", m => { 
         if(cachedMode !== m) ls.setItem('callsys_mode_cache', m);
@@ -135,10 +137,22 @@ socket.on("connect", () => { socket.emit('joinRoom', 'public'); clearTimeout(con
     .on("updateTimestamp", ts => { lastUpd = new Date(ts); updTime(); });
 
 setInterval(updTime, 10000); 
-doc.addEventListener('visibilitychange', () => { if(doc.visibilityState==='visible' && myTicket) toggleWakeLock(true); });
+doc.addEventListener('visibilitychange', () => { if(doc.visibilityState==='visible' && (myTicket||isKioskMode())) toggleWakeLock(true); });
+
+// [Feature] Kiosk Mode Detection
+const isKioskMode = () => new URLSearchParams(window.location.search).get('mode') === 'kiosk';
 
 // --- Interactions ---
 doc.addEventListener("DOMContentLoaded", () => {
+    if(isKioskMode()) {
+        doc.body.classList.add('kiosk-mode');
+        // Inject Kiosk Styles programmatically to avoid file modification
+        const style = doc.createElement('style');
+        style.textContent = `body.kiosk-mode .hero-section { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 100; padding: 0; margin: 0; border-radius: 0; display:flex; flex-direction:column; justify-content:center; } body.kiosk-mode #number { font-size: 25vw; } body.kiosk-mode .hero-stats-grid { transform: scale(1.5); margin-top: 5vh; width: 80%; } body.kiosk-mode .side-panel, body.kiosk-mode .app-header { display: none !important; } body.kiosk-mode .bg-decoration { opacity: 0.8; }`;
+        doc.head.appendChild(style);
+        toggleWakeLock(true);
+    }
+
     if($("language-selector")) $("language-selector").value = lang;
     applyTheme(); applyText(); renderMode(); socket.connect();
     
@@ -150,7 +164,7 @@ doc.addEventListener("DOMContentLoaded", () => {
 
     on($("btn-take-ticket"), "click", async () => {
         const b = $("btn-take-ticket"); if(b.disabled) return; 
-        if(ls.getItem('callsys_ticket')) return toast("您已有號碼", "error"); // Double check
+        if(ls.getItem('callsys_ticket')) return toast("您已有號碼", "error"); 
         
         unlockAudio(); if(Notification.permission!=='granted') Notification.requestPermission();
         b.disabled = true;
