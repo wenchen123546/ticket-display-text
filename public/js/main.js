@@ -1,5 +1,5 @@
 /* ==========================================
- * 前台邏輯 (main.js) - v61.0 Optimized
+ * 前台邏輯 (main.js) - v62.0 Auto Refresh
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const on = (el, ev, fn) => el?.addEventListener(ev, fn), show = (el, v) => el && (el.style.display = v ? 'block' : 'none');
@@ -88,8 +88,15 @@ socket.on("connect", () => { socket.emit('joinRoom', 'public'); clearTimeout(con
     .on("adminBroadcast", m => { if(!localMute) speak(m); toast(T.notice+m, 'info', 10000); })
     .on("updateWaitTime", t => { avgTime = t; updateTicket(parseInt($("number").textContent)||0); })
     .on("updateSoundSetting", b => sndEnabled = b)
-    .on("updatePublicStatus", b => { doc.body.classList.toggle("is-closed", !b); b ? socket.connect() : socket.disconnect(); })
-    .on("updateSystemMode", m => { sysMode = m; renderMode(); })
+    .on("updatePublicStatus", b => { 
+        // [Fix] Active Refresh: Reload page if status becomes Open (true), ensuring clean state
+        if (b) setTimeout(() => location.reload(), 200); 
+        else { doc.body.classList.toggle("is-closed", true); socket.disconnect(); }
+    })
+    .on("updateSystemMode", m => { 
+        // [Fix] Active Refresh: Force reload to switch layouts cleanly
+        setTimeout(() => location.reload(), 200); 
+    })
     .on("updatePassed", l => { 
         const ul=$("passedList"), mt=$("passed-empty-msg"); if($("passed-count")) $("passed-count").textContent = l?.length||0;
         if(!l?.length) { show(ul, false); show(mt, true); } else { show(ul, true); show(mt, false); ul.innerHTML = l.map(n=>`<li>${n}</li>`).join(""); }
