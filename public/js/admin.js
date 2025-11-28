@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v17.0 Role Matrix
+ * 後台邏輯 (admin.js) - v17.1 Role Cards & Layout Fix
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
@@ -12,10 +12,8 @@ const toast = (m, t='info') => {
     el.className = `show ${t}`; setTimeout(()=>el.className="", 3000); 
 };
 
-// [I18N] 新增權限相關翻譯
 const i18n = {
     "zh-TW": { 
-        // ... (保留原有翻譯) ...
         status_conn:"✅ 已連線", status_dis:"⚠️ 連線中斷...", saved:"✅ 已儲存", denied:"❌ 權限不足", 
         expired:"Session 過期", login_fail:"登入失敗", confirm:"⚠️ 確認", recall:"↩️ 重呼", 
         edit:"✎ 編輯", del:"✕ 刪除", save:"✓ 儲存", cancel:"✕ 取消",
@@ -42,13 +40,10 @@ const i18n = {
         loading: "載入中...", empty: "[ 空 ]", no_logs: "[ 無日誌 ]", no_appt: "暫無預約",
         role_viewer: "檢視者", role_operator: "操作員", role_manager: "經理", role_admin: "管理員",
         msg_recall_confirm: "確定要重呼 %s 嗎？", msg_sent: "📢 已發送", msg_calibrated: "校正完成",
-        
-        // [New Permissions]
         perm_role: "角色權限", perm_call: "叫號/指揮", perm_issue: "發號", perm_stats: "數據/日誌", 
         perm_settings: "系統設定", perm_line: "LINE設定", perm_appointment: "預約管理", perm_users: "帳號管理"
     },
     "en": { 
-        // ... (保留原有翻譯) ...
         status_conn:"✅ Connected", status_dis:"⚠️ Disconnected...", saved:"✅ Saved", denied:"❌ Denied", 
         expired:"Session Expired", login_fail:"Login Failed", confirm:"⚠️ Confirm", recall:"↩️ Recall", 
         edit:"✎ Edit", del:"✕ Del", save:"✓ Save", cancel:"✕ Cancel",
@@ -75,8 +70,6 @@ const i18n = {
         loading: "Loading...", empty: "[ Empty ]", no_logs: "[ No Logs ]", no_appt: "No Appointments",
         role_viewer: "Viewer", role_operator: "Operator", role_manager: "Manager", role_admin: "Admin",
         msg_recall_confirm: "Recall number %s?", msg_sent: "📢 Sent", msg_calibrated: "Calibrated",
-        
-        // [New Permissions]
         perm_role: "Role", perm_call: "Call/Cmd", perm_issue: "Ticketing", perm_stats: "Stats/Logs", 
         perm_settings: "Settings", perm_line: "Line Config", perm_appointment: "Booking", perm_users: "Users"
     }
@@ -84,7 +77,7 @@ const i18n = {
 
 let curLang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[curLang], userRole="normal", username="", uniqueUser="", cachedLine=null, isDark = localStorage.getItem('callsys_admin_theme') === 'dark';
 const socket = io({ autoConnect: false });
-let globalRoleConfig = null; // 儲存全域權限設定
+let globalRoleConfig = null;
 
 async function req(url, data={}, btn=null) {
     if(btn) btn.disabled=true;
@@ -113,7 +106,6 @@ const updateLangUI = () => {
     $$('[data-i18n-ph]').forEach(e => e.placeholder = T[e.getAttribute('data-i18n-ph')]||"");
     $$('button[data-original-key]').forEach(b => { if(!b.classList.contains('is-confirming')) b.textContent = T[b.dataset.originalKey]; });
     
-    // 如果有權限，重新載入
     if(checkPerm('users')) loadUsers(); 
     if(checkPerm('stats')) loadStats(); 
     if(checkPerm('appointment')) loadAppointments(); 
@@ -139,7 +131,6 @@ function applyTheme() {
     if($('admin-theme-toggle-mobile')) $('admin-theme-toggle-mobile').textContent = isDark ? '☀️' : '🌙';
 }
 
-// [關鍵] 前端權限檢查 Helper
 const checkPerm = (perm) => {
     if(isSuperAdmin()) return true;
     if(!globalRoleConfig) return false;
@@ -148,25 +139,18 @@ const checkPerm = (perm) => {
     return myRoleConfig.can.includes('*') || myRoleConfig.can.includes(perm);
 };
 
-// [關鍵] 根據權限隱藏/顯示 UI 元素
 const applyUIPermissions = async () => {
-    // 1. 取得最新權限設定
     globalRoleConfig = await req("/api/admin/roles/get");
     if(!globalRoleConfig) return;
-
-    // 2. 遍歷所有帶有 data-perm 的元素
     $$('[data-perm]').forEach(el => {
         const requiredPerm = el.getAttribute('data-perm');
         if (checkPerm(requiredPerm)) {
-            el.style.display = ''; // 恢復預設 (flex/block)
-            // 特殊處理：如果是卡片，需要恢復 flex
+            el.style.display = ''; 
             if(el.classList.contains('admin-card')) el.style.display = 'flex';
         } else {
-            el.style.display = 'none'; // 隱藏
+            el.style.display = 'none'; 
         }
     });
-
-    // 3. 觸發一次導航點擊，避免停留在被隱藏的頁面
     const visibleNav = document.querySelector('.nav-btn[style="display: none;"]');
     if(visibleNav && visibleNav.classList.contains('active')) {
         const firstVisible = document.querySelector('.nav-btn:not([style*="none"])');
@@ -182,8 +166,8 @@ const checkSession = async () => {
     
     if(uniqueUser) {
         showPanel();
-        await applyUIPermissions(); // 登入後立即應用權限
-        updateLangUI(); // 更新文字
+        await applyUIPermissions();
+        updateLangUI();
     } else showLogin();
 };
 
@@ -197,13 +181,10 @@ const isSuperAdmin = () => (uniqueUser === 'superadmin' || userRole === 'super' 
 
 const showPanel = () => {
     $("login-container").style.display="none"; $("admin-panel").style.display="flex"; $("sidebar-user-info").textContent = username;
-    
     const isSuper = isSuperAdmin();
-    // 只有 Super Admin 能看到的角色管理與全域重置
     const setBlock = (id, show) => { if($(id)) $(id).style.display = show ? "block" : "none"; };
     ["card-role-management", "btn-export-csv", "mode-switcher-group", "unlock-pwd-group"].forEach(id => setBlock(id, isSuper));
     ['resetNumber','resetIssued','resetPassed','resetFeaturedContents','btn-clear-logs','btn-clear-stats','btn-reset-line-msg','resetAll'].forEach(id => setBlock(id, isSuper));
-    
     socket.connect(); 
     upgradeSystemModeUI();
 };
@@ -310,32 +291,42 @@ async function loadUsers() {
 }
 
 async function loadRoles() {
-    // [New Permissions Matrix]
+    // [Updated: Vertical Cards Layout]
     const cfg = globalRoleConfig || await req("/api/admin/roles/get"); 
     const ctr = $("role-editor-content"); if(!cfg || !ctr) return; ctr.innerHTML="";
-    const tbl = mk("table", "role-table"), th = mk("tr");
     
-    // 定義權限 Key 與翻譯的對應
     const perms = [
         {k:'call', t:T.perm_call}, {k:'issue', t:T.perm_issue}, {k:'stats', t:T.perm_stats},
         {k:'settings', t:T.perm_settings}, {k:'appointment', t:T.perm_appointment}, 
         {k:'line', t:T.perm_line}, {k:'users', t:T.perm_users}
     ];
+    const roleMeta = {
+        'VIEWER': { icon: '👀', label: T.role_viewer },
+        'OPERATOR': { icon: '🎮', label: T.role_operator },
+        'MANAGER': { icon: '🛡️', label: T.role_manager }
+    };
 
-    th.appendChild(mk("th", null, T.perm_role));
-    perms.forEach(p => th.appendChild(mk("th", null, p.t)));
-    tbl.appendChild(mk("thead", null, null, {}, [th]));
-    
-    const tb = mk("tbody");
+    const container = mk("div", "role-editor-container");
+
     ['VIEWER', 'OPERATOR', 'MANAGER'].forEach(r => {
-        const tr = mk("tr", null, null, {}, [mk("td", null, r, {style:"font-weight:bold"})]);
+        const block = mk("div", "role-block");
+        const meta = roleMeta[r] || {icon:'👤', label:r};
+        const header = mk("div", "role-header", null, {}, [
+            mk("span", null, meta.icon),
+            mk("span", null, `${meta.label} (${r})`)
+        ]);
+
+        const grid = mk("div", "perm-grid");
         perms.forEach(p => {
             const isChecked = (cfg[r]?.can||[]).includes(p.k);
-            tr.appendChild(mk("td", null, null, {}, [mk("input", "role-chk", null, {type:"checkbox", dataset:{role:r, perm:p.k}, checked:isChecked})]));
+            const chk = mk("input", "role-chk", null, {type:"checkbox", dataset:{role:r, perm:p.k}, checked:isChecked});
+            const label = mk("label", "perm-item", null, {}, [chk, mk("span", null, p.t)]);
+            grid.appendChild(label);
         });
-        tb.appendChild(tr);
+
+        block.appendChild(header); block.appendChild(grid); container.appendChild(block);
     });
-    tbl.appendChild(tb); ctr.appendChild(mk("div", "role-table-wrapper", null, {}, [tbl]));
+    ctr.appendChild(container);
 }
 
 async function loadStats() {
@@ -413,7 +404,6 @@ bind("btn-save-roles", async()=>{
     $$(".role-chk:checked").forEach(k => c[k.dataset.role].can.push(k.dataset.perm));
     if(await req("/api/admin/roles/update", {rolesConfig:c})) {
         toast(T.saved,"success");
-        // 更新成功後，重新套用一次 UI 權限 (預覽)
         globalRoleConfig = c;
         applyUIPermissions();
     }
