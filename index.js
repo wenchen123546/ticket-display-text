@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v91.0 Stats & DB Optimized
+ * 伺服器 (index.js) - v91.1 Fixed DB Race Condition
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http"), express = require("express"), socketio = require("socket.io");
@@ -41,13 +41,31 @@ initLine();
 
 try { if (!fs.existsSync(path.join(__dirname, 'user_logs'))) fs.mkdirSync(path.join(__dirname, 'user_logs')); } catch(e) {}
 
-const db = new sqlite3.Database(path.join(__dirname, 'callsys.db'), (err) => { if(!err) {
-    db.run(`CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY, date_str TEXT, timestamp INTEGER, number INTEGER, action TEXT, operator TEXT, wait_time_min REAL)`);
-    db.run(`CREATE TABLE IF NOT EXISTS appointments (id INTEGER PRIMARY KEY, number INTEGER, scheduled_time INTEGER, status TEXT DEFAULT 'pending')`);
-    // [Optimization] Add Indexes for performance
-    db.run(`CREATE INDEX IF NOT EXISTS idx_history_date ON history(date_str)`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_history_ts ON history(timestamp)`);
-}});
+// --- Database Setup (Optimized with Promise to prevent Race Condition) ---
+// 若在 Render 使用 Disk，路徑可改為 process.env.RENDER ? '/var/data/callsys.db' : path.join(__dirname, 'callsys.db')
+const dbPath = path.join(__dirname, 'callsys.db');
+const db = new sqlite3.Database(dbPath);
+
+const initDatabase = () => {
+    return new Promise((resolve, reject) => {
+        db.serialize(() => {
+            db.run(`CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY, date_str TEXT, timestamp INTEGER, number INTEGER, action TEXT, operator TEXT, wait_time_min REAL)`);
+            db.run(`CREATE TABLE IF NOT EXISTS appointments (id INTEGER PRIMARY KEY, number INTEGER, scheduled_time INTEGER, status TEXT DEFAULT 'pending')`);
+            // [Optimization] Add Indexes for performance
+            db.run(`CREATE INDEX IF NOT EXISTS idx_history_date ON history(date_str)`);
+            db.run(`CREATE INDEX IF NOT EXISTS idx_history_ts ON history(timestamp)`, (err) => {
+                if (err) {
+                    console.error("❌ Database Init Error:", err);
+                    reject(err);
+                } else {
+                    console.log("✅ Database tables initialized.");
+                    resolve();
+                }
+            });
+        });
+    });
+};
+
 const dbQuery = (m, s, p=[]) => new Promise((res, rej) => db[m](s, p, function(e, r){ e ? rej(e) : res(m==='run'?this:r) }));
 const [run, all, get] = ['run', 'all', 'get'].map(m => (s, p) => dbQuery(m, s, p));
 
@@ -333,4 +351,11 @@ io.on("connection", async s => {
     s.emit("update",Number(c)); s.emit("updateQueue",{current:Number(c),issued:Number(i)}); s.emit("updatePassed",p.map(Number)); s.emit("updateFeaturedContents",f.map(JSON.parse));
     s.emit("updateSoundSetting",snd==="1"); s.emit("updatePublicStatus",pub!=="0"); s.emit("updateSystemMode",m||'ticketing'); s.emit("updateWaitTime",await calcWaitTime());
 });
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v91.0 running on ${PORT}`));
+
+// --- Server Start (Wait for DB) ---
+initDatabase().then(() => {
+    server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v91.1 running on ${PORT}`));
+}).catch(err => {
+    console.error("❌ Failed to start server due to DB error:", err);
+    process.exit(1);
+});
