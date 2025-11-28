@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v96.0 Final Fix
+ * 後台邏輯 (admin.js) - v97.0 Final Optimization
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
@@ -103,13 +103,7 @@ const checkSession = () => {
     uniqueUser = localStorage.getItem('callsys_user');
     userRole = localStorage.getItem('callsys_role'); 
     username = localStorage.getItem('callsys_nick');
-    
-    // [Fix] 強制修正 superadmin 的角色，防止快取導致權限遺失
-    if (uniqueUser === 'superadmin' && userRole !== 'ADMIN') {
-        userRole = 'ADMIN';
-        localStorage.setItem('callsys_role', 'ADMIN');
-    }
-
+    if (uniqueUser === 'superadmin' && userRole !== 'ADMIN') { userRole = 'ADMIN'; localStorage.setItem('callsys_role', 'ADMIN'); }
     if(token && uniqueUser) showPanel(); else showLogin();
 };
 const logout = () => { localStorage.removeItem('callsys_token'); location.reload(); };
@@ -117,30 +111,16 @@ const showLogin = () => { $("login-container").style.display="block"; $("admin-p
 const isSuperAdmin = () => (uniqueUser === 'superadmin' || userRole === 'super' || userRole === 'ADMIN');
 
 const showPanel = () => {
-    $("login-container").style.display="none"; 
-    $("admin-panel").style.display="flex"; 
-    $("sidebar-user-info").textContent = username;
-    
+    $("login-container").style.display="none"; $("admin-panel").style.display="flex"; $("sidebar-user-info").textContent = username;
     const isSuper = isSuperAdmin();
-    
-    // 1. 導覽列按鈕 (使用 Flex 以防跑版)
     const setFlex = (id, show) => { if($(id)) $(id).style.display = show ? "flex" : "none"; };
     const setBlock = (id, show) => { if($(id)) $(id).style.display = show ? "block" : "none"; };
-
     setFlex("nav-btn-booking", isSuper);
     const lineBtn = document.querySelector('button[data-target="section-line"]');
     if(lineBtn) lineBtn.style.display = isSuper ? "flex" : "none";
-    
-    // 2. 區塊顯示控制
     if(!isSuper && $("section-booking")) $("section-booking").style.display = "none";
-    
-    // 3. 超級管理員專屬功能 (強制顯示)
     ["card-user-management", "btn-export-csv", "mode-switcher-group", "unlock-pwd-group", "role-editor-container"].forEach(id => setBlock(id, isSuper));
-
-    // 4. 危險按鈕
     ['resetNumber','resetIssued','resetPassed','resetFeaturedContents','btn-clear-logs','btn-clear-stats','btn-reset-line-msg','resetAll'].forEach(id => setBlock(id, isSuper));
-    
-    // 5. 確保資料載入
     socket.auth.token = token; socket.connect(); 
     updateLangUI();
     if(isSuper) { loadRoles(); loadUsers(); } 
@@ -183,9 +163,7 @@ socket.on("updateFeaturedContents", l => renderList("featured-list-ui", l, item 
 }));
 
 // --- Data Loading & Rendering ---
-async function loadAppointments() {
-    try { renderAppointments((await req("/api/appointment/list"))?.appointments); } catch(e){}
-}
+async function loadAppointments() { try { renderAppointments((await req("/api/appointment/list"))?.appointments); } catch(e){} }
 function renderAppointments(list) {
     renderList("appointment-list-ui", list, a => {
         const dt = new Date(a.scheduled_time), dateStr = dt.toLocaleDateString()+" "+dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
@@ -200,7 +178,6 @@ async function loadUsers() {
     const d = await req("/api/admin/users"); if(!d?.users) return;
     const roles = { 'VIEWER':'Viewer', 'OPERATOR':'Operator', 'MANAGER':'Manager', 'ADMIN':'Admin' };
     const isSuper = isSuperAdmin(); 
-
     renderList("user-list-ui", d.users, u => {
         const view = mk("div", "list-info", null, {}, [mk("span","list-main-text",`${u.role==='ADMIN'?'👑':(u.role==='MANAGER'?'🛡️':'👤')} ${u.nickname}`), mk("span","list-sub-text",`${u.username} (${roles[u.role]||u.role})`)]);
         const acts = mk("div", "list-actions");
@@ -211,10 +188,7 @@ async function loadUsers() {
                 mk("button","btn-secondary success",T.save,{onclick:async()=>{if(await req("/api/admin/set-nickname",{targetUsername:u.username, nickname:form.children[0].value})) {toast(T.saved,"success"); loadUsers();}}})
             ])
         ]);
-        
-        if(u.username === uniqueUser || isSuper) {
-            acts.appendChild(mk("button","btn-secondary",T.edit,{onclick:()=>{view.style.display="none";acts.style.display="none";form.style.display="flex";}}));
-        }
+        if(u.username === uniqueUser || isSuper) acts.appendChild(mk("button","btn-secondary",T.edit,{onclick:()=>{view.style.display="none";acts.style.display="none";form.style.display="flex";}}));
         if(u.username !== 'superadmin' && isSuper) {
             const sel = mk("select","role-select",null,{onchange:async()=>await req("/api/admin/set-role",{targetUsername:u.username, newRole:sel.value})});
             Object.keys(roles).forEach(k=>sel.add(new Option(roles[k], k, false, u.role===k)));
@@ -270,6 +244,8 @@ function renderLogs(logs, init) {
     const ul = $("admin-log-ui"); if(!ul) return; if(init) ul.innerHTML=""; 
     if(!logs?.length && init) return ul.innerHTML="<li>[No Logs]</li>";
     logs.forEach(m => { const li = mk("li", null, m); init ? ul.appendChild(li) : ul.insertBefore(li, ul.firstChild); });
+    // [Fix] Prevent Infinite List (Limit to 50 nodes)
+    while(ul.children.length > 50) ul.removeChild(ul.lastChild);
 }
 
 // --- Interactions ---
@@ -279,7 +255,6 @@ const act = (id, api, data={}) => $(id)?.addEventListener("click", async () => {
 });
 const bind = (id, fn) => $(id)?.addEventListener("click", fn);
 
-// Bindings
 act("btn-call-prev", "/api/control/call", {direction:"prev"}); 
 act("btn-call-next", "/api/control/call", {direction:"next"});
 act("btn-mark-passed", "/api/control/pass-current"); 
@@ -304,40 +279,29 @@ bind("admin-theme-toggle-mobile", ()=>{ isDark = !isDark; applyTheme(); });
 bind("login-button", async () => {
     const res = await fetch("/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({username:$("username-input").value, password:$("password-input").value})}).then(r=>r.json()).catch(()=>({error:T.login_fail}));
     if(res.token) { 
-        localStorage.setItem('callsys_token', res.token); 
-        localStorage.setItem('callsys_user', res.username); 
-        localStorage.setItem('callsys_role', res.userRole); 
-        localStorage.setItem('callsys_nick', res.nickname); 
-        checkSession(); 
+        localStorage.setItem('callsys_token', res.token); localStorage.setItem('callsys_user', res.username); localStorage.setItem('callsys_role', res.userRole); localStorage.setItem('callsys_nick', res.nickname); checkSession(); 
     } else $("login-error").textContent=res.error||T.login_fail;
 });
 bind("btn-logout", logout); bind("btn-logout-mobile", logout);
 
 ["resetNumber","resetIssued","resetPassed","resetFeaturedContents","resetAll","btn-clear-logs","btn-clear-stats","btn-reset-line-msg"].forEach(id => {
-    const el = $(id);
-    if(!el) return;
-    
+    const el = $(id); if(!el) return;
     let url;
-    if (id.includes('clear')) {
-        url = id.includes('logs') ? "/api/logs/clear" : "/api/admin/stats/clear";
-    } else if (id === 'resetAll') {
-        url = "/reset";
-    } else if (id.includes('line')) {
-        url = "/api/admin/line-settings/reset";
-    } else if (id.includes('Passed')) {
-        url = "/api/passed/clear";
-    } else if (id.includes('Featured')) {
-        url = "/api/featured/clear";
-    } else {
-        url = `/api/control/${id==='resetNumber'?'set-call':'set-issue'}`;
-    }
+    if (id.includes('clear')) url = id.includes('logs') ? "/api/logs/clear" : "/api/admin/stats/clear";
+    else if (id === 'resetAll') url = "/reset";
+    else if (id.includes('line')) url = "/api/admin/line-settings/reset";
+    else if (id.includes('Passed')) url = "/api/passed/clear";
+    else if (id.includes('Featured')) url = "/api/featured/clear";
+    else url = `/api/control/${id==='resetNumber'?'set-call':'set-issue'}`;
     const needsZero = id.startsWith('reset') && !['All','Passed','Featured','line'].some(s => id.includes(s));
-    const data = needsZero ? {number: 0} : {};
-
-    confirmBtn(el, el.textContent, () => req(url, data));
+    confirmBtn(el, el.textContent, async () => {
+        await req(url, needsZero ? {number: 0} : {});
+        // [Fix] Immediate UI Update for Stats Clearing
+        if(id === 'btn-clear-stats') { $("stats-today-count").textContent="0"; $("hourly-chart").innerHTML=""; toast(T.saved, "success"); }
+        if(id === 'btn-clear-logs') { $("admin-log-ui").innerHTML="<li>[No Logs]</li>"; toast(T.saved, "success"); }
+    });
 });
 
-// Misc UI Handlers
 let editHr=null; const modal=$("edit-stats-overlay");
 bind("btn-modal-close", ()=>modal.style.display="none");
 window.openStatModal = (h,v) => { $("modal-current-count").textContent=v; editHr=h; modal.style.display="flex"; };
@@ -347,10 +311,7 @@ document.addEventListener("DOMContentLoaded", () => {
     checkSession(); applyTheme();
     if($("admin-lang-selector")) $("admin-lang-selector").value = curLang;
     if($("appt-time")) flatpickr("#appt-time", { enableTime:true, dateFormat:"Y-m-d H:i", time_24hr:true, locale:"zh_tw", minDate:"today", disableMobile:"true" });
-    
-    // [Fix] Bind Refresh Button
     bind("btn-refresh-stats", loadStats);
-
     $$('.nav-btn').forEach(b => b.onclick = () => {
         $$('.nav-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active');
         $$('.section-group').forEach(s=>s.classList.remove('active')); $(b.dataset.target)?.classList.add('active');
