@@ -1,5 +1,5 @@
 /* ==========================================
- * 前台邏輯 (main.js) - v63.0 Loop Fix
+ * 前台邏輯 (main.js) - v64.0 Connection Keep-Alive
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const on = (el, ev, fn) => el?.addEventListener(ev, fn), show = (el, v) => el && (el.style.display = v ? 'block' : 'none');
@@ -7,14 +7,14 @@ const ls = localStorage, doc = document;
 
 // --- Config & State ---
 const i18n = {
-    "zh-TW": { cur:"目前叫號", iss:"已發至", online:"線上取號", help:"免排隊，手機領號", man_t:"號碼提醒", man_p:"輸入您的號碼開啟到號提醒", take:"立即取號", track:"追蹤", my:"我的號碼", ahead:"前方", wait:"⏳ 剩 %s 組", arr:"🎉 輪到您了！", pass:"⚠️ 已過號", p_list:"過號", none:"無", links:"精選連結", copy:"複製", sound:"音效", s_on:"開啟", s_off:"靜音", scan:"掃描追蹤", off:"連線中斷", ok:"取號成功", fail:"失敗", no_in:"請輸入號碼", cancel:"取消追蹤？", copied:"已複製", notice:"📢 ", q_left:"還剩 %s 組！", est:"約 %s 分", est_less:"< 1 分", just:"剛剛", ago:"%s 分前", conn:"已連線", retry:"連線中 (%s)...", wait_count:"等待中" },
-    "en": { cur:"Now Serving", iss:"Issued", online:"Get Ticket", help:"Digital ticket & notify", man_t:"Number Alert", man_p:"Enter number to get alerted", take:"Get Ticket", track:"Track", my:"Your #", ahead:"Ahead", wait:"⏳ %s groups", arr:"🎉 Your Turn!", pass:"⚠️ Passed", p_list:"Passed", none:"None", links:"Links", copy:"Copy", sound:"Sound", s_on:"On", s_off:"Mute", scan:"Scan", off:"Offline", ok:"Success", fail:"Failed", no_in:"Enter #", cancel:"Stop tracking?", copied:"Copied", notice:"📢 ", q_left:"%s groups left!", est:"~%s min", est_less:"< 1 min", just:"Now", ago:"%s m ago", conn:"Online", retry:"Retry (%s)...", wait_count:"Waiting" }
+    "zh-TW": { cur:"目前叫號", iss:"已發至", online:"線上取號", help:"免排隊，手機領號", man_t:"號碼提醒", man_p:"輸入您的號碼開啟到號提醒", take:"立即取號", track:"追蹤", my:"我的號碼", ahead:"前方", wait:"⏳ 剩 %s 組", arr:"🎉 輪到您了！", pass:"⚠️ 已過號", p_list:"過號", none:"無", links:"精選連結", copy:"複製", sound:"音效", s_on:"開啟", s_off:"靜音", scan:"掃描追蹤", off:"連線中斷", ok:"取號成功", fail:"失敗", no_in:"請輸入號碼", cancel:"取消追蹤？", copied:"已複製", notice:"📢 ", q_left:"還剩 %s 組！", est:"約 %s 分", est_less:"< 1 分", just:"剛剛", ago:"%s 分前", conn:"已連線", retry:"連線中 (%s)...", wait_count:"等待中", sys_close:"⛔ 系統已關閉" },
+    "en": { cur:"Now Serving", iss:"Issued", online:"Get Ticket", help:"Digital ticket & notify", man_t:"Number Alert", man_p:"Enter number to get alerted", take:"Get Ticket", track:"Track", my:"Your #", ahead:"Ahead", wait:"⏳ %s groups", arr:"🎉 Your Turn!", pass:"⚠️ Passed", p_list:"Passed", none:"None", links:"Links", copy:"Copy", sound:"Sound", s_on:"On", s_off:"Mute", scan:"Scan", off:"Offline", ok:"Success", fail:"Failed", no_in:"Enter #", cancel:"Stop tracking?", copied:"Copied", notice:"📢 ", q_left:"%s groups left!", est:"~%s min", est_less:"< 1 min", just:"Now", ago:"%s m ago", conn:"Online", retry:"Retry (%s)...", wait_count:"Waiting", sys_close:"⛔ System Closed" }
 };
 let lang = ls.getItem('callsys_lang')||'zh-TW', T = i18n[lang], myTicket = ls.getItem('callsys_ticket'), sysMode = 'ticketing';
 let sndEnabled = true, localMute = false, avgTime = 0, lastUpd = null, audioCtx = null, connTimer, wakeLock = null;
 let isDarkMode = ls.getItem('callsys_theme') === 'dark';
 
-// [Fix] Cache state to prevent infinite reload loops
+// State Cache
 let cachedMode = ls.getItem('callsys_mode_cache');
 let cachedPublic = ls.getItem('callsys_public_cache');
 
@@ -93,21 +93,29 @@ socket.on("connect", () => { socket.emit('joinRoom', 'public'); clearTimeout(con
     .on("updateWaitTime", t => { avgTime = t; updateTicket(parseInt($("number").textContent)||0); })
     .on("updateSoundSetting", b => sndEnabled = b)
     .on("updatePublicStatus", b => { 
-        // [Fix] Smart Refresh: Only reload if status actually CHANGED from what we cached
         const s = b ? '1' : '0';
+        // [Fix] Refresh on ANY change (Open -> Closed OR Closed -> Open)
         if (cachedPublic !== null && cachedPublic !== s) {
             ls.setItem('callsys_public_cache', s);
             location.reload(); 
         } else {
-            // First load or reconnect with same state -> No reload, just UI update
             if(cachedPublic !== s) ls.setItem('callsys_public_cache', s);
             cachedPublic = s;
-            if (!b) { doc.body.classList.toggle("is-closed", true); socket.disconnect(); }
-            else { doc.body.classList.remove("is-closed"); }
+            
+            if (!b) {
+                // System Closed - UI Update
+                doc.body.classList.add("is-closed");
+                $("status-bar").textContent = T.sys_close || "⛔ 系統已關閉";
+                $("status-bar").classList.add("visible");
+                // [CRITICAL] DO NOT DISCONNECT. Must keep socket alive to listen for "Open" event.
+            } else {
+                // System Open - UI Update
+                doc.body.classList.remove("is-closed");
+                $("status-bar").classList.remove("visible");
+            }
         }
     })
     .on("updateSystemMode", m => { 
-        // [Fix] Smart Refresh: Only reload if mode actually CHANGED
         if (cachedMode && cachedMode !== m) {
             ls.setItem('callsys_mode_cache', m);
             location.reload(); 
