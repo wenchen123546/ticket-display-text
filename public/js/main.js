@@ -1,5 +1,5 @@
 /* ==========================================
- * 前台邏輯 (main.js) - v62.0 Auto Refresh
+ * 前台邏輯 (main.js) - v63.0 Loop Fix
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const on = (el, ev, fn) => el?.addEventListener(ev, fn), show = (el, v) => el && (el.style.display = v ? 'block' : 'none');
@@ -13,6 +13,10 @@ const i18n = {
 let lang = ls.getItem('callsys_lang')||'zh-TW', T = i18n[lang], myTicket = ls.getItem('callsys_ticket'), sysMode = 'ticketing';
 let sndEnabled = true, localMute = false, avgTime = 0, lastUpd = null, audioCtx = null, connTimer, wakeLock = null;
 let isDarkMode = ls.getItem('callsys_theme') === 'dark';
+
+// [Fix] Cache state to prevent infinite reload loops
+let cachedMode = ls.getItem('callsys_mode_cache');
+let cachedPublic = ls.getItem('callsys_public_cache');
 
 const socket = io({ autoConnect: false, reconnection: true });
 
@@ -89,13 +93,30 @@ socket.on("connect", () => { socket.emit('joinRoom', 'public'); clearTimeout(con
     .on("updateWaitTime", t => { avgTime = t; updateTicket(parseInt($("number").textContent)||0); })
     .on("updateSoundSetting", b => sndEnabled = b)
     .on("updatePublicStatus", b => { 
-        // [Fix] Active Refresh: Reload page if status becomes Open (true), ensuring clean state
-        if (b) setTimeout(() => location.reload(), 200); 
-        else { doc.body.classList.toggle("is-closed", true); socket.disconnect(); }
+        // [Fix] Smart Refresh: Only reload if status actually CHANGED from what we cached
+        const s = b ? '1' : '0';
+        if (cachedPublic !== null && cachedPublic !== s) {
+            ls.setItem('callsys_public_cache', s);
+            location.reload(); 
+        } else {
+            // First load or reconnect with same state -> No reload, just UI update
+            if(cachedPublic !== s) ls.setItem('callsys_public_cache', s);
+            cachedPublic = s;
+            if (!b) { doc.body.classList.toggle("is-closed", true); socket.disconnect(); }
+            else { doc.body.classList.remove("is-closed"); }
+        }
     })
     .on("updateSystemMode", m => { 
-        // [Fix] Active Refresh: Force reload to switch layouts cleanly
-        setTimeout(() => location.reload(), 200); 
+        // [Fix] Smart Refresh: Only reload if mode actually CHANGED
+        if (cachedMode && cachedMode !== m) {
+            ls.setItem('callsys_mode_cache', m);
+            location.reload(); 
+        } else {
+            if(cachedMode !== m) ls.setItem('callsys_mode_cache', m);
+            cachedMode = m;
+            sysMode = m; 
+            renderMode();
+        }
     })
     .on("updatePassed", l => { 
         const ul=$("passedList"), mt=$("passed-empty-msg"); if($("passed-count")) $("passed-count").textContent = l?.length||0;
