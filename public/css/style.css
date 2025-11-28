@@ -1,5 +1,5 @@
 /* ==========================================
- * 前台樣式 (style.css) - v80.0 Optimized
+ * 前台樣式 (style.css) - v109.0 Kiosk Ready
  * ========================================== */
 :root {
     --primary:#4f46e5; --primary-dark:#4338ca; --primary-soft:#eef2ff; --text-main:#1e293b; --text-sub:#64748b; --text-light:#94a3b8;
@@ -73,6 +73,7 @@ body.dark-mode .my-ticket-card { background:linear-gradient(145deg,#312e81 0%,#1
 #toast-container { position:fixed; bottom:100px; left:50%; transform:translateX(-50%); z-index:9999; width:100%; pointer-events:none; display:flex; flex-direction:column; align-items:center; }
 .toast-message { background:rgba(15,23,42,.9); backdrop-filter:blur(10px); color:#fff; padding:12px 24px; border-radius:30px; margin-top:10px; opacity:0; transform:translateY(10px); transition:.3s; font-size:.95rem; font-weight:600; box-shadow:0 10px 30px rgba(0,0,0,.3); border:1px solid rgba(255,255,255,.1); } .toast-message.show { opacity:1; transform:translateY(0); }
 body.dark-mode .toast-message { background:rgba(255,255,255,.95); color:#0f172a; } #qr-code-container { display:none; }
+
 @media (min-width:1024px) {
     .app-container { max-width:1100px; height:90vh; display:grid; grid-template-columns:1.1fr 1fr; gap:40px; align-content:center; margin:auto; padding:0; }
     .app-header { position:absolute; top:30px; right:40px; width:auto; z-index:10; } .status-indicator { display:none; }
@@ -80,3 +81,25 @@ body.dark-mode .toast-message { background:rgba(255,255,255,.95); color:#0f172a;
     .side-panel { justify-content:center; height:100%; gap:24px; } .control-section { order:0; padding:32px; } .list-section { flex:0 0 auto; max-height:none; overflow:hidden; padding:24px; } .scroll-view { flex:1; max-height:250px; } .util-btns { width:auto; }
     #qr-code-container { display:block; position:fixed; bottom:30px; left:30px; padding:20px; background:#fff; border-radius:20px; box-shadow:0 10px 40px rgba(0,0,0,.15); text-align:center; font-size:.85rem; color:var(--text-sub); } #qr-code-placeholder img { display:block; margin:0 auto 8px; }
 }
+
+/* [Kiosk Mode Styles] - 純顯示模式 */
+body.kiosk-mode .hero-section {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    z-index: 100; padding: 0; margin: 0; border-radius: 0;
+    display: flex; flex-direction: column; justify-content: center;
+    box-shadow: none; background: var(--bg-body);
+}
+body.kiosk-mode #number { 
+    font-size: clamp(15rem, 35vw, 30rem); 
+    margin: 20px 0; 
+}
+body.kiosk-mode .hero-stats-grid { 
+    transform: scale(1.8); margin-top: 5vh; width: 70%; 
+    background: var(--surface); backdrop-filter: blur(10px);
+}
+body.kiosk-mode .side-panel, 
+body.kiosk-mode .app-header, 
+body.kiosk-mode #qr-code-container { 
+    display: none !important; 
+}
+body.kiosk-mode .bg-decoration { opacity: 0.8; }
