@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v93.0 Force SuperAdmin Fix
+ * 後台邏輯 (admin.js) - v94.0 Force Visibility Fix
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
@@ -83,10 +83,7 @@ const confirmBtn = (el, txt, action) => {
 };
 const updateLangUI = () => {
     T = i18n[curLang]||i18n["zh-TW"]; 
-    $$('[data-i18n]').forEach(e => {
-        const k = e.getAttribute('data-i18n');
-        if(T[k]) e.textContent = T[k];
-    });
+    $$('[data-i18n]').forEach(e => { const k = e.getAttribute('data-i18n'); if(T[k]) e.textContent = T[k]; });
     $$('[data-i18n-ph]').forEach(e => e.placeholder = T[e.getAttribute('data-i18n-ph')]||"");
     loadUsers(); loadStats(); loadAppointments(); if(cachedLine) renderLineSettings(); else loadLineSettings();
 };
@@ -118,7 +115,7 @@ const checkSession = () => {
 const logout = () => { localStorage.removeItem('callsys_token'); location.reload(); };
 const showLogin = () => { $("login-container").style.display="block"; $("admin-panel").style.display="none"; socket.disconnect(); };
 
-// [CRITICAL FIX] 權限判斷終極修正：只要帳號是 superadmin 就無條件視為超級管理員
+// [CRITICAL FIX] 權限判斷終極修正
 const isSuperAdmin = () => (uniqueUser === 'superadmin' || userRole === 'super' || userRole === 'ADMIN');
 
 const showPanel = () => {
@@ -126,28 +123,29 @@ const showPanel = () => {
     $("admin-panel").style.display="flex"; 
     $("sidebar-user-info").textContent = username;
     
-    const isSuper = isSuperAdmin(); // 使用修正後的強判斷
+    const isSuper = isSuperAdmin();
     
-    // 1. 預約按鈕與區塊
-    if($("nav-btn-booking")) $("nav-btn-booking").style.display = isSuper ? "flex" : "none";
+    // 1. 導覽列按鈕 (使用 Flex 以防跑版)
+    const setFlex = (id, show) => { if($(id)) $(id).style.display = show ? "flex" : "none"; };
+    const setBlock = (id, show) => { if($(id)) $(id).style.display = show ? "block" : "none"; };
+
+    setFlex("nav-btn-booking", isSuper);
+    const lineBtn = document.querySelector('button[data-target="section-line"]');
+    if(lineBtn) lineBtn.style.display = isSuper ? "flex" : "none";
+    
+    // 2. 區塊顯示控制
     if(!isSuper && $("section-booking")) $("section-booking").style.display = "none";
     
-    // 2. 超級管理員專屬區塊
-    ["card-user-management", "btn-export-csv", "mode-switcher-group", "unlock-pwd-group", "role-editor-container"].forEach(id => {
-        if($(id)) $(id).style.display = isSuper ? "block" : "none";
-    });
+    // 3. 超級管理員專屬功能 (強制顯示)
+    ["card-user-management", "btn-export-csv", "mode-switcher-group", "unlock-pwd-group", "role-editor-container"].forEach(id => setBlock(id, isSuper));
 
-    // 3. 危險操作按鈕
-    ['resetNumber','resetIssued','resetPassed','resetFeaturedContents','btn-clear-logs','btn-clear-stats','btn-reset-line-msg','resetAll'].forEach(id => {
-        if($(id)) $(id).style.display = isSuper ? 'block' : 'none';
-    });
+    // 4. 危險按鈕
+    ['resetNumber','resetIssued','resetPassed','resetFeaturedContents','btn-clear-logs','btn-clear-stats','btn-reset-line-msg','resetAll'].forEach(id => setBlock(id, isSuper));
     
-    // 4. LINE 設定按鈕
-    const lineBtn = document.querySelector('button[data-target="section-line"]');
-    if(lineBtn) lineBtn.style.display = isSuper ? 'flex' : 'none';
-
-    if(isSuper) loadRoles(); 
-    socket.auth.token = token; socket.connect(); updateLangUI();
+    // 5. 確保資料載入
+    socket.auth.token = token; socket.connect(); 
+    updateLangUI();
+    if(isSuper) { loadRoles(); loadUsers(); } // 強制重載用戶列表以顯示編輯按鈕
 };
 
 // --- Socket Events ---
@@ -203,7 +201,7 @@ function renderAppointments(list) {
 async function loadUsers() {
     const d = await req("/api/admin/users"); if(!d?.users) return;
     const roles = { 'VIEWER':'Viewer', 'OPERATOR':'Operator', 'MANAGER':'Manager', 'ADMIN':'Admin' };
-    const isSuper = isSuperAdmin(); // 使用統一強判斷
+    const isSuper = isSuperAdmin(); 
 
     renderList("user-list-ui", d.users, u => {
         const view = mk("div", "list-info", null, {}, [mk("span","list-main-text",`${u.role==='ADMIN'?'👑':(u.role==='MANAGER'?'🛡️':'👤')} ${u.nickname}`), mk("span","list-sub-text",`${u.username} (${roles[u.role]||u.role})`)]);
@@ -216,11 +214,9 @@ async function loadUsers() {
             ])
         ]);
         
-        // 修正：使用者編輯權限
         if(u.username === uniqueUser || isSuper) {
             acts.appendChild(mk("button","btn-secondary",T.edit,{onclick:()=>{view.style.display="none";acts.style.display="none";form.style.display="flex";}}));
         }
-        // 修正：使用者刪除/改權限 (保護 superadmin)
         if(u.username !== 'superadmin' && isSuper) {
             const sel = mk("select","role-select",null,{onchange:async()=>await req("/api/admin/set-role",{targetUsername:u.username, newRole:sel.value})});
             Object.keys(roles).forEach(k=>sel.add(new Option(roles[k], k, false, u.role===k)));
