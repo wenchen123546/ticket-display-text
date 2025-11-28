@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v89.0 Net Stats Logic
+ * 伺服器 (index.js) - v90.0 Stats Calibration
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http"), express = require("express"), socketio = require("socket.io");
@@ -109,8 +109,7 @@ app.post("/api/ticket/take", rateLimit({windowMs:36e5,max:20}), H(async req => {
     const { dateStr, hour } = getTWTime();
     if(BUSINESS_HOURS.enabled) { const h=new Date().getHours(); if(h<BUSINESS_HOURS.start||h>=BUSINESS_HOURS.end) throw new Error("非營業時間"); }
     const t = await redis.incr(KEYS.ISSUED); 
-    // Stats: Increment Issued Count (_i)
-    await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_i`, 1);
+    await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_i`, 1); // Stats: +Issued
     await redis.expire(`${KEYS.HOURLY}${dateStr}`, 172800);
     await run(`INSERT INTO history (date_str, timestamp, number, action, operator, wait_time_min) VALUES (?, ?, ?, ?, ?, ?)`, [dateStr, Date.now(), t, 'online_take', 'User', await calcWaitTime()]);
     await broadcastQueue(); return { ticket: t };
@@ -134,14 +133,12 @@ async function ctl(type, {body, user}) {
         if(dir==='next') { 
             newNum = await redis.incr(KEYS.ISSUED); 
             msg=`手動發號 ${newNum}`; 
-            // Stats: Increment Issued (_i)
-            await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_i`, 1); 
+            await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_i`, 1); // Stats: +Issued
         }
         else if(issued > curr) { 
             newNum = await redis.decr(KEYS.ISSUED); 
             msg=`手動回退 ${newNum}`; 
-            // Stats: Decrement Issued (_i)
-            await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_i`, -1); 
+            await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_i`, -1); // Stats: -Issued
         }
         else return { error: "錯誤" };
         await redis.expire(`${KEYS.HOURLY}${dateStr}`, 172800);
@@ -150,8 +147,7 @@ async function ctl(type, {body, user}) {
         if(type==='set_issue' && newNum===0) return resetSys(user.nickname);
         if(type==='set_issue') { 
             const diff = newNum - issued;
-            // Stats: Adjust Issued (_i) by diff
-            if(diff !== 0) await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_i`, diff);
+            if(diff !== 0) await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_i`, diff); // Stats: Fix Issued
             await redis.set(KEYS.ISSUED, newNum); msg=`修正發號 ${newNum}`; 
         } else { 
             await redis.mset(KEYS.CURRENT, newNum, ...(newNum>issued?[KEYS.ISSUED, newNum]:[])); msg=`設定叫號 ${newNum}`; checkLine(newNum); 
@@ -171,8 +167,7 @@ app.post("/api/control/pass-current", auth, perm('pass'), H(async req => {
     const c = parseInt(await redis.get(KEYS.CURRENT))||0; if(!c) throw new Error("無叫號");
     await redis.zadd(KEYS.PASSED, c, c); const next = (await redis.safeNextNumber(KEYS.CURRENT, KEYS.ISSUED)===-1 ? c : await redis.get(KEYS.CURRENT));
     const {dateStr, hour} = getTWTime(); 
-    // Stats: Increment Passed Count (_p)
-    await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_p`, 1); 
+    await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_p`, 1); // Stats: +Passed
     await run(`INSERT INTO history (date_str, timestamp, number, action, operator, wait_time_min) VALUES (?, ?, ?, ?, ?, ?)`, [dateStr, Date.now(), c, 'pass', req.user.nickname, await calcWaitTime()]);
     checkLine(next); await broadcastQueue(); io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number)); return { next };
 }));
@@ -180,8 +175,7 @@ app.post("/api/control/pass-current", auth, perm('pass'), H(async req => {
 app.post("/api/control/recall-passed", auth, perm('recall'), H(async req => {
     await redis.zrem(KEYS.PASSED, req.body.number); await redis.set(KEYS.CURRENT, req.body.number);
     const {dateStr, hour} = getTWTime(); 
-    // Stats: Decrement Passed Count (_p) since it's recalled
-    await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_p`, -1); 
+    await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_p`, -1); // Stats: -Passed (Recall)
     addLog(req.user.nickname, `↩️ 重呼 ${req.body.number}`); await broadcastQueue(); io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number));
 }));
 
@@ -190,8 +184,7 @@ app.post("/api/passed/add", auth, perm('pass'), H(async r => {
     if(n > 0) {
         await redis.zadd(KEYS.PASSED, n, n);
         const {dateStr, hour} = getTWTime(); 
-        // Stats: Increment Passed Count (_p)
-        await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_p`, 1);
+        await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_p`, 1); // Stats: +Passed
         io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number));
         addLog(r.user.nickname, `➕ 手動過號 ${n}`);
     }
@@ -201,8 +194,7 @@ app.post("/api/passed/remove", auth, perm('pass'), H(async r => {
     if(n > 0) {
         await redis.zrem(KEYS.PASSED, n);
         const {dateStr, hour} = getTWTime(); 
-        // Stats: Decrement Passed Count (_p)
-        await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_p`, -1);
+        await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_p`, -1); // Stats: -Passed
         io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number));
         addLog(r.user.nickname, `🗑️ 移除過號 ${n}`);
     }
@@ -221,28 +213,50 @@ app.post("/api/admin/set-role", auth, perm('settings'), H(async r => { if(r.user
 app.post("/api/admin/roles/get", auth, H(async r => JSON.parse(await redis.get(KEYS.ROLES)) || DEFAULT_ROLES));
 app.post("/api/admin/roles/update", auth, perm('settings'), H(async r => { if(r.user.role!=='super') throw new Error("僅超級管理員"); await redis.set(KEYS.ROLES, JSON.stringify(r.body.rolesConfig)); addLog(r.user.nickname, "🔧 修改權限"); }));
 
-// Stats (New Calculation: Issued - Passed)
+// Stats & Calibration
 app.post("/api/admin/stats", auth, H(async req => {
     const {dateStr, hour} = getTWTime(), hData = await redis.hgetall(`${KEYS.HOURLY}${dateStr}`), counts = new Array(24).fill(0);
     let total = 0; 
     if(hData) { 
         for(let i=0; i<24; i++) {
-            // New logic: _i (Issued) - _p (Passed)
             let iss = parseInt(hData[`${i}_i`]) || 0;
-            // Backwards compatibility for old data (simple keys)
-            if(!hData[`${i}_i`] && hData[i]) iss = parseInt(hData[i]);
-
+            if(!hData[`${i}_i`] && hData[i]) iss = parseInt(hData[i]); // Backwards compact
             const pass = parseInt(hData[`${i}_p`]) || 0;
             const net = Math.max(0, iss - pass);
-            counts[i] = net; 
-            total += net; 
+            counts[i] = net; total += net; 
         } 
     }
     return { history: await all("SELECT * FROM history ORDER BY id DESC LIMIT 50"), hourlyCounts: counts, todayCount: Math.max(0, total), serverHour: hour };
 }));
 app.post("/api/admin/stats/clear", auth, perm('settings'), H(async r => { const {dateStr} = getTWTime(); await redis.del(`${KEYS.HOURLY}${dateStr}`); await run("DELETE FROM history WHERE date_str=?", [dateStr]); addLog(r.user.nickname, "🗑️ 清空今日統計"); }));
-// Adjust needs to hit the _i bucket to affect the net calculation intuitively
 app.post("/api/admin/stats/adjust", auth, perm('settings'), H(async r => { const {dateStr} = getTWTime(); await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${r.body.hour}_i`, r.body.delta); }));
+app.post("/api/admin/stats/calibrate", auth, perm('settings'), H(async r => {
+    // FORCE SYNC: Calculates Total Target (Issued - PassedCount) and adjusts the current hour's stats to match.
+    const {dateStr, hour} = getTWTime();
+    const [issuedStr, passedList] = await Promise.all([redis.get(KEYS.ISSUED), redis.zrange(KEYS.PASSED, 0, -1)]);
+    const issued = parseInt(issuedStr) || 0;
+    const passed = passedList ? passedList.length : 0;
+    const targetTotal = Math.max(0, issued - passed);
+
+    // Get current total from stats
+    const hData = await redis.hgetall(`${KEYS.HOURLY}${dateStr}`);
+    let currentStatsTotal = 0;
+    if(hData) {
+        for(let i=0; i<24; i++) {
+            let iss = parseInt(hData[`${i}_i`]) || 0;
+            if(!hData[`${i}_i`] && hData[i]) iss = parseInt(hData[i]);
+            const p = parseInt(hData[`${i}_p`]) || 0;
+            currentStatsTotal += Math.max(0, iss - p);
+        }
+    }
+    
+    const diff = targetTotal - currentStatsTotal;
+    if(diff !== 0) {
+        await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_i`, diff);
+        addLog(r.user.nickname, `⚖️ 校正統計 (${diff > 0 ? '+' : ''}${diff})`);
+    }
+    return { success: true, diff };
+}));
 app.post("/api/admin/export-csv", auth, perm('settings'), H(async r => {
     const rows = await all("SELECT * FROM history ORDER BY id DESC LIMIT 2000");
     const csv = "Date,Time,Number,Action,Operator,Wait(min)\n" + rows.map(d => `${d.date_str},${new Date(d.timestamp).toLocaleTimeString('zh-TW')},${d.number},${d.action},${d.operator},${d.wait_time_min}`).join("\n");
@@ -312,4 +326,4 @@ io.on("connection", async s => {
     s.emit("update",Number(c)); s.emit("updateQueue",{current:Number(c),issued:Number(i)}); s.emit("updatePassed",p.map(Number)); s.emit("updateFeaturedContents",f.map(JSON.parse));
     s.emit("updateSoundSetting",snd==="1"); s.emit("updatePublicStatus",pub!=="0"); s.emit("updateSystemMode",m||'ticketing'); s.emit("updateWaitTime",await calcWaitTime());
 });
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v89.0 running on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v90.0 running on ${PORT}`));
