@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v101.0 Button Fix
+ * 後台邏輯 (admin.js) - v102.0 Final Sync
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
@@ -254,7 +254,7 @@ const act = (id, api, data={}) => $(id)?.addEventListener("click", async () => {
 });
 const bind = (id, fn) => $(id)?.addEventListener("click", fn);
 
-// [Fix] Logic for +1 and +5 buttons in Command Center
+// [Fix] Add handlers for +1 and +5 in Command Center
 async function adjustCurrent(delta) {
     const c = parseInt($("number").textContent) || 0;
     const target = c + delta;
