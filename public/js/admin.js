@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v108.0 Fragment & Security
+ * 後台邏輯 (admin.js) - v109.0 Optimistic UI
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
@@ -63,10 +63,8 @@ const i18n = {
 };
 
 let curLang = localStorage.getItem('callsys_lang')||'zh-TW', T = i18n[curLang], userRole="normal", username="", uniqueUser="", cachedLine=null, isDark = localStorage.getItem('callsys_admin_theme') === 'dark';
-// [Security] No token in auth, use Cookie
 const socket = io({ autoConnect: false });
 
-// [Security] Removed token from body, Cookies are handled automatically by browser
 async function req(url, data={}, btn=null) {
     if(btn) btn.disabled=true;
     try {
@@ -88,10 +86,9 @@ const updateLangUI = () => {
     loadUsers(); loadStats(); loadAppointments(); if(cachedLine) renderLineSettings(); else loadLineSettings();
 };
 
-// [Performance] Use DocumentFragment for batched DOM updates
 function renderList(ulId, list, fn, emptyMsg="[ Empty ]") {
     const ul = $(ulId); if(!ul) return; 
-    while (ul.firstChild) ul.removeChild(ul.firstChild); // Faster clear
+    while (ul.firstChild) ul.removeChild(ul.firstChild); 
     if(!list?.length) {
         ul.innerHTML=`<li class="list-item" style="justify-content:center;color:var(--text-sub);">${emptyMsg}</li>`;
         return;
@@ -106,17 +103,14 @@ function applyTheme() {
 }
 
 const checkSession = () => {
-    // Only check local state for UI rendering, auth is cookie-based
     uniqueUser = localStorage.getItem('callsys_user');
     userRole = localStorage.getItem('callsys_role'); 
     username = localStorage.getItem('callsys_nick');
     if (uniqueUser === 'superadmin' && userRole !== 'ADMIN') { userRole = 'ADMIN'; localStorage.setItem('callsys_role', 'ADMIN'); }
     if(uniqueUser) showPanel(); else showLogin();
 };
-// Clear local state and reload (Cookie will be cleared by server logic if possible or just expire)
 const logout = () => { 
     localStorage.removeItem('callsys_user'); localStorage.removeItem('callsys_role'); localStorage.removeItem('callsys_nick');
-    // Force cookie expiration by setting past date
     document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     location.reload(); 
 };
@@ -284,17 +278,44 @@ function renderLogs(logs, init) {
     while(ul.children.length > 50) ul.removeChild(ul.lastChild);
 }
 
+// [Optimistic UI] Helper
 const act = (id, api, data={}) => $(id)?.addEventListener("click", async () => {
-    const num = $("number"); if(api.includes('call') && num && data.direction) num.textContent = parseInt(num.textContent||0) + (data.direction==='next'?1:-1);
-    await req(api, data, $(id));
+    const numEl = $("number");
+    const originalVal = numEl ? parseInt(numEl.textContent || 0) : 0;
+    
+    // Optimistic update
+    if(api.includes('call') && numEl && data.direction) {
+        numEl.textContent = originalVal + (data.direction === 'next' ? 1 : -1);
+        numEl.style.opacity = "0.6"; // Visual feedback
+    }
+
+    try {
+        await req(api, data, $(id));
+    } catch(e) {
+        // Revert on error
+        if(numEl) numEl.textContent = originalVal;
+    } finally {
+        if(numEl) numEl.style.opacity = "1";
+    }
 });
 const bind = (id, fn) => $(id)?.addEventListener("click", fn);
 
+// [Optimistic UI] for adjustments
 async function adjustCurrent(delta) {
-    const c = parseInt($("number").textContent) || 0;
+    const numEl = $("number");
+    const c = parseInt(numEl.textContent) || 0;
     const target = c + delta;
     if(target > 0) {
-        if(await req("/api/control/set-call", {number: target})) toast(`${T.saved}: ${target}`, "success");
+        // Optimistic
+        numEl.textContent = target;
+        numEl.style.opacity = "0.6";
+        try {
+            if(await req("/api/control/set-call", {number: target})) toast(`${T.saved}: ${target}`, "success");
+        } catch(e) {
+            numEl.textContent = c; // Revert
+        } finally {
+            numEl.style.opacity = "1";
+        }
     }
 }
 bind("btn-call-add-1", () => adjustCurrent(1));
@@ -325,7 +346,6 @@ bind("add-user-btn", async()=>{ const u=$("new-user-username").value, p=$("new-u
 bind("admin-theme-toggle", ()=>{ isDark = !isDark; applyTheme(); });
 bind("admin-theme-toggle-mobile", ()=>{ isDark = !isDark; applyTheme(); });
 bind("login-button", async () => {
-    // [Security] Token is now handled by HttpOnly Cookie
     const res = await fetch("/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({username:$("username-input").value, password:$("password-input").value})}).then(r=>r.json()).catch(()=>({error:T.login_fail}));
     if(res.success) { 
         localStorage.setItem('callsys_user', res.username); localStorage.setItem('callsys_role', res.userRole); localStorage.setItem('callsys_nick', res.nickname); checkSession(); 
