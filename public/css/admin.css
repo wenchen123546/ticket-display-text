@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台樣式 (admin.css) - v10.0 Smart Layout Context
+ * 後台樣式 (admin.css) - v11.0 Absolute Uniform Grid
  * ========================================== */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
 
@@ -104,40 +104,31 @@ body {
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ==========================================
-   2. 智慧網格系統 (Context-Aware Grid)
+   2. 絕對統一網格系統 (Absolute Uniform Grid)
    ========================================== */
-/* 基礎網格設定 */
 .card-container { 
-    display: grid; gap: 24px; 
-    align-items: stretch; /* 強制等高 */
-    grid-template-columns: 1fr; /* 手機預設 1 欄 */
+    display: grid; 
+    gap: 24px; 
+    
+    /* [手機] 預設 1 欄 */
+    grid-template-columns: 1fr; 
+    
+    /* 強制每列卡片高度拉伸一致 */
+    grid-auto-rows: 1fr; 
+    align-items: stretch; 
 }
 
-/* --- [關鍵優化] 針對不同頁面的特殊佈局 --- */
-
-/* A. 現場控台 (#section-live): 3 張卡片 -> 桌機 3 欄完美對齊 */
-@media (min-width: 1100px) {
-    #section-live .card-container { grid-template-columns: repeat(3, 1fr); }
-}
-
-/* B. 數據報表 (#section-stats): 2 張大卡片 -> 桌機 2 欄 (50/50)，不要留白 */
+/* [平板/筆電] >= 900px: 強制 2 欄 */
 @media (min-width: 900px) {
-    #section-stats .card-container { grid-template-columns: 1fr 1fr; }
+    .card-container { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* C. 系統設定 (#section-settings): 卡片很多 -> 使用 Auto-Fit 自動填滿 */
-@media (min-width: 768px) {
-    #section-settings .card-container { 
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); 
-    }
+/* [桌機] >= 1400px: 強制 3 欄 */
+@media (min-width: 1400px) {
+    .card-container { grid-template-columns: repeat(3, 1fr); }
 }
 
-/* D. LINE 設定 (#section-line): 通常只有 1 張大卡片 -> 限制最大寬度並置中 */
-#section-line .card-container { 
-    display: flex; flex-direction: column; max-width: 800px; margin: 0 auto; 
-}
-
-/* 跨欄卡片 */
+/* 跨欄專用卡片 (如數據圖表、操作日誌) - 只有加了 class 才會跨欄 */
 .full-width-card { grid-column: 1 / -1 !important; width: 100%; }
 
 /* ==========================================
@@ -150,7 +141,7 @@ body {
     box-shadow: var(--shadow-card); 
     padding: 24px; 
     display: flex; flex-direction: column; 
-    height: 100%; /* 填滿 Grid 高度 */
+    height: 100%; /* 確保填滿 Grid 高度 */
     position: relative;
     transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -163,7 +154,7 @@ body {
     display: flex; align-items: center; gap: 8px;
 }
 
-/* 自動將按鈕推到底部對齊 */
+/* [對齊關鍵] 自動將按鈕推到底部，確保視覺對齊 */
 .admin-card .control-group:last-of-type,
 .admin-card > button:last-child { margin-top: auto; }
 
@@ -172,7 +163,8 @@ body {
    ========================================== */
 .dashboard-header { 
     display: grid; 
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); 
+    /* 自動填滿，最小 240px */
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); 
     gap: 20px; margin-bottom: 32px; 
 }
 
@@ -251,7 +243,7 @@ button { cursor: pointer; border: none; border-radius: 6px; font-weight: 600; di
 .btn-reset-single:hover { color: var(--danger); text-decoration: underline; }
 
 /* ==========================================
-   6. 列表 (Lists)
+   6. 列表 (Lists - Table Style)
    ========================================== */
 .list-container { 
     flex: 1; 
@@ -263,6 +255,7 @@ button { cursor: pointer; border: none; border-radius: 6px; font-weight: 600; di
 }
 .scroll-list { flex: 1; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
 
+/* 斑馬紋表格樣式列表 */
 .list-item { 
     display: grid; grid-template-columns: 1fr auto; 
     align-items: center; gap: 12px;
@@ -311,36 +304,7 @@ body.dark-mode .list-item:nth-child(even) { background: #182333; }
 .chart-label { font-size: 0.65rem; margin-top: 4px; color: var(--text-light); }
 
 /* ==========================================
-   8. 手機版適配 (Mobile)
-   ========================================== */
-@media (max-width: 768px) {
-    #admin-panel { flex-direction: column; }
-    .sidebar { 
-        width: 100%; height: auto; position: fixed; bottom: 0; top: auto; 
-        flex-direction: row; border-top: 1px solid var(--border-color); border-right: none;
-        background: var(--bg-surface); padding-bottom: env(safe-area-inset-bottom);
-        box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
-    }
-    .sidebar-header, .sidebar-footer { display: none; }
-    .sidebar-nav { flex-direction: row; padding: 8px; overflow-x: auto; gap: 8px; }
-    .nav-btn { flex-direction: column; padding: 8px; font-size: 0.7rem; gap: 4px; text-align: center; justify-content: center; }
-    
-    .content-area { padding: 16px; padding-bottom: 80px; }
-    
-    /* 手機版所有頁面強制單欄 */
-    #section-live .card-container,
-    #section-stats .card-container,
-    #section-settings .card-container { grid-template-columns: 1fr; }
-    
-    .dashboard-header { grid-template-columns: 1fr 1fr; gap: 12px; }
-    .dashboard-item:last-child { grid-column: 1 / -1; }
-    
-    .mobile-only-settings { display: block; margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--border-color); }
-    .lang-select { width: 100%; border: 1px solid var(--border-color); padding: 8px; }
-}
-
-/* ==========================================
-   9. 其他 (Misc)
+   8. 其他 & 手機版 (Misc & Mobile)
    ========================================== */
 #login-container { background: var(--bg-surface); padding: 40px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: var(--shadow-card); }
 #login-container:not([style*="display: none"]) ~ #status-bar { display: none !important; }
@@ -358,3 +322,27 @@ body.dark-mode .list-item:nth-child(even) { background: #182333; }
 .segmented-control { background: var(--bg-body); padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--border-color); display: flex; margin-bottom: 12px; }
 .segmented-option { padding: 6px 12px; font-size: 0.85rem; border-radius: 4px; text-align: center; flex: 1; cursor: pointer; }
 .segmented-option.active { background: var(--bg-surface); color: var(--primary); box-shadow: 0 1px 2px rgba(0,0,0,0.1); font-weight: 600; }
+
+@media (max-width: 768px) {
+    #admin-panel { flex-direction: column; }
+    .sidebar { 
+        width: 100%; height: auto; position: fixed; bottom: 0; top: auto; 
+        flex-direction: row; border-top: 1px solid var(--border-color); border-right: none;
+        background: var(--bg-surface); padding-bottom: env(safe-area-inset-bottom);
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+    }
+    .sidebar-header, .sidebar-footer { display: none; }
+    .sidebar-nav { flex-direction: row; padding: 8px; overflow-x: auto; gap: 8px; }
+    .nav-btn { flex-direction: column; padding: 8px; font-size: 0.7rem; gap: 4px; text-align: center; justify-content: center; }
+    
+    .content-area { padding: 16px; padding-bottom: 80px; }
+    
+    /* 手機強制單欄 */
+    .card-container { grid-template-columns: 1fr; } 
+    
+    .dashboard-header { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .dashboard-item:last-child { grid-column: 1 / -1; }
+    
+    .mobile-only-settings { display: block; margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--border-color); }
+    .lang-select { width: 100%; border: 1px solid var(--border-color); padding: 8px; }
+}
