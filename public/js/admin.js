@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v109.0 Optimistic UI
+ * 後台邏輯 (admin.js) - v16.3 Full Localization Fix
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
@@ -7,13 +7,18 @@ const mk = (t, c, txt, ev={}, ch=[]) => {
     Object.entries(ev).forEach(([k,v])=>e[k.startsWith('on')?k.toLowerCase():k]=v); 
     ch.forEach(x=>x&&e.appendChild(x)); return e; 
 };
-const toast = (m, t='info') => { const el=$("toast-notification"); el.textContent=m; el.className=`show ${t}`; setTimeout(()=>el.className="", 3000); };
+const toast = (m, t='info') => { 
+    const el=$("toast-notification"); el.textContent=m; 
+    el.className = `show ${t}`; 
+    setTimeout(()=>el.className="", 3000); 
+};
 
+// [關鍵] 擴充翻譯字典，包含所有 JS 動態生成的文字
 const i18n = {
     "zh-TW": { 
         status_conn:"✅ 已連線", status_dis:"⚠️ 連線中斷...", saved:"✅ 已儲存", denied:"❌ 權限不足", 
         expired:"Session 過期", login_fail:"登入失敗", confirm:"⚠️ 確認", recall:"↩️ 重呼", 
-        edit:"✎", del:"✕", save:"✓", cancel:"✕",
+        edit:"✎ 編輯", del:"✕ 刪除", save:"✓ 儲存", cancel:"✕ 取消",
         login_title: "請登入管理系統", ph_account: "帳號", ph_password: "密碼", login_btn: "登入",
         admin_panel: "管理後台", nav_live: "現場控台", nav_stats: "數據報表", nav_booking: "預約管理",
         nav_settings: "系統設定", nav_line: "LINE設定", logout: "登出",
@@ -33,12 +38,16 @@ const i18n = {
         card_roles: "權限設定", btn_save_roles: "儲存權限變更",
         btn_save: "儲存", btn_restore: "恢復預設值",
         modal_edit: "編輯數據", btn_done: "完成",
-        card_booking: "預約管理", lbl_add_appt: "新增預約", wait: "等待"
+        card_booking: "預約管理", lbl_add_appt: "新增預約", wait: "等待...",
+        loading: "載入中...", empty: "[ 空 ]", no_logs: "[ 無日誌 ]", no_appt: "暫無預約",
+        role_viewer: "檢視者", role_operator: "操作員", role_manager: "經理", role_admin: "管理員",
+        perm_role: "角色", perm_call: "叫號", perm_pass: "過號", perm_recall: "重呼", perm_issue: "發號", perm_settings: "設定", perm_appt: "預約",
+        msg_recall_confirm: "確定要重呼 %s 嗎？", msg_sent: "📢 已發送", msg_calibrated: "校正完成"
     },
     "en": { 
         status_conn:"✅ Connected", status_dis:"⚠️ Disconnected...", saved:"✅ Saved", denied:"❌ Denied", 
         expired:"Session Expired", login_fail:"Login Failed", confirm:"⚠️ Confirm", recall:"↩️ Recall", 
-        edit:"Edit", del:"Del", save:"Save", cancel:"Cancel",
+        edit:"✎ Edit", del:"✕ Del", save:"✓ Save", cancel:"✕ Cancel",
         login_title: "Login to Admin Panel", ph_account: "Username", ph_password: "Password", login_btn: "Login",
         admin_panel: "Admin Panel", nav_live: "Live Console", nav_stats: "Statistics", nav_booking: "Booking",
         nav_settings: "Settings", nav_line: "Line Config", logout: "Logout",
@@ -58,7 +67,11 @@ const i18n = {
         card_roles: "Role Permissions", btn_save_roles: "Save Permission Changes",
         btn_save: "Save", btn_restore: "Restore Defaults",
         modal_edit: "Edit Data", btn_done: "Done",
-        card_booking: "Booking Manager", lbl_add_appt: "Add Booking", wait: "Waiting"
+        card_booking: "Booking Manager", lbl_add_appt: "Add Booking", wait: "Waiting...",
+        loading: "Loading...", empty: "[ Empty ]", no_logs: "[ No Logs ]", no_appt: "No Appointments",
+        role_viewer: "Viewer", role_operator: "Operator", role_manager: "Manager", role_admin: "Admin",
+        perm_role: "Role", perm_call: "Call", perm_pass: "Pass", perm_recall: "Recall", perm_issue: "Issue", perm_settings: "Settings", perm_appt: "Booking",
+        msg_recall_confirm: "Recall number %s?", msg_sent: "📢 Sent", msg_calibrated: "Calibrated"
     }
 };
 
@@ -74,32 +87,72 @@ async function req(url, data={}, btn=null) {
         return res;
     } catch(e) { toast(`❌ ${e.message}`, "error"); return null; } finally { if(btn) setTimeout(()=>btn.disabled=false, 300); }
 }
+
 const confirmBtn = (el, txt, action) => {
     if(!el) return; let t, c=5;
-    el.onclick = (e) => { e.stopPropagation(); if(el.classList.contains("is-confirming")) { action(); reset(); } else { el.classList.add("is-confirming"); el.textContent = `${T.confirm} (${c})`; t = setInterval(() => { c--; el.textContent = `${T.confirm} (${c})`; if(c<=0) reset(); }, 1000); } };
-    const reset = () => { clearInterval(t); el.classList.remove("is-confirming"); el.textContent = txt; c=5; };
-};
-const updateLangUI = () => {
-    T = i18n[curLang]||i18n["zh-TW"]; 
-    $$('[data-i18n]').forEach(e => { const k = e.getAttribute('data-i18n'); if(T[k]) e.textContent = T[k]; });
-    $$('[data-i18n-ph]').forEach(e => e.placeholder = T[e.getAttribute('data-i18n-ph')]||"");
-    loadUsers(); loadStats(); loadAppointments(); if(cachedLine) renderLineSettings(); else loadLineSettings();
+    // 儲存原始文字 key，以便切換語言時更新
+    el.dataset.originalKey = Object.keys(T).find(key => T[key] === txt) || txt; 
+    
+    el.onclick = (e) => { 
+        e.stopPropagation(); 
+        if(el.classList.contains("is-confirming")) { action(); reset(); } 
+        else { 
+            el.classList.add("is-confirming"); 
+            el.textContent = `${T.confirm} (${c})`; 
+            t = setInterval(() => { c--; el.textContent = `${T.confirm} (${c})`; if(c<=0) reset(); }, 1000); 
+        } 
+    };
+    const reset = () => { 
+        clearInterval(t); el.classList.remove("is-confirming"); 
+        // 恢復時嘗試使用翻譯
+        el.textContent = T[el.dataset.originalKey] || txt; 
+        c=5; 
+    };
 };
 
-function renderList(ulId, list, fn, emptyMsg="[ Empty ]") {
+// [關鍵] 更新所有 UI，包含重新渲染列表
+const updateLangUI = () => {
+    T = i18n[curLang]||i18n["zh-TW"]; 
+    
+    // 1. 更新靜態 HTML 文字
+    $$('[data-i18n]').forEach(e => { const k = e.getAttribute('data-i18n'); if(T[k]) e.textContent = T[k]; });
+    $$('[data-i18n-ph]').forEach(e => e.placeholder = T[e.getAttribute('data-i18n-ph')]||"");
+    
+    // 2. 更新按鈕原始文字 (若沒在確認狀態)
+    $$('button[data-original-key]').forEach(b => {
+        if(!b.classList.contains('is-confirming')) b.textContent = T[b.dataset.originalKey];
+    });
+
+    // 3. [關鍵] 重新載入動態列表，確保 JS 生成的內容也翻譯
+    loadUsers(); 
+    loadStats(); 
+    loadAppointments(); 
+    if(isSuperAdmin()) loadRoles(); // 重新渲染權限表
+    if(cachedLine) renderLineSettings(); else loadLineSettings();
+    
+    // 重新請求列表以刷新翻譯 (Passed List, Featured Links)
+    req("/api/featured/get").then(l => renderList("featured-list-ui", l, renderFeaturedItem));
+    
+    // 更新登入者資訊顯示
+    if(username) $("sidebar-user-info").textContent = username;
+};
+
+function renderList(ulId, list, fn, emptyMsgKey="empty") {
     const ul = $(ulId); if(!ul) return; 
     while (ul.firstChild) ul.removeChild(ul.firstChild); 
     if(!list?.length) {
-        ul.innerHTML=`<li class="list-item" style="justify-content:center;color:var(--text-sub);">${emptyMsg}</li>`;
+        ul.innerHTML=`<li class="list-item" style="justify-content:center;color:var(--text-sub);">${T[emptyMsgKey] || T.empty}</li>`;
         return;
     }
     const frag = document.createDocumentFragment();
     list.forEach(x => { const el = fn(x); if(el) frag.appendChild(el); });
     ul.appendChild(frag);
 }
+
 function applyTheme() {
     document.body.classList.toggle('dark-mode', isDark); localStorage.setItem('callsys_admin_theme', isDark?'dark':'light');
     if($('admin-theme-toggle')) $('admin-theme-toggle').textContent = isDark ? '☀️' : '🌙';
+    if($('admin-theme-toggle-mobile')) $('admin-theme-toggle-mobile').textContent = isDark ? '☀️' : '🌙';
 }
 
 const checkSession = () => {
@@ -128,9 +181,9 @@ const showPanel = () => {
 
     ["card-user-management", "card-role-management", "btn-export-csv", "mode-switcher-group", "unlock-pwd-group"].forEach(id => setBlock(id, isSuper));
     ['resetNumber','resetIssued','resetPassed','resetFeaturedContents','btn-clear-logs','btn-clear-stats','btn-reset-line-msg','resetAll'].forEach(id => setBlock(id, isSuper));
+    
     socket.connect(); 
-    updateLangUI();
-    if(isSuper) { loadRoles(); loadUsers(); } 
+    updateLangUI(); // 這裡會觸發所有載入
     upgradeSystemModeUI();
 };
 
@@ -142,9 +195,14 @@ function upgradeSystemModeUI() {
     const wrapper = mk('div', 'segmented-control');
     radios.forEach(radio => {
         const textNode = radio.nextSibling;
-        const labelText = textNode && textNode.nodeType === 3 ? textNode.textContent.trim() : radio.value;
+        // 翻譯模式標籤
+        const labelKey = radio.value === 'ticketing' ? 'mode_online' : 'mode_manual';
+        const labelText = T[labelKey]; 
         if(textNode) textNode.remove();
         const label = mk('div', 'segmented-option', labelText);
+        // 綁定動態更新
+        label.dataset.i18n = labelKey; 
+        
         label.onclick = () => { radio.checked = true; radio.dispatchEvent(new Event('change')); updateSegmentedVisuals(wrapper); };
         wrapper.appendChild(label); wrapper.appendChild(radio);
     });
@@ -168,15 +226,19 @@ socket.on("updatePublicStatus", b => $("public-toggle").checked = b);
 socket.on("updateSoundSetting", b => $("sound-toggle").checked = b);
 socket.on("updateSystemMode", m => { $$('input[name="systemMode"]').forEach(r => r.checked = (r.value === m)); const w = document.querySelector('.segmented-control'); if(w) updateSegmentedVisuals(w); });
 socket.on("updateAppointments", l => renderAppointments(l));
-socket.on("updateOnlineAdmins", l => renderList("online-users-list", (l||[]).sort((a,b)=>(a.role==='super'?-1:1)), u => mk("li","list-item",null,{},[mk("div","list-info",null,{},[mk("span","list-main-text",`🟢 ${u.nickname}`), mk("span","list-sub-text",u.username)])]), "Wait..."));
+socket.on("updateOnlineAdmins", l => renderList("online-users-list", (l||[]).sort((a,b)=>(a.role==='super'?-1:1)), u => mk("li","list-item",null,{},[mk("div","list-info",null,{},[mk("span","list-main-text",`🟢 ${u.nickname}`), mk("span","list-sub-text",u.username)])]), "loading"));
+
+// Render Passed List
 socket.on("updatePassed", l => renderList("passed-list-ui", l, n => {
     const acts = mk("div", "list-actions", null, {}, [
-        mk("button", "btn-secondary", T.recall, {onclick:()=>{ if(confirm(`Recall ${n}?`)) req("/api/control/recall-passed",{number:n}); }}),
+        mk("button", "btn-secondary", T.recall, {onclick:()=>{ if(confirm(T.msg_recall_confirm.replace('%s', n))) req("/api/control/recall-passed",{number:n}); }}),
         (b => { confirmBtn(b, T.del, ()=>req("/api/passed/remove",{number:n})); return b; })(mk("button", "btn-secondary", T.del))
     ]);
     return mk("li", "list-item", null, {}, [mk("span","list-main-text",`${n} 號`,{style:"font-size:1rem;color:var(--primary);"}), acts]);
-}, T.wait));
-socket.on("updateFeaturedContents", l => renderList("featured-list-ui", l, item => {
+}, "empty"));
+
+// Render Featured Links
+const renderFeaturedItem = (item) => {
     const view = mk("div", "list-info", null, {}, [mk("span","list-main-text",item.linkText), mk("span","list-sub-text",item.linkUrl)]);
     const form = mk("div", "edit-form-wrapper", null, {style:"display:none;"}, [
         mk("input",null,null,{value:item.linkText, placeholder:"Name"}), mk("input",null,null,{value:item.linkUrl, placeholder:"URL"}),
@@ -190,7 +252,8 @@ socket.on("updateFeaturedContents", l => renderList("featured-list-ui", l, item 
         mk("button", "btn-secondary", T.del, {onclick:()=>req("/api/featured/remove", item)})
     ]);
     return mk("li", "list-item", null, {}, [view, acts, form]);
-}));
+};
+socket.on("updateFeaturedContents", l => renderList("featured-list-ui", l, renderFeaturedItem, "empty"));
 
 async function loadAppointments() { try { renderAppointments((await req("/api/appointment/list"))?.appointments); } catch(e){} }
 function renderAppointments(list) {
@@ -201,17 +264,19 @@ function renderAppointments(list) {
             mk("div", "list-info", null, {}, [mk("span","list-main-text",`${a.number} 號`,{style:"color:var(--primary);font-size:1rem;"}), mk("span","list-sub-text",`📅 ${dateStr}`)]),
             mk("div", "list-actions", null, {}, [btnDel])
         ]);
-    }, "暫無預約");
+    }, "no_appt");
 }
+
 async function loadUsers() {
     const d = await req("/api/admin/users"); if(!d?.users) return;
-    const roles = { 'VIEWER':'Viewer', 'OPERATOR':'Operator', 'MANAGER':'Manager', 'ADMIN':'Admin' };
+    const roleNames = { 'VIEWER': T.role_viewer, 'OPERATOR': T.role_operator, 'MANAGER': T.role_manager, 'ADMIN': T.role_admin };
     const isSuper = isSuperAdmin(); 
     renderList("user-list-ui", d.users, u => {
-        const view = mk("div", "list-info", null, {}, [mk("span","list-main-text",`${u.role==='ADMIN'?'👑':(u.role==='MANAGER'?'🛡️':'👤')} ${u.nickname}`), mk("span","list-sub-text",`${u.username} (${roles[u.role]||u.role})`)]);
+        const roleLabel = roleNames[u.role] || u.role;
+        const view = mk("div", "list-info", null, {}, [mk("span","list-main-text",`${u.role==='ADMIN'?'👑':(u.role==='MANAGER'?'🛡️':'👤')} ${u.nickname}`), mk("span","list-sub-text",`${u.username} (${roleLabel})`)]);
         const acts = mk("div", "list-actions");
         const form = mk("div", "edit-form-wrapper", null, {style:"display:none;"}, [
-            mk("input",null,null,{value:u.nickname, placeholder:"Nickname"}),
+            mk("input",null,null,{value:u.nickname, placeholder: T.ph_nick}),
             mk("div","edit-form-actions",null,{},[
                 mk("button","btn-secondary",T.cancel,{onclick:()=>{form.style.display="none";view.style.display="flex";acts.style.display="flex";}}),
                 mk("button","btn-secondary success",T.save,{onclick:async()=>{if(await req("/api/admin/set-nickname",{targetUsername:u.username, nickname:form.children[0].value})) {toast(T.saved,"success"); loadUsers();}}})
@@ -220,17 +285,21 @@ async function loadUsers() {
         if(u.username === uniqueUser || isSuper) acts.appendChild(mk("button","btn-secondary",T.edit,{onclick:()=>{view.style.display="none";acts.style.display="none";form.style.display="flex";}}));
         if(u.username !== 'superadmin' && isSuper) {
             const sel = mk("select","role-select",null,{onchange:async()=>await req("/api/admin/set-role",{targetUsername:u.username, newRole:sel.value})});
-            Object.keys(roles).forEach(k=>sel.add(new Option(roles[k], k, false, u.role===k)));
+            // 重建選項以確保是當前語言
+            Object.keys(roleNames).forEach(k=>sel.add(new Option(roleNames[k], k, false, u.role===k)));
+            
             const btnDel = mk("button","btn-secondary",T.del); confirmBtn(btnDel, T.del, async()=>{await req("/api/admin/del-user",{delUsername:u.username}); loadUsers();});
             acts.append(sel, btnDel);
         }
         return mk("li", "list-item", null, {}, [view, acts, form]);
-    }, "Wait...");
+    }, "loading");
 }
+
 async function loadRoles() {
     const cfg = await req("/api/admin/roles/get"), ctr = $("role-editor-content"); if(!cfg || !ctr) return; ctr.innerHTML="";
     const tbl = mk("table", "role-table"), th = mk("tr");
-    ['Role', '叫號', '過號', '重呼', '發號', '設定', '預約'].forEach(t => th.appendChild(mk("th", null, t)));
+    // [關鍵] 動態產生翻譯標題
+    [T.perm_role, T.perm_call, T.perm_pass, T.perm_recall, T.perm_issue, T.perm_settings, T.perm_appt].forEach(t => th.appendChild(mk("th", null, t)));
     tbl.appendChild(mk("thead", null, null, {}, [th]));
     const tb = mk("tbody");
     ['VIEWER', 'OPERATOR', 'MANAGER'].forEach(r => {
@@ -240,6 +309,7 @@ async function loadRoles() {
     });
     tbl.appendChild(tb); ctr.appendChild(mk("div", "role-table-wrapper", null, {}, [tbl]));
 }
+
 async function loadStats() {
     try {
         const d = await req("/api/admin/stats");
@@ -249,10 +319,11 @@ async function loadStats() {
             d.hourlyCounts.forEach((v, i) => chart.appendChild(mk("div", `chart-col ${i===d.serverHour?'current':''}`, null, {onclick:()=>openStatModal(i,v)}, [
                 mk("div","chart-val",v||""), mk("div","chart-bar",null,{style:`height:${Math.max(v/max*100,2)}%;background:${v===0?'var(--border-color)':''}`}), mk("div","chart-label",String(i).padStart(2,'0'))
             ])));
-            renderList("stats-list-ui", d.history||[], h => mk("li","list-item",null,{},[mk("span",null,null,{innerHTML:`${new Date(h.timestamp).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})} - <b style="color:var(--primary)">${h.number}</b> <small style="color:var(--text-sub)">(${h.operator})</small>`})]), "本日尚無紀錄");
+            renderList("stats-list-ui", d.history||[], h => mk("li","list-item",null,{},[mk("span",null,null,{innerHTML:`${new Date(h.timestamp).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})} - <b style="color:var(--primary)">${h.number}</b> <small style="color:var(--text-sub)">(${h.operator})</small>`})]), "no_logs");
         }
     } catch(e){}
 }
+
 async function loadLineSettings() { cachedLine = await req("/api/admin/line-settings/get"); renderLineSettings(); }
 function renderLineSettings() {
     renderList("line-settings-list-ui", Object.keys(cachedLine||{}), k => {
@@ -266,12 +337,13 @@ function renderLineSettings() {
         ]);
         row.append(mk("div","line-setting-info",null,{},[mk("div","line-setting-label",k.split(':').pop(),{style:"font-weight:600;"}), mk("code","line-setting-preview",val||"(未設定)",{style:val?"color:var(--text-sub);":"opacity:0.5"})]), mk("button","btn-secondary",T.edit,{onclick:()=>{row.style.display="none";edit.style.display="flex";}}));
         return mk("li", "list-item", null, {}, [row, edit]);
-    });
+    }, "empty");
     req("/api/admin/line-settings/get-unlock-pass").then(r=>{ if($("line-unlock-pwd") && r) $("line-unlock-pwd").value=r.password||""; });
 }
+
 function renderLogs(logs, init) {
     const ul = $("admin-log-ui"); if(!ul) return; if(init) ul.innerHTML=""; 
-    if(!logs?.length && init) return ul.innerHTML="<li class='list-item' style='color:var(--text-sub);'>[No Logs]</li>";
+    if(!logs?.length && init) return ul.innerHTML=`<li class='list-item' style='color:var(--text-sub);'>${T.no_logs}</li>`;
     const frag = document.createDocumentFragment();
     logs.forEach(m => frag.appendChild(mk("li", "list-item", m, {style:"font-family:monospace;font-size:0.8rem;"})));
     init ? ul.appendChild(frag) : ul.insertBefore(frag.firstChild, ul.firstChild);
@@ -282,40 +354,20 @@ function renderLogs(logs, init) {
 const act = (id, api, data={}) => $(id)?.addEventListener("click", async () => {
     const numEl = $("number");
     const originalVal = numEl ? parseInt(numEl.textContent || 0) : 0;
-    
-    // Optimistic update
     if(api.includes('call') && numEl && data.direction) {
         numEl.textContent = originalVal + (data.direction === 'next' ? 1 : -1);
-        numEl.style.opacity = "0.6"; // Visual feedback
+        numEl.style.opacity = "0.6"; 
     }
-
-    try {
-        await req(api, data, $(id));
-    } catch(e) {
-        // Revert on error
-        if(numEl) numEl.textContent = originalVal;
-    } finally {
-        if(numEl) numEl.style.opacity = "1";
-    }
+    try { await req(api, data, $(id)); } catch(e) { if(numEl) numEl.textContent = originalVal; } finally { if(numEl) numEl.style.opacity = "1"; }
 });
 const bind = (id, fn) => $(id)?.addEventListener("click", fn);
 
-// [Optimistic UI] for adjustments
 async function adjustCurrent(delta) {
-    const numEl = $("number");
-    const c = parseInt(numEl.textContent) || 0;
-    const target = c + delta;
+    const numEl = $("number"); const c = parseInt(numEl.textContent) || 0; const target = c + delta;
     if(target > 0) {
-        // Optimistic
-        numEl.textContent = target;
-        numEl.style.opacity = "0.6";
-        try {
-            if(await req("/api/control/set-call", {number: target})) toast(`${T.saved}: ${target}`, "success");
-        } catch(e) {
-            numEl.textContent = c; // Revert
-        } finally {
-            numEl.style.opacity = "1";
-        }
+        numEl.textContent = target; numEl.style.opacity = "0.6";
+        try { if(await req("/api/control/set-call", {number: target})) toast(`${T.saved}: ${target}`, "success"); } 
+        catch(e) { numEl.textContent = c; } finally { numEl.style.opacity = "1"; }
     }
 }
 bind("btn-call-add-1", () => adjustCurrent(1));
@@ -330,7 +382,7 @@ bind("setNumber", async()=>{ const n=$("manualNumber").value; if(n>0 && await re
 bind("setIssuedNumber", async()=>{ const n=$("manualIssuedNumber").value; if(n>=0 && await req("/api/control/set-issue",{number:n})) { $("manualIssuedNumber").value=""; toast(T.saved,"success"); }});
 bind("add-passed-btn", async()=>{ const n=$("new-passed-number").value; if(n>0 && await req("/api/passed/add",{number:n})) $("new-passed-number").value=""; });
 bind("add-featured-btn", async()=>{ const t=$("new-link-text").value, u=$("new-link-url").value; if(t&&u && await req("/api/featured/add",{linkText:t, linkUrl:u})) { $("new-link-text").value=""; $("new-link-url").value=""; }});
-bind("btn-broadcast", async()=>{ const m=$("broadcast-msg").value; if(m && await req("/api/admin/broadcast",{message:m})) { toast("📢 Sent","success"); $("broadcast-msg").value=""; }});
+bind("btn-broadcast", async()=>{ const m=$("broadcast-msg").value; if(m && await req("/api/admin/broadcast",{message:m})) { toast(T.msg_sent,"success"); $("broadcast-msg").value=""; }});
 bind("btn-add-appt", async()=>{ const n=$("appt-number").value, t=$("appt-time").value; if(n&&t && await req("/api/appointment/add",{number:parseInt(n), timeStr:t})) { toast(T.saved,"success"); $("appt-number").value=""; $("appt-time")._flatpickr?.clear(); }});
 bind("btn-save-roles", async()=>{ 
     const c={ VIEWER:{level:0,can:[]}, OPERATOR:{level:1,can:[]}, MANAGER:{level:2,can:[]}, ADMIN:{level:9,can:['*']} };
@@ -363,7 +415,7 @@ bind("btn-logout", logout); bind("btn-logout-mobile", logout);
     else if (id.includes('Featured')) url = "/api/featured/clear";
     else url = `/api/control/${id==='resetNumber'?'set-call':'set-issue'}`;
     const needsZero = id.startsWith('reset') && !['All','Passed','Featured','line'].some(s => id.includes(s));
-    confirmBtn(el, el.textContent, async () => {
+    confirmBtn(el, el.textContent.trim(), async () => {
         await req(url, needsZero ? {number: 0} : {});
         if(id === 'btn-clear-stats') { 
             $("stats-today-count").textContent="0"; 
@@ -377,12 +429,12 @@ bind("btn-logout", logout); bind("btn-logout-mobile", logout);
             }
             toast(T.saved, "success"); 
         }
-        if(id === 'btn-clear-logs') { $("admin-log-ui").innerHTML="<li>[No Logs]</li>"; toast(T.saved, "success"); }
+        if(id === 'btn-clear-logs') { $("admin-log-ui").innerHTML=`<li class='list-item'>${T.no_logs}</li>`; toast(T.saved, "success"); }
     });
 });
 
 bind("btn-refresh-stats", loadStats);
-bind("btn-calibrate-stats", async () => { if(confirm(T.confirm + " Recalculate stats?")) { const r = await req("/api/admin/stats/calibrate"); if(r && r.success) { toast(`校正完成 (Diff: ${r.diff})`, "success"); loadStats(); } } });
+bind("btn-calibrate-stats", async () => { if(confirm(`${T.confirm} ${T.btn_calibrate}?`)) { const r = await req("/api/admin/stats/calibrate"); if(r && r.success) { toast(`${T.msg_calibrated} (Diff: ${r.diff})`, "success"); loadStats(); } } });
 
 let editHr=null; const modal=$("edit-stats-overlay");
 bind("btn-modal-close", ()=>modal.style.display="none");
@@ -392,6 +444,7 @@ window.openStatModal = (h,v) => { $("modal-current-count").textContent=v; editHr
 document.addEventListener("DOMContentLoaded", () => {
     checkSession(); applyTheme();
     if($("admin-lang-selector")) $("admin-lang-selector").value = curLang;
+    if($("admin-lang-selector-mobile")) $("admin-lang-selector-mobile").value = curLang;
     if($("appt-time")) flatpickr("#appt-time", { enableTime:true, dateFormat:"Y-m-d H:i", time_24hr:true, locale:"zh_tw", minDate:"today", disableMobile:"true" });
     
     $$('.nav-btn').forEach(b => b.onclick = () => {
@@ -403,10 +456,23 @@ document.addEventListener("DOMContentLoaded", () => {
         if(b.dataset.target === 'section-stats') loadStats();
         if(b.dataset.target === 'section-settings') { loadAppointments(); loadUsers(); }
     });
-    $("admin-lang-selector")?.addEventListener("change", e => { curLang=e.target.value; localStorage.setItem('callsys_lang', curLang); updateLangUI(); });
+    
+    // [關鍵] 綁定所有語言選擇器
+    [ $("admin-lang-selector"), $("admin-lang-selector-mobile") ].forEach(sel => {
+        sel?.addEventListener("change", e => { 
+            curLang = e.target.value; 
+            localStorage.setItem('callsys_lang', curLang); 
+            // 同步所有選擇器
+            if($("admin-lang-selector")) $("admin-lang-selector").value = curLang;
+            if($("admin-lang-selector-mobile")) $("admin-lang-selector-mobile").value = curLang;
+            updateLangUI(); 
+        });
+    });
+
     $("sound-toggle")?.addEventListener("change", e => req("/set-sound-enabled", {enabled:e.target.checked})); 
     $("public-toggle")?.addEventListener("change", e => req("/set-public-status", {isPublic:e.target.checked}));
     $$('input[name="systemMode"]').forEach(r => r.onchange = () => confirm(T.confirm+" Switch Mode?") ? req("/set-system-mode", {mode:r.value}) : (r.checked=!r.checked));
+    
     document.addEventListener("keydown", e => {
         if(["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) { if(e.key==="Enter" && !e.shiftKey) { const map={"username-input":"login-button","manualNumber":"setNumber","manualIssuedNumber":"setIssuedNumber","new-passed-number":"add-passed-btn"}; if(map[document.activeElement.id]) $(map[document.activeElement.id])?.click(); } return; }
         if(e.key==="ArrowRight") $("btn-call-next")?.click(); if(e.key==="ArrowLeft") $("btn-call-prev")?.click(); if(e.key.toLowerCase()==="p") $("btn-mark-passed")?.click();
