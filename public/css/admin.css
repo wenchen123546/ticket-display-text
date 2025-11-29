@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台樣式 (admin.css) - v17.5 Mobile Bottom Nav
+ * 後台樣式 (admin.css) - Fixed List Height
  * ========================================== */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
 
@@ -69,7 +69,7 @@ body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif; 
     background: var(--bg-body); color: var(--text-main); 
     font-size: 14px; line-height: 1.5; letter-spacing: -0.01em;
-    overflow: hidden; 
+    overflow: hidden; /* Desktop default: App-like feel */
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -107,7 +107,7 @@ body {
 
 .sidebar-footer { padding: 20px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px; background: var(--bg-sidebar); }
 
-/* Content Area - Desktop Default */
+/* Content Area */
 .content-area { 
     flex: 1; padding: 32px; width: 0; min-width: 0; 
     overflow-y: auto; display: flex; flex-direction: column; align-items: center; 
@@ -121,6 +121,7 @@ body {
    ========================================== */
 .card-container { 
     display: grid; gap: 24px; 
+    /* Desktop: 智能 Grid，最少 340px */
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     align-items: stretch;
 }
@@ -133,9 +134,7 @@ body {
     padding: 24px; 
     height: 100%; position: relative; 
     transition: transform 0.2s, box-shadow 0.2s;
-    
-    /* 修正對齊方式，防止上方空白 */
-    display: flex; flex-direction: column; justify-content: flex-start; gap: 16px; 
+    display: flex; flex-direction: column; justify-content: space-between; gap: 16px; 
 }
 body.dark-mode .admin-card { border: 1px solid rgba(255,255,255,0.08); }
 .admin-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-float); border-color: var(--primary); }
@@ -149,10 +148,9 @@ body.dark-mode .admin-card { border: 1px solid rgba(255,255,255,0.08); }
 }
 .card-icon { font-size: 1.2rem; filter: grayscale(0.2); flex-shrink: 0; }
 
+/* 讓卡片內部輸入區自動推到底部，但清空按鈕緊隨其後 */
 .admin-card .control-group { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
 .admin-card .control-group.compact-group { flex-grow: 0; margin-top: auto; }
-
-/* 重置按鈕置底 */
 .admin-card > button:last-child { margin-top: 0; }
 
 /* Dashboard Stats */
@@ -234,19 +232,20 @@ button:active { transform: scale(0.97); }
 .btn-add { width: var(--input-h); padding: 0; background: var(--primary); color: white; font-size: 1.4rem; line-height: 1; flex-shrink: 0; }
 
 .btn-reset-single { 
-    width: 100%; margin-top: auto; 
-    padding: 10px; height: auto;
+    width: 100%; margin-top: 0; padding: 10px; height: auto;
     background: transparent; color: var(--text-light); font-size: 0.85rem; font-weight: 500;
 }
 .btn-reset-single:hover { color: var(--danger); text-decoration: none; background: var(--danger-bg); border-radius: var(--btn-radius); }
 .secondary-actions-row, .big-action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 0; }
 
 /* ==========================================
-   4. 列表 (Lists)
+   4. 列表 (Lists) - [MODIFIED]
    ========================================== */
 .list-container { 
     flex: 1; 
-    min-height: 150px;
+    /* Desktop: 設置固定高度並確保內部捲動，防止卡片撐爆版面 */
+    height: 280px; 
+    min-height: 0; /* 關鍵：讓 flex 子元素正確計算高度 */
     border: 1px solid var(--border-color); border-radius: var(--btn-radius); 
     overflow: hidden; background: var(--bg-input); display: flex; flex-direction: column; 
 }
@@ -354,151 +353,117 @@ button:active { transform: scale(0.97); }
 .btn-circle:hover { border-color: var(--primary); color: var(--primary); background: var(--bg-surface); transform: scale(1.1); }
 
 /* ==========================================
-   7. RWD (Mobile Fixes - BOTTOM NAV)
+   7. RWD (Mobile Fixes - 重點修改區域) [MODIFIED]
    ========================================== */
 @media (max-width: 768px) {
-    /* 修正整體捲動 */
-    body { height: auto; overflow-y: auto !important; -webkit-overflow-scrolling: touch; }
-    #admin-panel { flex-direction: column; height: auto; min-height: 100vh; overflow: visible; }
+    /* 1. 全局布局修正 */
+    body { 
+        height: auto; 
+        overflow-y: auto !important; /* 重要：允許手機自然捲動 */
+        -webkit-overflow-scrolling: touch; 
+    }
+    #admin-panel { 
+        flex-direction: column; 
+        height: auto; 
+        min-height: 100vh; 
+        overflow: visible; 
+    }
     
-    /* 側邊欄變底部導航 (BOTTOM NAVIGATION) */
+    /* 2. 側邊欄變為頂部導航 */
     .sidebar { 
         width: 100%; 
         height: auto; 
-        position: fixed; /* 固定在底部 */
-        bottom: 0; 
-        top: auto; 
-        border-right: none; 
-        border-top: 1px solid var(--border-color); /* 上方分隔線 */
-        border-bottom: none;
+        position: sticky; top: 0; /* 黏在頂部 */
+        border-right: none; border-bottom: 1px solid var(--border-color); 
         flex-direction: row; 
         padding: 0; 
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.05); /* 向上陰影 */
-        z-index: 9999; 
-        overflow-x: auto; 
-        scrollbar-width: none; 
-        background: var(--bg-surface); /* 確保不透明 */
-        padding-bottom: env(safe-area-inset-bottom); /* iOS Home Bar 避讓 */
+        box-shadow: var(--shadow-sm); 
+        z-index: 1000; 
+        overflow-x: auto; /* 允許橫向滑動 */
+        scrollbar-width: none; /* Firefox 隱藏捲軸 */
     }
-    .sidebar::-webkit-scrollbar { display: none; }
+    .sidebar::-webkit-scrollbar { display: none; /* Chrome 隱藏捲軸 */ }
     .sidebar-header, .sidebar-footer { display: none; }
     
     .sidebar-nav { 
         flex-direction: row; 
         padding: 8px 12px; 
-        gap: 0; 
-        width: 100%;
-        justify-content: space-around; /* 按鈕平均分佈 */
+        gap: 8px; 
+        flex-wrap: nowrap; 
     }
     .nav-btn { 
         flex-direction: column; 
-        padding: 6px 4px; 
+        padding: 6px 12px; 
         font-size: 0.75rem; 
         gap: 4px; 
-        justify-content: center; 
-        text-align: center; 
-        flex: 1; /* 均分寬度 */
-        min-width: auto; 
-        border-radius: 8px;
+        justify-content: center; text-align: center; 
+        flex: 0 0 auto; /* 防止縮小 */
+        min-width: 65px; 
     }
-    .nav-btn:active { background: var(--bg-hover); transform: scale(0.95); }
     
-    /* [CRITICAL FIX] 強制重置 content-area 寬度與底部留白 */
+    /* 3. 內容區修正 */
     .content-area { 
         padding: 16px; 
-        padding-bottom: 100px; /* 預留底部導航空間，防止內容被擋 */
         overflow: visible; 
         height: auto; 
-        display: block; 
-        width: 100% !important; 
+        display: block; /* 移除 flex center 對齊 */
     }
     
-    /* 卡片與儀表板佈局調整 */
-    .card-container { display: flex; flex-direction: column; gap: 20px; } 
-    .admin-card { height: auto !important; min-height: auto; gap: 20px; }
+    /* 4. 卡片 Grid 修正 */
+    .card-container { 
+        display: flex; 
+        flex-direction: column; /* 強制單欄堆疊 */
+        gap: 20px; 
+    } 
+    .admin-card { 
+        height: auto !important; /* 重要：移除固定高度 */
+        min-height: auto; 
+        gap: 20px;
+    }
     
-    /* 儀表板 */
-    .dashboard-header { grid-template-columns: 1fr 1fr; gap: 12px; }
+    /* 5. 儀表板 Dashboard 修正 */
+    .dashboard-header { 
+        grid-template-columns: 1fr 1fr; 
+        gap: 12px; 
+    }
     .dashboard-item { padding: 16px; }
-    .dashboard-item:last-child { grid-column: 1 / -1; }
-    .big-number { font-size: 2.5rem; } 
-    .sub-number { font-size: 1.8rem; }
+    .dashboard-item:last-child { grid-column: 1 / -1; } /* 最後一個佔滿整行 */
+    .big-number { font-size: 2.8rem; } /* 縮小字體 */
+    .sub-number { font-size: 2rem; }
+
+    /* 6. 輸入框與按鈕堆疊 */
+    .input-group { 
+        flex-direction: column; /* 上下排列 */
+    }
+    .secondary-actions-row, .big-action-row {
+        gap: 10px;
+    }
     
-    /* 輸入框與按鈕 */
-    .input-group { flex-direction: column; }
-    .secondary-actions-row, .big-action-row { gap: 10px; }
-    .btn-add { width: 100%; height: 44px; font-size: 1.2rem; }
+    .btn-add { width: 100%; height: 44px; font-size: 1.2rem; } /* 加號按鈕變寬 */
     
-    /* 按鈕最小高度與文字 */
-    button, input, select { min-height: 48px; font-size: 16px; }
-    button { white-space: normal; line-height: 1.2; height: auto; padding: 12px; }
+    button, input, select { min-height: 48px; font-size: 16px; /* 防止 iOS 縮放 */ }
+    button { 
+        white-space: normal; /* 允許換行 */
+        line-height: 1.2; 
+        height: auto; 
+        padding: 12px;
+    }
     
-    /* 列表高度 */
-    .list-container { max-height: none; height: auto; }
-    .scroll-list { max-height: 400px; }
-    
-    /* 其他 */
+    /* 7. 列表高度 [MODIFIED] */
+    .list-container { 
+        /* 修改：限制最大高度並強制使用卡片內捲動 */
+        max-height: 300px !important; 
+        height: auto;
+        flex: none; /* 手機版不自動伸縮 */
+    }
+    /* 修改：讓列表填滿容器高度並捲動 */
+    .scroll-list { 
+        max-height: 100%; 
+    }
+
+    /* 8. 其他 */
     .mobile-only-settings { display: block; margin-top: 24px; padding-top: 20px; border-top: 1px dashed var(--border-color); }
     #login-container { width: 100%; padding: 32px 24px; box-shadow: none; top: 0; margin-top: 40px; border: none; }
 }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-/* ==========================================
- * 優化：帳號與在線管理卡片 (User & Online Cards)
- * ========================================== */
-.user-list-item {
-    display: flex; align-items: center; padding: 14px 16px; gap: 12px;
-    background: var(--bg-surface); border-bottom: 1px solid var(--border-color); transition: background 0.2s;
-}
-.user-list-item:hover { background: var(--bg-hover); }
-
-.user-avatar {
-    width: 36px; height: 36px; border-radius: 50%;
-    background: var(--bg-input); color: var(--primary);
-    border: 1px solid var(--border-color);
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 1rem; flex-shrink: 0;
-}
-.user-avatar.is-admin { background: var(--primary-soft); color: var(--primary); border-color: transparent; }
-.user-avatar.is-online { box-shadow: 0 0 0 2px var(--success-bg); }
-
-.user-info-col { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
-.user-name { font-weight: 600; color: var(--text-main); font-size: 0.95rem; display: flex; align-items: center; gap: 6px; }
-.user-id { font-size: 0.8rem; color: var(--text-light); font-family: 'JetBrains Mono', monospace; }
-
-.role-badge {
-    font-size: 0.75rem; padding: 2px 8px; border-radius: 6px;
-    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid transparent;
-}
-.role-badge.ADMIN { background: var(--primary); color: #fff; }
-.role-badge.MANAGER { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
-.role-badge.OPERATOR { background: var(--bg-input); color: var(--text-sub); border-color: var(--border-color); }
-
-.user-actions { display: flex; align-items: center; gap: 8px; }
-.btn-icon-only {
-    width: 32px; height: 32px; padding: 0;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 8px; color: var(--text-sub); background: transparent;
-    border: 1px solid transparent;
-}
-.btn-icon-only:hover { background: var(--bg-hover); color: var(--text-main); border-color: var(--border-color); }
-.btn-icon-only.danger:hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bg); }
-
-.role-select-tiny {
-    height: 32px; font-size: 0.8rem; padding: 0 8px;
-    border-radius: 8px; background: var(--bg-input);
-    border: 1px solid var(--border-color); cursor: pointer;
-}
-
-.add-user-form-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-    background: var(--bg-input); padding: 12px;
-    border-radius: 12px; border: 1px solid var(--border-color);
-}
-.add-user-form-grid input, .add-user-form-grid select { height: 38px; background: var(--bg-surface); font-size: 0.9rem; }
-.full-width-btn { grid-column: 1 / -1; height: 38px; }
-
-.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; margin-right: 6px; box-shadow: 0 0 0 2px var(--success-bg); }
-.status-dot.pulse { animation: pulse-green 2s infinite; }
-@keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
