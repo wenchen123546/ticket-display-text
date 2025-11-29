@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台樣式 (admin.css) - Fixed List Height
+ * 後台樣式 (admin.css) - v17.2 Mobile Response Fix
  * ========================================== */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
 
@@ -239,13 +239,13 @@ button:active { transform: scale(0.97); }
 .secondary-actions-row, .big-action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 0; }
 
 /* ==========================================
-   4. 列表 (Lists) - [MODIFIED]
+   4. 列表 (Lists)
    ========================================== */
 .list-container { 
     flex: 1; 
-    /* Desktop: 設置固定高度並確保內部捲動，防止卡片撐爆版面 */
-    height: 280px; 
-    min-height: 0; /* 關鍵：讓 flex 子元素正確計算高度 */
+    /* Desktop: 限制列表高度，保持卡片一致性 */
+    max-height: 40vh; 
+    min-height: 150px;
     border: 1px solid var(--border-color); border-radius: var(--btn-radius); 
     overflow: hidden; background: var(--bg-input); display: flex; flex-direction: column; 
 }
@@ -353,7 +353,7 @@ button:active { transform: scale(0.97); }
 .btn-circle:hover { border-color: var(--primary); color: var(--primary); background: var(--bg-surface); transform: scale(1.1); }
 
 /* ==========================================
-   7. RWD (Mobile Fixes - 重點修改區域) [MODIFIED]
+   7. RWD (Mobile Fixes - 重點修改區域)
    ========================================== */
 @media (max-width: 768px) {
     /* 1. 全局布局修正 */
@@ -437,6 +437,7 @@ button:active { transform: scale(0.97); }
     }
     .secondary-actions-row, .big-action-row {
         gap: 10px;
+        /* 如果按鈕文字還是太長，可以在這裡改成單欄：grid-template-columns: 1fr; */
     }
     
     .btn-add { width: 100%; height: 44px; font-size: 1.2rem; } /* 加號按鈕變寬 */
@@ -449,17 +450,13 @@ button:active { transform: scale(0.97); }
         padding: 12px;
     }
     
-    /* 7. 列表高度 [MODIFIED] */
+    /* 7. 列表高度 */
     .list-container { 
-        /* 修改：限制最大高度並強制使用卡片內捲動 */
-        max-height: 300px !important; 
+        max-height: none; /* 讓列表在手機上自然展開，不要內部捲動 */
         height: auto;
-        flex: none; /* 手機版不自動伸縮 */
     }
-    /* 修改：讓列表填滿容器高度並捲動 */
-    .scroll-list { 
-        max-height: 100%; 
-    }
+    /* 限制過長的列表避免無限捲動，但給予更多空間 */
+    .scroll-list { max-height: 400px; }
 
     /* 8. 其他 */
     .mobile-only-settings { display: block; margin-top: 24px; padding-top: 20px; border-top: 1px dashed var(--border-color); }
