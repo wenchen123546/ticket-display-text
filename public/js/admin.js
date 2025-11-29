@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v20.3 Auto Reply (Fixed Syntax)
+ * 後台邏輯 (admin.js) - v20.4 Line Edit Fix
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 
@@ -282,7 +282,7 @@ async function loadLineMessages() {
     }
 }
 
-// [New] Line Auto Reply Logic
+// [New] Line Auto Reply Logic (Enhanced with Edit)
 async function loadLineAutoReplies() {
     const list = $("line-autoreply-list"); 
     if(!list) return;
@@ -300,26 +300,61 @@ async function loadLineAutoReplies() {
         return;
     }
 
-    renderList("line-autoreply-list", Object.entries(rules), ([key, reply]) => {
-        const li = mk("li", "list-item");
-        
-        const info = mk("div", "list-info", null, {}, [
-            mk("span", "list-main-text", key, {style: "color:var(--primary);"}),
+    const renderAutoReplyItem = ([key, reply]) => {
+        // A. 檢視模式
+        const view = mk("div", "list-info", null, {}, [
+            mk("span", "list-main-text", key, {style: "color:var(--primary); font-weight:bold;"}),
             mk("span", "list-sub-text", reply)
         ]);
-        
-        const btnDel = mk("button", "btn-action-icon danger", "✕", { title: T.del });
-        confirmBtn(btnDel, "✕", async () => {
-            await req("/api/admin/line-autoreply/del", { keyword: key });
-            loadLineAutoReplies();
-        });
 
-        const actions = mk("div", "list-actions");
-        actions.appendChild(btnDel);
-        
-        li.append(info, actions);
-        return li;
-    });
+        // B. 編輯模式 (預設隱藏)
+        const form = mk("div", "edit-form-wrapper", null, {style:"display:none; width:100%; gap:8px; align-items:center;"}, [
+            mk("input", null, null, {value: key, placeholder: "接收關鍵字", style:"flex:1;"}),
+            mk("input", null, null, {value: reply, placeholder: "回覆內容", style:"flex:2;"}),
+            mk("div", "edit-form-actions", null, {}, [
+                mk("button", "btn-secondary", T.cancel, {onclick: (e) => { 
+                    e.stopPropagation();
+                    form.style.display="none"; view.style.display="flex"; actions.style.display="flex"; 
+                }}),
+                mk("button", "btn-secondary success", T.save, {onclick: async (e) => {
+                    e.stopPropagation();
+                    const newKey = form.children[0].value;
+                    const newRep = form.children[1].value;
+                    if(await req("/api/admin/line-autoreply/edit", { 
+                        oldKeyword: key, 
+                        newKeyword: newKey, 
+                        newReply: newRep 
+                    })) {
+                        toast(T.saved, "success");
+                        loadLineAutoReplies(); // 重新載入列表
+                    }
+                }})
+            ])
+        ]);
+
+        // C. 操作按鈕
+        const actions = mk("div", "list-actions", null, {}, [
+            mk("button", "btn-action-icon", "✎", { 
+                title: T.edit,
+                onclick: () => { 
+                    form.style.display="flex"; view.style.display="none"; actions.style.display="none"; 
+                }
+            }),
+            (b => { 
+                confirmBtn(b, "✕", async () => {
+                    await req("/api/admin/line-autoreply/del", { keyword: key });
+                    loadLineAutoReplies();
+                }); 
+                b.className = "btn-action-icon danger";
+                b.title = T.del;
+                return b;
+            })(mk("button"))
+        ]);
+
+        return mk("li", "list-item", null, {style:"flex-wrap:wrap;"}, [view, actions, form]);
+    };
+
+    renderList("line-autoreply-list", Object.entries(rules), renderAutoReplyItem);
 }
 
 socket.on("connect", () => { $("status-bar").classList.remove("visible"); toast(`${T.status_conn} (${username})`, "success"); });
@@ -335,6 +370,7 @@ socket.on("updateAppointments", l => { if(checkPerm('appointment')) renderAppoin
 
 socket.on("updateOnlineAdmins", l => { 
     if(checkPerm('users')) {
+        // [Fixed Syntax]
         const getGradient = (str) => { const n=str.split('').reduce((a,c)=>a+c.charCodeAt(0),0); return `linear-gradient(135deg, hsl(${n%360}, 75%, 60%), hsl(${(n+50)%360}, 75%, 50%))`; };
         renderList("online-users-list", (l||[]).sort((a,b)=>(a.role==='super'?-1:1)), u => {
             const roleClass = (u.userRole || u.role || 'OPERATOR').toLowerCase();
@@ -393,6 +429,7 @@ function renderAppointments(list) {
 async function loadUsers() {
     const d = await req("/api/admin/users"); if(!d?.users) return;
     const isSuper = isSuperAdmin(); 
+    // [Fixed Syntax]
     const getGradient = (str) => { const n=str.split('').reduce((a,c)=>a+c.charCodeAt(0),0); return `linear-gradient(135deg, hsl(${n%360}, 75%, 60%), hsl(${(n+50)%360}, 75%, 50%))`; };
 
     renderList("user-list-ui", d.users, u => {
