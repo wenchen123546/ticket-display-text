@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v18.1 Fixed & Polished
+ * 後台邏輯 (admin.js) - v18.2 Restore Backgrounds
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
@@ -382,40 +382,35 @@ async function loadUsers() {
         return card;
     }, "loading");
 
-    // 重繪 "新增使用者" 區塊 (從卡片列表分離出來) - v18.1 Fix
+    // 重繪 "新增使用者" 區塊 - 確保它在卡片底部
     const cardContainer = $("card-user-management");
-    const existingWrapper = document.getElementById("add-user-wrapper");
-    if(existingWrapper) existingWrapper.remove(); // 避免重複
+    let cardAdminBody = cardContainer?.querySelector('.admin-card');
     
-    let addSection = document.getElementById("add-user-section-fixed");
-    
-    if(cardContainer) {
-        // 建立新的新增區塊卡片
-        const containerDiv = mk("div", "admin-card", null, {id: "add-user-wrapper", style:"margin-top: 20px; padding: 24px; height: auto;"});
-        const header = mk("h3", null, null, {}, [mk("span", "card-icon", "👤"), mk("span", null, T.lbl_add_user)]);
-        
-        addSection = mk("div", "add-user-grid", null, {id:"add-user-section-fixed", style:"margin-top:16px;"});
-        
-        containerDiv.append(header, addSection);
-        cardContainer.appendChild(containerDiv);
-    }
-    
-    if(addSection) {
-        addSection.innerHTML = '';
+    // 移除舊的新增區塊（如果存在）
+    const oldAdd = document.getElementById("add-user-container-fixed");
+    if(oldAdd) oldAdd.remove();
+
+    if(cardAdminBody) {
+        const addContainer = mk("div", "add-user-container", null, {id:"add-user-container-fixed"});
+        const addGrid = mk("div", "add-user-grid");
+
         const iUser = mk("input", null, null, {id:"new-user-username", placeholder: T.ph_account});
         const iPass = mk("input", null, null, {id:"new-user-password", type:"password", placeholder: "Pwd"});
         const iNick = mk("input", null, null, {id:"new-user-nickname", placeholder: T.ph_nick});
         const iRole = mk("select", null, null, {id:"new-user-role"});
         iRole.add(new Option("Operator", "OPERATOR")); iRole.add(new Option("Manager", "MANAGER")); iRole.add(new Option("Admin", "ADMIN"));
         
-        const btnAdd = mk("button", "btn-hero", `+ ${T.lbl_add_user}`, {style: "height:46px; font-size:1rem; grid-column: 1 / -1;"});
+        const btnAdd = mk("button", "btn-hero btn-add-user-fancy", `+ ${T.lbl_add_user}`, {style: "height:46px; font-size:1rem; grid-column: 1 / -1;"});
         btnAdd.onclick = async()=>{ 
             if(!iUser.value || !iPass.value) return toast("請輸入帳號密碼", "error");
             if(await req("/api/admin/add-user", {newUsername:iUser.value, newPassword:iPass.value, newNickname:iNick.value, newRole:iRole.value})) { 
                 toast(T.saved,"success"); loadUsers(); iUser.value=""; iPass.value=""; iNick.value="";
             } 
         };
-        addSection.append(iUser, iPass, iNick, iRole, btnAdd);
+        
+        addGrid.append(iUser, iPass, iNick, iRole, btnAdd);
+        addContainer.appendChild(addGrid);
+        cardAdminBody.appendChild(addContainer);
     }
 }
 
