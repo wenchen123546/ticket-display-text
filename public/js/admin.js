@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v17.3 Optimized User & Online UI
+ * 後台邏輯 (admin.js) - v17.5 Merged Line Settings
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
@@ -110,9 +110,13 @@ const updateLangUI = () => {
     if(checkPerm('stats')) loadStats(); 
     if(checkPerm('appointment')) loadAppointments(); 
     if(isSuperAdmin()) loadRoles(); 
-    if(checkPerm('line')) { if(cachedLine) renderLineSettings(); else loadLineSettings(); }
     if(checkPerm('settings')) req("/api/featured/get").then(l => renderList("featured-list-ui", l, renderFeaturedItem));
     
+    // 如果現在就在設定頁面，且有權限，就重新載入 LINE 設定 (切換語言時更新)
+    if($("section-settings").classList.contains("active") && checkPerm('line')) {
+        if(cachedLine) renderLineSettings(); else loadLineSettings();
+    }
+
     if(username) $("sidebar-user-info").textContent = username;
 };
 
@@ -226,7 +230,6 @@ socket.on("updateSoundSetting", b => $("sound-toggle").checked = b);
 socket.on("updateSystemMode", m => { $$('input[name="systemMode"]').forEach(r => r.checked = (r.value === m)); const w = document.querySelector('.segmented-control'); if(w) updateSegmentedVisuals(w); });
 socket.on("updateAppointments", l => { if(checkPerm('appointment')) renderAppointments(l); });
 
-/* --- [Optimized] Online Users Listener --- */
 socket.on("updateOnlineAdmins", l => { 
     if(checkPerm('users')) {
         renderList("online-users-list", (l||[]).sort((a,b)=>(a.role==='super'?-1:1)), u => {
@@ -459,7 +462,7 @@ bind("btn-export-csv", async()=>{
     const d=await req("/api/admin/export-csv", { date: new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Taipei"}) }); 
     if(d?.csvData) { const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\uFEFF"+d.csvData],{type:'text/csv'})); a.download=d.fileName; a.click(); }
 });
-// Note: "add-user-btn" binding is now handled dynamically inside loadUsers()
+
 bind("admin-theme-toggle", ()=>{ isDark = !isDark; applyTheme(); });
 bind("admin-theme-toggle-mobile", ()=>{ isDark = !isDark; applyTheme(); });
 bind("login-button", async () => {
@@ -516,9 +519,20 @@ document.addEventListener("DOMContentLoaded", () => {
         $$('.nav-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active');
         $$('.section-group').forEach(s=>s.classList.remove('active')); 
         const target = $(b.dataset.target);
-        if(target) target.classList.add('active');
-        if(b.dataset.target === 'section-stats') loadStats();
-        if(b.dataset.target === 'section-settings') { loadAppointments(); loadUsers(); }
+        if(target) {
+            target.classList.add('active');
+            
+            // 載入各區塊資料
+            if(b.dataset.target === 'section-stats') loadStats();
+            if(b.dataset.target === 'section-settings') { 
+                loadAppointments(); 
+                loadUsers(); 
+                // 新增：如果權限允許，同時載入 LINE 設定
+                if(checkPerm('line')) {
+                    if(cachedLine) renderLineSettings(); else loadLineSettings();
+                }
+            }
+        }
     });
     
     [ $("admin-lang-selector"), $("admin-lang-selector-mobile") ].forEach(sel => {
