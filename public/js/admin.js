@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v17.2 Remove Viewer Role
+ * 後台邏輯 (admin.js) - v17.2 Optimized User & Online UI
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
@@ -70,7 +70,7 @@ const i18n = {
         loading: "Loading...", empty: "[ Empty ]", no_logs: "[ No Logs ]", no_appt: "No Appointments",
         role_operator: "Operator", role_manager: "Manager", role_admin: "Admin",
         msg_recall_confirm: "Recall number %s?", msg_sent: "📢 Sent", msg_calibrated: "Calibrated",
-        perm_role: "Role", perm_call: "Call/Cmd", perm_issue: "Ticketing", perm_stats: "Stats/Logs", 
+        perm_role: "Role", perm_call: "Role", perm_issue: "Ticketing", perm_stats: "Stats/Logs", 
         perm_settings: "Settings", perm_line: "Line Config", perm_appointment: "Booking", perm_users: "Users"
     }
 };
@@ -225,7 +225,21 @@ socket.on("updatePublicStatus", b => $("public-toggle").checked = b);
 socket.on("updateSoundSetting", b => $("sound-toggle").checked = b);
 socket.on("updateSystemMode", m => { $$('input[name="systemMode"]').forEach(r => r.checked = (r.value === m)); const w = document.querySelector('.segmented-control'); if(w) updateSegmentedVisuals(w); });
 socket.on("updateAppointments", l => { if(checkPerm('appointment')) renderAppointments(l); });
-socket.on("updateOnlineAdmins", l => { if(checkPerm('users')) renderList("online-users-list", (l||[]).sort((a,b)=>(a.role==='super'?-1:1)), u => mk("li","list-item",null,{},[mk("div","list-info",null,{},[mk("span","list-main-text",`🟢 ${u.nickname}`), mk("span","list-sub-text",u.username)])]), "loading"); });
+
+/* --- [Optimized] Online Users Listener --- */
+socket.on("updateOnlineAdmins", l => { 
+    if(checkPerm('users')) {
+        renderList("online-users-list", (l||[]).sort((a,b)=>(a.role==='super'?-1:1)), u => {
+            const dot = mk("span", "status-dot pulse");
+            const firstChar = (u.nickname || u.username).charAt(0).toUpperCase();
+            const avatar = mk("div", "user-avatar is-online", firstChar, {style:"width:32px;height:32px;font-size:0.8rem;"});
+            const name = mk("div", "user-name", null, {style:"font-size:0.9rem"}, [dot, mk("span",null,u.nickname)]);
+            const ip = mk("div", "user-id", u.username === 'superadmin' ? 'Super Admin' : `@${u.username}`);
+            const info = mk("div", "user-info-col", null, {}, [name, ip]);
+            return mk("li", "user-list-item", null, {style:"padding:10px 14px;"}, [avatar, info]);
+        }, "loading");
+    }
+});
 
 socket.on("updatePassed", l => renderList("passed-list-ui", l, n => {
     const acts = mk("div", "list-actions", null, {}, [
@@ -264,35 +278,68 @@ function renderAppointments(list) {
     }, "no_appt");
 }
 
+/* --- [Optimized] Load Users Function --- */
 async function loadUsers() {
     const d = await req("/api/admin/users"); if(!d?.users) return;
-    // [Mod] Remove VIEWER
-    const roleNames = { 'OPERATOR': T.role_operator, 'MANAGER': T.role_manager, 'ADMIN': T.role_admin };
     const isSuper = isSuperAdmin(); 
+    
     renderList("user-list-ui", d.users, u => {
-        const roleLabel = roleNames[u.role] || u.role;
-        const view = mk("div", "list-info", null, {}, [mk("span","list-main-text",`${u.role==='ADMIN'?'👑':(u.role==='MANAGER'?'🛡️':'👤')} ${u.nickname}`), mk("span","list-sub-text",`${u.username} (${roleLabel})`)]);
-        const acts = mk("div", "list-actions");
-        const form = mk("div", "edit-form-wrapper", null, {style:"display:none;"}, [
-            mk("input",null,null,{value:u.nickname, placeholder: T.ph_nick}),
+        const firstChar = (u.nickname || u.username).charAt(0).toUpperCase();
+        const avatar = mk("div", `user-avatar ${u.role==='ADMIN'?'is-admin':''}`, firstChar);
+        const roleBadge = mk("span", `role-badge ${u.role}`, u.role === 'OPERATOR' ? 'Op' : (u.role === 'MANAGER' ? 'Mgr' : 'Adm'));
+        const nameRow = mk("div", "user-name", null, {}, [mk("span",null, u.nickname||u.username), roleBadge]);
+        const idRow = mk("div", "user-id", `@${u.username}`);
+        const infoCol = mk("div", "user-info-col", null, {}, [nameRow, idRow]);
+        const acts = mk("div", "user-actions");
+        
+        const form = mk("div", "edit-form-wrapper", null, {style:"display:none; padding:10px; background:var(--bg-input); border-radius:8px; margin-top:8px;"}, [
+            mk("input",null,null,{value:u.nickname, placeholder: T.ph_nick, style:"margin-bottom:8px;"}),
             mk("div","edit-form-actions",null,{},[
-                mk("button","btn-secondary",T.cancel,{onclick:()=>{form.style.display="none";view.style.display="flex";acts.style.display="flex";}}),
+                mk("button","btn-secondary",T.cancel,{onclick:()=>{form.style.display="none"; infoCol.style.display="flex"; acts.style.display="flex"; avatar.style.display="flex";}}),
                 mk("button","btn-secondary success",T.save,{onclick:async()=>{if(await req("/api/admin/set-nickname",{targetUsername:u.username, nickname:form.children[0].value})) {toast(T.saved,"success"); loadUsers();}}})
             ])
         ]);
-        if(u.username === uniqueUser || isSuper) acts.appendChild(mk("button","btn-secondary",T.edit,{onclick:()=>{view.style.display="none";acts.style.display="none";form.style.display="flex";}}));
-        if(u.username !== 'superadmin' && isSuper) {
-            const sel = mk("select","role-select",null,{onchange:async()=>await req("/api/admin/set-role",{targetUsername:u.username, newRole:sel.value})});
-            Object.keys(roleNames).forEach(k=>sel.add(new Option(roleNames[k], k, false, u.role===k)));
-            const btnDel = mk("button","btn-secondary",T.del); confirmBtn(btnDel, T.del, async()=>{await req("/api/admin/del-user",{delUsername:u.username}); loadUsers();});
-            acts.append(sel, btnDel);
+
+        if(u.username === uniqueUser || isSuper) {
+            acts.appendChild(mk("button","btn-icon-only","✎",{title:T.edit, onclick:()=>{form.style.display="block"; infoCol.style.display="none"; acts.style.display="none"; avatar.style.display="none";}}));
         }
-        return mk("li", "list-item", null, {}, [view, acts, form]);
+        
+        if(u.username !== 'superadmin' && isSuper) {
+            const sel = mk("select","role-select-tiny",null,{title:"Change Role", onchange:async()=>await req("/api/admin/set-role",{targetUsername:u.username, newRole:sel.value})});
+            ['OPERATOR','MANAGER','ADMIN'].forEach(r => sel.add(new Option(r==='OPERATOR'?'Op':(r==='MANAGER'?'Mgr':'Adm'), r, false, u.role===r)));
+            acts.appendChild(sel);
+            const btnDel = mk("button","btn-icon-only danger","✕", {title:T.del}); 
+            confirmBtn(btnDel, "✕", async()=>{await req("/api/admin/del-user",{delUsername:u.username}); loadUsers();});
+            acts.appendChild(btnDel);
+        }
+        return mk("li", "user-list-item", null, {}, [avatar, infoCol, acts, form]);
     }, "loading");
+
+    const addSection = document.querySelector('#card-user-management .control-group.compact-group');
+    if(addSection) {
+        addSection.innerHTML = ''; 
+        addSection.appendChild(mk("label", null, T.lbl_add_user));
+        const grid = mk("div", "add-user-form-grid");
+        const iUser = mk("input", null, null, {id:"new-user-username", placeholder: T.ph_account});
+        const iPass = mk("input", null, null, {id:"new-user-password", type:"password", placeholder: "Pwd"});
+        const iNick = mk("input", null, null, {id:"new-user-nickname", placeholder: T.ph_nick});
+        const iRole = mk("select", null, null, {id:"new-user-role"});
+        iRole.add(new Option("Op (操作員)", "OPERATOR"));
+        iRole.add(new Option("Mgr (經理)", "MANAGER"));
+        iRole.add(new Option("Adm (管理員)", "ADMIN"));
+        const btnAdd = mk("button", "btn-add full-width-btn", "+ Add User", {id:"add-user-btn"});
+        btnAdd.onclick = async()=>{ 
+            if(await req("/api/admin/add-user", {newUsername:iUser.value, newPassword:iPass.value, newNickname:iNick.value, newRole:iRole.value})) { 
+                toast(T.saved,"success"); loadUsers(); 
+                iUser.value=""; iPass.value=""; iNick.value="";
+            } 
+        };
+        grid.append(iUser, iPass, iNick, iRole, btnAdd);
+        addSection.appendChild(grid);
+    }
 }
 
 async function loadRoles() {
-    // [Updated: Vertical Cards Layout, Removed VIEWER]
     const cfg = globalRoleConfig || await req("/api/admin/roles/get"); 
     const ctr = $("role-editor-content"); if(!cfg || !ctr) return; ctr.innerHTML="";
     
@@ -301,15 +348,12 @@ async function loadRoles() {
         {k:'settings', t:T.perm_settings}, {k:'appointment', t:T.perm_appointment}, 
         {k:'line', t:T.perm_line}, {k:'users', t:T.perm_users}
     ];
-    // [Mod] Remove VIEWER meta
     const roleMeta = {
         'OPERATOR': { icon: '🎮', label: T.role_operator },
         'MANAGER': { icon: '🛡️', label: T.role_manager }
     };
 
     const container = mk("div", "role-editor-container");
-
-    // [Mod] Loop only OPERATOR and MANAGER
     ['OPERATOR', 'MANAGER'].forEach(r => {
         const block = mk("div", "role-block");
         const meta = roleMeta[r] || {icon:'👤', label:r};
@@ -402,7 +446,6 @@ bind("add-featured-btn", async()=>{ const t=$("new-link-text").value, u=$("new-l
 bind("btn-broadcast", async()=>{ const m=$("broadcast-msg").value; if(m && await req("/api/admin/broadcast",{message:m})) { toast(T.msg_sent,"success"); $("broadcast-msg").value=""; }});
 bind("btn-add-appt", async()=>{ const n=$("appt-number").value, t=$("appt-time").value; if(n&&t && await req("/api/appointment/add",{number:parseInt(n), timeStr:t})) { toast(T.saved,"success"); $("appt-number").value=""; $("appt-time")._flatpickr?.clear(); }});
 bind("btn-save-roles", async()=>{ 
-    // [Mod] Remove VIEWER
     const c={ OPERATOR:{level:1,can:[]}, MANAGER:{level:2,can:[]}, ADMIN:{level:9,can:['*']} };
     $$(".role-chk:checked").forEach(k => c[k.dataset.role].can.push(k.dataset.perm));
     if(await req("/api/admin/roles/update", {rolesConfig:c})) {
@@ -416,7 +459,7 @@ bind("btn-export-csv", async()=>{
     const d=await req("/api/admin/export-csv", { date: new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Taipei"}) }); 
     if(d?.csvData) { const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\uFEFF"+d.csvData],{type:'text/csv'})); a.download=d.fileName; a.click(); }
 });
-bind("add-user-btn", async()=>{ const u=$("new-user-username").value, p=$("new-user-password").value, n=$("new-user-nickname").value, r=$("new-user-role")?.value; if(await req("/api/admin/add-user", {newUsername:u, newPassword:p, newNickname:n, newRole:r})) { toast(T.saved,"success"); loadUsers(); } });
+// Note: "add-user-btn" binding is now handled dynamically inside loadUsers()
 bind("admin-theme-toggle", ()=>{ isDark = !isDark; applyTheme(); });
 bind("admin-theme-toggle-mobile", ()=>{ isDark = !isDark; applyTheme(); });
 bind("login-button", async () => {
