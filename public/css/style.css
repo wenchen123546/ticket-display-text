@@ -1,5 +1,5 @@
 /* ==========================================
- * 前台樣式 (style.css) - v109.0 Kiosk Ready
+ * 前台樣式 (style.css) - v109.1 Kiosk Integrated
  * ========================================== */
 :root {
     --primary:#4f46e5; --primary-dark:#4338ca; --primary-soft:#eef2ff; --text-main:#1e293b; --text-sub:#64748b; --text-light:#94a3b8;
@@ -82,24 +82,36 @@ body.dark-mode .toast-message { background:rgba(255,255,255,.95); color:#0f172a;
     #qr-code-container { display:block; position:fixed; bottom:30px; left:30px; padding:20px; background:#fff; border-radius:20px; box-shadow:0 10px 40px rgba(0,0,0,.15); text-align:center; font-size:.85rem; color:var(--text-sub); } #qr-code-placeholder img { display:block; margin:0 auto 8px; }
 }
 
-/* [Kiosk Mode Styles] - 純顯示模式 */
+/* ==========================================
+ * Kiosk Mode Overrides (Native CSS)
+ * ========================================== */
 body.kiosk-mode .hero-section {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
     z-index: 100; padding: 0; margin: 0; border-radius: 0;
     display: flex; flex-direction: column; justify-content: center;
     box-shadow: none; background: var(--bg-body);
 }
+
 body.kiosk-mode #number { 
     font-size: clamp(15rem, 35vw, 30rem); 
     margin: 20px 0; 
 }
+
 body.kiosk-mode .hero-stats-grid { 
-    transform: scale(1.8); margin-top: 5vh; width: 70%; 
-    background: var(--surface); backdrop-filter: blur(10px);
+    transform: scale(1.5); 
+    margin-top: 5vh; 
+    width: 80%; 
+    max-width: 800px;
+    background: var(--surface); 
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
 }
+
+/* Hide other elements in Kiosk Mode */
 body.kiosk-mode .side-panel, 
 body.kiosk-mode .app-header, 
 body.kiosk-mode #qr-code-container { 
     display: none !important; 
 }
+
 body.kiosk-mode .bg-decoration { opacity: 0.8; }
