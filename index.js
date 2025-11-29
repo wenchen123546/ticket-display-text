@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v18.5 Super Admin Fix
+ * 伺服器 (index.js) - v18.6 Super Admin & Line Edit Fix
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http"), express = require("express"), socketio = require("socket.io");
@@ -379,15 +379,35 @@ app.post("/api/admin/line-messages/save", auth, perm('line'), H(async r => {
 
 // [新增] 關鍵字自動回覆 API
 app.post("/api/admin/line-autoreply/list", auth, perm('line'), H(async r => await redis.hgetall(KEYS.LINE.AUTOREPLY)));
+
 app.post("/api/admin/line-autoreply/save", auth, perm('line'), H(async r => { 
     if(!r.body.keyword || !r.body.reply) throw new Error("無效內容");
     await redis.hset(KEYS.LINE.AUTOREPLY, r.body.keyword.trim(), r.body.reply); 
     addLog(r.user.nickname, `➕ LINE 關鍵字: ${r.body.keyword}`);
 }));
+
+// [新增] 編輯功能：同時支援修改關鍵字與內容
+app.post("/api/admin/line-autoreply/edit", auth, perm('line'), H(async r => {
+    const { oldKeyword, newKeyword, newReply } = r.body;
+    if(!newKeyword || !newReply) throw new Error("內容不能為空");
+    
+    const pipeline = redis.multi();
+    // 如果關鍵字有改，先刪除舊的
+    if(oldKeyword !== newKeyword) {
+        pipeline.hdel(KEYS.LINE.AUTOREPLY, oldKeyword);
+    }
+    // 設定新的（或更新舊的）
+    pipeline.hset(KEYS.LINE.AUTOREPLY, newKeyword.trim(), newReply);
+    await pipeline.exec();
+    
+    addLog(r.user.nickname, `✎ 修改 LINE 規則: ${oldKeyword} -> ${newKeyword}`);
+}));
+
 app.post("/api/admin/line-autoreply/del", auth, perm('line'), H(async r => { 
     await redis.hdel(KEYS.LINE.AUTOREPLY, r.body.keyword); 
     addLog(r.user.nickname, `🗑️ 移除 LINE 關鍵字: ${r.body.keyword}`);
 }));
+
 // [新增] 預設回覆 API
 app.post("/api/admin/line-default-reply/get", auth, perm('line'), H(async r => ({ reply: await redis.get(KEYS.LINE.MSG.DEFAULT) })));
 app.post("/api/admin/line-default-reply/save", auth, perm('line'), H(async r => { 
@@ -433,4 +453,4 @@ io.on("connection", async s => {
     s.emit("updateSoundSetting",snd==="1"); s.emit("updatePublicStatus",pub!=="0"); s.emit("updateSystemMode",m||'ticketing'); s.emit("updateWaitTime",await calcWaitTime());
 });
 
-initDatabase().then(() => { server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v18.5 running on ${PORT}`)); }).catch(err => { console.error("❌ DB Error:", err); process.exit(1); });
+initDatabase().then(() => { server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v18.6 running on ${PORT}`)); }).catch(err => { console.error("❌ DB Error:", err); process.exit(1); });
