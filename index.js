@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v17.2 Remove Viewer Role
+ * 伺服器 (index.js) - v18.0 Optimized & Secure
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http"), express = require("express"), socketio = require("socket.io");
@@ -12,11 +12,7 @@ const { PORT = 3000, UPSTASH_REDIS_URL: REDIS_URL, ADMIN_TOKEN, LINE_ACCESS_TOKE
 if (!ADMIN_TOKEN || !REDIS_URL) { console.error("❌ Missing ADMIN_TOKEN or REDIS_URL"); process.exit(1); }
 
 // --- Config & Consts ---
-const BUSINESS_HOURS = { start: 8, end: 22, enabled: false };
 const DB_FLUSH_INTERVAL = 5000;
-
-// [Security] 擴充後的權限定義 (已移除 VIEWER)
-// keys: call, issue, stats, settings, appointment, line, users, pass, recall
 const DEFAULT_ROLES = { 
     OPERATOR: { level: 1, can: ['call', 'pass', 'recall', 'issue', 'appointment'] }, 
     MANAGER: { level: 2, can: ['call', 'pass', 'recall', 'issue', 'appointment', 'stats', 'settings', 'users'] }, 
@@ -27,7 +23,7 @@ const KEYS = {
     CURRENT: 'callsys:number', ISSUED: 'callsys:issued', MODE: 'callsys:mode', PASSED: 'callsys:passed', 
     FEATURED: 'callsys:featured', LOGS: 'callsys:admin-log', USERS: 'callsys:users', NICKS: 'callsys:nicknames', 
     USER_ROLES: 'callsys:user_roles', SESSION: 'callsys:session:', HISTORY: 'callsys:stats:history', 
-    HOURLY: 'callsys:stats:hourly:', ROLES: 'callsys:config:roles', 
+    HOURLY: 'callsys:stats:hourly:', ROLES: 'callsys:config:roles', HOURS: 'callsys:config:hours',
     LINE: { SUB: 'callsys:line:notify:', USER: 'callsys:line:user:', PWD: 'callsys:line:unlock_pwd', ADMIN: 'callsys:line:admin_session:', CTX: 'callsys:line:context:', ACTIVE: 'callsys:line:active_subs_set', CFG_TOKEN: 'callsys:line:cfg:token', CFG_SECRET: 'callsys:line:cfg:secret' } 
 };
 
@@ -106,7 +102,7 @@ const broadcastQueue = async () => {
         if(i < c) { i = c; await redis.set(KEYS.ISSUED, i); }
         io.emit("update", c); io.emit("updateQueue", { current: c, issued: i });
         io.emit("updateWaitTime", await calcWaitTime()); io.emit("updateTimestamp", new Date().toISOString());
-    }, 50);
+    }, 100); // Optimized: Increased debounce to 100ms
 };
 const broadcastAppts = async () => io.to("admin").emit("updateAppointments", await all("SELECT * FROM appointments WHERE status='pending' ORDER BY scheduled_time ASC"));
 const calcWaitTime = async (force) => {
@@ -115,6 +111,15 @@ const calcWaitTime = async (force) => {
     if(!rows || rows.length < 2) return (cacheWait=0);
     let total = 0; for(let i=0; i<rows.length-1; i++) total += (rows[i].timestamp - rows[i+1].timestamp);
     return (lastWaitCalc=Date.now(), cacheWait = Math.ceil((total / (rows.length - 1) / 60000) * 10) / 10);
+};
+
+// [Helper] Business Hours Check
+const isBusinessOpen = async () => {
+    const cfg = JSON.parse(await redis.get(KEYS.HOURS)) || { enabled: false };
+    if (!cfg.enabled) return true;
+    const h = new Date().toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour12:false, hour:'numeric'});
+    const currentH = parseInt(h);
+    return currentH >= cfg.start && currentH < cfg.end;
 };
 
 // --- Middleware & Auth ---
@@ -160,7 +165,7 @@ app.post("/login", rateLimit({windowMs:9e5,max:100}), H(async (req, res) => {
 app.post("/api/ticket/take", rateLimit({windowMs:36e5,max:20}), H(async req => {
     if(await redis.get(KEYS.MODE)==='input') throw new Error("手動模式");
     const { dateStr, hour } = getTWTime();
-    if(BUSINESS_HOURS.enabled) { const h=new Date().getHours(); if(h<BUSINESS_HOURS.start||h>=BUSINESS_HOURS.end) throw new Error("非營業時間"); }
+    if(!(await isBusinessOpen())) throw new Error("非營業時間");
     const t = await redis.incr(KEYS.ISSUED); 
     await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_i`, 1);
     await redis.expire(`${KEYS.HOURLY}${dateStr}`, 172800);
@@ -175,7 +180,8 @@ async function ctl(type, {body, user}) {
     const { direction: dir, number: num } = body, { dateStr, hour } = getTWTime();
     const curr = parseInt(await redis.get(KEYS.CURRENT))||0;
     let issued = parseInt(await redis.get(KEYS.ISSUED))||0, newNum=0, msg='';
-    if(['call','issue'].includes(type) && BUSINESS_HOURS.enabled) { const h=new Date().getHours(); if(h<BUSINESS_HOURS.start||h>=BUSINESS_HOURS.end) return { error: "非營業時間" }; }
+    
+    if(['call','issue'].includes(type) && !(await isBusinessOpen())) return { error: "非營業時間" };
 
     if(type === 'call') {
         if(dir==='next') {
@@ -219,6 +225,7 @@ async function resetSys(by) {
 }
 ['call','issue','set-call','set-issue'].forEach(c => app.post(`/api/control/${c}`, auth, perm(c.startsWith('set')?'settings':c.split('-')[0]), H(async r => { const res = await ctl(c.replace('-','_'), r); if(res.error) throw new Error(res.error); return res; })));
 
+// [Modified] Recall Logic - Prevents overwriting current number
 app.post("/api/control/pass-current", auth, perm('pass'), H(async req => {
     const c = parseInt(await redis.get(KEYS.CURRENT))||0; if(!c) throw new Error("無叫號");
     await redis.zadd(KEYS.PASSED, c, c); const next = (await redis.safeNextNumber(KEYS.CURRENT, KEYS.ISSUED)===-1 ? c : await redis.get(KEYS.CURRENT));
@@ -229,9 +236,23 @@ app.post("/api/control/pass-current", auth, perm('pass'), H(async req => {
 }));
 
 app.post("/api/control/recall-passed", auth, perm('recall'), H(async req => {
-    await redis.zrem(KEYS.PASSED, req.body.number); await redis.set(KEYS.CURRENT, req.body.number);
-    const {dateStr, hour} = getTWTime(); await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_p`, -1);
-    addLog(req.user.nickname, `↩️ 重呼 ${req.body.number}`); await broadcastQueue(); io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number));
+    const recallNum = parseInt(req.body.number);
+    const current = parseInt(await redis.get(KEYS.CURRENT)) || 0;
+
+    // [Safety] If current number is active, move it to passed list instead of overwriting
+    if (current > 0 && current !== recallNum) {
+        await redis.zadd(KEYS.PASSED, current, current);
+        const {dateStr, hour} = getTWTime();
+        await redis.hincrby(`${KEYS.HOURLY}${dateStr}`, `${hour}_p`, 1);
+    }
+
+    await redis.zrem(KEYS.PASSED, recallNum);
+    await redis.set(KEYS.CURRENT, recallNum);
+    // Note: Not decrementing hour_p to maintain cumulative passed count record
+    
+    addLog(req.user.nickname, `↩️ 重呼 ${recallNum}`); 
+    await broadcastQueue(); 
+    io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number));
 }));
 
 app.post("/api/passed/add", auth, perm('pass'), H(async r => {
@@ -239,6 +260,12 @@ app.post("/api/passed/add", auth, perm('pass'), H(async r => {
 }));
 app.post("/api/passed/remove", auth, perm('pass'), H(async r => {
     const n = parseInt(r.body.number); if(n>0) { await redis.zrem(KEYS.PASSED, n); await redis.hincrby(`${KEYS.HOURLY}${getTWTime().dateStr}`, `${getTWTime().hour}_p`, -1); io.emit("updatePassed", (await redis.zrange(KEYS.PASSED,0,-1)).map(Number)); addLog(r.user.nickname, `🗑️ 移除過號 ${n}`); }
+}));
+// [New] Clear Passed List
+app.post("/api/passed/clear", auth, perm('pass'), H(async r => {
+    await redis.del(KEYS.PASSED);
+    io.emit("updatePassed", []);
+    addLog(r.user.nickname, "🗑️ 清空過號名單");
 }));
 
 // Users API (Protected by 'users' permission)
@@ -286,7 +313,13 @@ app.post("/api/featured/remove", auth, perm('settings'), H(async r => { const l=
 app.post("/api/featured/edit", auth, perm('settings'), H(async r => { const l=await redis.lrange(KEYS.FEATURED,0,-1), idx=l.findIndex(x=>x.includes(r.body.oldLinkUrl)); if(idx>=0) await redis.lset(KEYS.FEATURED, idx, JSON.stringify({linkText:r.body.newLinkText, linkUrl:r.body.newLinkUrl})); io.emit("updateFeaturedContents", (await redis.lrange(KEYS.FEATURED,0,-1)).map(JSON.parse)); }));
 app.post("/api/featured/clear", auth, perm('settings'), H(async r => { await redis.del(KEYS.FEATURED); io.emit("updateFeaturedContents", []); }));
 
-app.post("/api/appointment/add", auth, perm('appointment'), H(async r => { await run("INSERT INTO appointments (number, scheduled_time) VALUES (?, ?)", [r.body.number, new Date(r.body.timeStr).getTime()]); addLog(r.user.nickname, `📅 預約: ${r.body.number}`); broadcastAppts(); }));
+app.post("/api/appointment/add", auth, perm('appointment'), H(async r => { 
+    const ts = new Date(r.body.timeStr).getTime();
+    const exist = await get("SELECT id FROM appointments WHERE scheduled_time = ? OR number = ?", [ts, r.body.number]);
+    if(exist) throw new Error("預約時間或號碼衝突");
+    await run("INSERT INTO appointments (number, scheduled_time) VALUES (?, ?)", [r.body.number, ts]); 
+    addLog(r.user.nickname, `📅 預約: ${r.body.number}`); broadcastAppts(); 
+}));
 app.post("/api/appointment/list", auth, perm('appointment'), H(async r => ({ appointments: await all("SELECT * FROM appointments WHERE status='pending' ORDER BY scheduled_time ASC") })));
 app.post("/api/appointment/remove", auth, perm('appointment'), H(async r => { await run("DELETE FROM appointments WHERE id=?", [r.body.id]); broadcastAppts(); }));
 
@@ -295,6 +328,14 @@ app.post("/set-public-status", auth, perm('settings'), H(async r=>{ await redis.
 app.post("/set-system-mode", auth, perm('settings'), H(async r=>{ await redis.set(KEYS.MODE, r.body.mode); io.emit("updateSystemMode", r.body.mode); }));
 app.post("/reset", auth, perm('settings'), H(async r => resetSys(r.user.nickname)));
 app.post("/api/admin/broadcast", auth, H(async r => { io.emit("adminBroadcast", r.body.message); addLog(r.user.nickname, `📢 廣播: ${r.body.message}`); }));
+
+// [New] Dynamic Business Hours
+app.post("/api/admin/settings/hours/get", auth, H(async r => JSON.parse(await redis.get(KEYS.HOURS)) || { enabled: false, start: 8, end: 22 }));
+app.post("/api/admin/settings/hours/save", auth, perm('settings'), H(async r => {
+    const { start, end, enabled } = r.body;
+    await redis.set(KEYS.HOURS, JSON.stringify({ start: parseInt(start), end: parseInt(end), enabled: !!enabled }));
+    addLog(r.user.nickname, "🔧 更新營業時間");
+}));
 
 // Line Settings API (Protected by 'line' permission)
 app.post("/api/admin/line-settings/get", auth, perm('line'), H(async r => ({ "LINE Access Token": await redis.get(KEYS.LINE.CFG_TOKEN), "LINE Channel Secret": await redis.get(KEYS.LINE.CFG_SECRET) })));
@@ -364,7 +405,7 @@ io.on("connection", async s => {
 });
 
 initDatabase().then(() => {
-    server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v17.2 running on ${PORT}`));
+    server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v18.0 running on ${PORT}`));
 }).catch(err => {
     console.error("❌ Failed to start server due to DB error:", err);
     process.exit(1);
