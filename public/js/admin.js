@@ -1,9 +1,9 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v19.4 Layout Polish
+ * 後台邏輯 (admin.js) - v19.5 Role Matrix Update
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
-    const e = document.createElement(t); if(c) e.className=c; if(txt) e.textContent=txt; 
+    const e = document.createElement(t); if(c) e.className=c; if(txt) e.innerHTML=txt; // Modified to allow innerHTML for icons
     Object.entries(ev).forEach(([k,v])=>e[k.startsWith('on')?k.toLowerCase():k]=v); 
     ch.forEach(x=>x&&e.appendChild(x)); return e; 
 };
@@ -367,27 +367,75 @@ async function loadUsers() {
     }
 }
 
+// [UPDATED] Matrix Table for Role Permissions
 async function loadRoles() {
     const cfg = globalRoleConfig || await req("/api/admin/roles/get"); 
     const ctr = $("role-editor-content"); if(!cfg || !ctr) return; ctr.innerHTML="";
-    const perms = [{k:'call', t:T.perm_call}, {k:'issue', t:T.perm_issue}, {k:'stats', t:T.perm_stats}, {k:'settings', t:T.perm_settings}, {k:'appointment', t:T.perm_appointment}, {k:'line', t:T.perm_line}, {k:'users', t:T.perm_users}];
-    const roleMeta = { 'OPERATOR': { icon: '🎮', label: T.role_operator }, 'MANAGER': { icon: '🛡️', label: T.role_manager } };
+    
+    // 定義權限列表
+    const perms = [
+        {k:'call', t:T.perm_call}, 
+        {k:'issue', t:T.perm_issue}, 
+        {k:'stats', t:T.perm_stats}, 
+        {k:'settings', t:T.perm_settings}, 
+        {k:'appointment', t:T.perm_appointment}, 
+        {k:'line', t:T.perm_line}, 
+        {k:'users', t:T.perm_users}
+    ];
+    
+    // 定義要顯示的角色
+    const targetRoles = ['OPERATOR', 'MANAGER'];
+    const roleMeta = { 
+        'OPERATOR': { icon: '🎮', label: T.role_operator, class: 'role-op' }, 
+        'MANAGER': { icon: '🛡️', label: T.role_manager, class: 'role-mgr' } 
+    };
 
-    const container = mk("div", "role-editor-container");
-    ['OPERATOR', 'MANAGER'].forEach(r => {
-        const block = mk("div", "role-block");
-        const meta = roleMeta[r] || {icon:'👤', label:r};
-        const header = mk("div", "role-header", null, {}, [mk("span", null, meta.icon), mk("span", null, `${meta.label} (${r})`)]);
-        const grid = mk("div", "perm-grid");
-        perms.forEach(p => {
-            const isChecked = (cfg[r]?.can||[]).includes(p.k);
-            const chk = mk("input", "role-chk", null, {type:"checkbox", dataset:{role:r, perm:p.k}, checked:isChecked});
-            const label = mk("label", "perm-item", null, {}, [chk, mk("span", null, p.t)]);
-            grid.appendChild(label);
-        });
-        block.appendChild(header); block.appendChild(grid); container.appendChild(block);
+    // 建立表格容器
+    const tableWrapper = mk("div", "perm-table-wrapper");
+    const table = mk("table", "perm-matrix");
+    
+    // 1. 建立表頭 (Thead)
+    const thead = mk("thead");
+    const trHead = mk("tr");
+    trHead.appendChild(mk("th", null, "權限項目 / 角色"));
+    targetRoles.forEach(r => {
+        const meta = roleMeta[r];
+        const th = mk("th", `th-role ${meta.class}`);
+        th.innerHTML = `<div class="th-content"><span class="th-icon">${meta.icon}</span><span>${meta.label}</span></div>`;
+        trHead.appendChild(th);
     });
-    ctr.appendChild(container);
+    thead.appendChild(trHead);
+    table.appendChild(thead);
+
+    // 2. 建立內容 (Tbody)
+    const tbody = mk("tbody");
+    perms.forEach(p => {
+        const tr = mk("tr");
+        const tdName = mk("td", "td-perm-name", p.t);
+        tr.appendChild(tdName);
+
+        targetRoles.forEach(r => {
+            const tdCheck = mk("td", "td-check");
+            const isChecked = (cfg[r]?.can||[]).includes(p.k);
+            
+            const label = mk("label", "custom-check");
+            const chk = mk("input", "role-chk", null, {
+                type: "checkbox", 
+                dataset: { role: r, perm: p.k }, 
+                checked: isChecked
+            });
+            const checkmark = mk("span", "checkmark");
+            
+            label.append(chk, checkmark);
+            tdCheck.appendChild(label);
+            tr.appendChild(tdCheck);
+        });
+        tbody.appendChild(tr);
+    });
+    
+    table.appendChild(tbody);
+    tableWrapper.appendChild(table);
+    ctr.appendChild(tableWrapper);
 }
 
 async function loadStats() {
