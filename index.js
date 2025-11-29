@@ -1,5 +1,5 @@
 /* ==========================================
- * 伺服器 (index.js) - v18.3 Custom LINE Messages
+ * 伺服器 (index.js) - v18.4 Auto-Reply & Default Reply
  * ========================================== */
 require('dotenv').config();
 const { Server } = require("http"), express = require("express"), socketio = require("socket.io");
@@ -30,8 +30,10 @@ const KEYS = {
         CFG_TOKEN: 'callsys:line:cfg:token', CFG_SECRET: 'callsys:line:cfg:secret',
         MSG: { 
             APPROACH: 'callsys:line:msg:approach', ARRIVAL: 'callsys:line:msg:arrival', 
-            SUCCESS: 'callsys:line:msg:success', PASSED: 'callsys:line:msg:passed', CANCEL: 'callsys:line:msg:cancel' 
-        }
+            SUCCESS: 'callsys:line:msg:success', PASSED: 'callsys:line:msg:passed', CANCEL: 'callsys:line:msg:cancel',
+            DEFAULT: 'callsys:line:msg:default' // [新增] 預設回覆
+        },
+        AUTOREPLY: 'callsys:line:autoreply_rules' // [新增] 關鍵字規則 Hash
     } 
 };
 
@@ -155,27 +157,39 @@ app.post('/callback', async (req, res, next) => {
         if (!lineClient) return;
         const rp = x => lineClient.replyMessage(e.replyToken, { type: 'text', text: x }).catch(err => console.error("Reply Error:", err));
 
-        // [Modified] Fetch custom messages
-        const [msgSucc, msgPass, msgCanc] = await redis.mget(KEYS.LINE.MSG.SUCCESS, KEYS.LINE.MSG.PASSED, KEYS.LINE.MSG.CANCEL);
+        // 1. 後台登入邏輯 (最高優先級)
+        if(t==='後台登入') return rp((await redis.get(`${KEYS.LINE.ADMIN}${u}`)) ? `🔗 ${process.env.RENDER_EXTERNAL_URL}/admin.html` : (await redis.set(`${KEYS.LINE.CTX}${u}`,'WAIT_PWD','EX',120),"請輸入密碼"));
+        if((await redis.get(`${KEYS.LINE.CTX}${u}`))==='WAIT_PWD' && t===(await redis.get(KEYS.LINE.PWD)||`unlock${ADMIN_TOKEN}`)) { await redis.set(`${KEYS.LINE.ADMIN}${u}`,"1","EX",600); await redis.del(`${KEYS.LINE.CTX}${u}`); return rp("🔓 驗證成功"); }
+
+        // 2. 自定義關鍵字回覆 (Custom Auto-Reply)
+        const customReply = await redis.hget(KEYS.LINE.AUTOREPLY, t);
+        if (customReply) return rp(customReply);
+        
+        // 3. 系統指令與數字
+        const [msgSucc, msgPass, msgCanc, msgDefault] = await redis.mget(KEYS.LINE.MSG.SUCCESS, KEYS.LINE.MSG.PASSED, KEYS.LINE.MSG.CANCEL, KEYS.LINE.MSG.DEFAULT);
         const TXT_SUCC = msgSucc || '設定成功: {number}號';
         const TXT_PASS = msgPass || '已過號';
         const TXT_CANC = msgCanc || '已取消';
 
-        if(t==='後台登入') return rp((await redis.get(`${KEYS.LINE.ADMIN}${u}`)) ? `🔗 ${process.env.RENDER_EXTERNAL_URL}/admin.html` : (await redis.set(`${KEYS.LINE.CTX}${u}`,'WAIT_PWD','EX',120),"請輸入密碼"));
-        if((await redis.get(`${KEYS.LINE.CTX}${u}`))==='WAIT_PWD' && t===(await redis.get(KEYS.LINE.PWD)||`unlock${ADMIN_TOKEN}`)) { await redis.set(`${KEYS.LINE.ADMIN}${u}`,"1","EX",600); await redis.del(`${KEYS.LINE.CTX}${u}`); return rp("🔓 驗證成功"); }
         if(['?','status'].includes(t.toLowerCase())) { const [n,i,my]=await Promise.all([redis.get(KEYS.CURRENT),redis.get(KEYS.ISSUED),redis.get(`${KEYS.LINE.USER}${u}`)]); return rp(`叫號:${n||0} / 發號:${i||0}${my?`\n您的:${my}`:''}`); }
         
-        // [Modified] Dynamic Reply Logic
+        if(['cancel'].includes(t.toLowerCase())) { 
+            const n=await redis.get(`${KEYS.LINE.USER}${u}`); 
+            if(n){await redis.multi().del(`${KEYS.LINE.USER}${u}`).srem(`${KEYS.LINE.SUB}${n}`,u).exec(); return rp(TXT_CANC);} 
+        }
+        
         if(/^\d+$/.test(t)) { 
             const n=parseInt(t), c=parseInt(await redis.get(KEYS.CURRENT))||0; 
             if(n<=c) return rp(TXT_PASS); 
             await redis.multi().set(`${KEYS.LINE.USER}${u}`,n,'EX',43200).sadd(`${KEYS.LINE.SUB}${n}`,u).expire(`${KEYS.LINE.SUB}${n}`,43200).sadd(KEYS.LINE.ACTIVE,n).exec(); 
             return rp(TXT_SUCC.replace(/{number}/g, n)); 
         }
-        if(['cancel'].includes(t.toLowerCase())) { 
-            const n=await redis.get(`${KEYS.LINE.USER}${u}`); 
-            if(n){await redis.multi().del(`${KEYS.LINE.USER}${u}`).srem(`${KEYS.LINE.SUB}${n}`,u).exec(); return rp(TXT_CANC);} 
+
+        // 4. 預設回覆 (Default Reply)
+        if (msgDefault && msgDefault.trim() !== "") {
+            return rp(msgDefault);
         }
+
     })).then(() => res.json({})).catch(e => res.status(500).end());
 });
 
@@ -343,7 +357,7 @@ app.post("/api/admin/line-settings/reset", auth, perm('line'), H(async r => { aw
 app.post("/api/admin/line-settings/get-unlock-pass", auth, perm('line'), H(async r => ({ password: await redis.get(KEYS.LINE.PWD) })));
 app.post("/api/admin/line-settings/save-pass", auth, perm('line'), H(async r => { await redis.set(KEYS.LINE.PWD, r.body.password); }));
 
-// [New] Line Custom Messages
+// [New] Line Auto Reply & Default Messages
 app.post("/api/admin/line-messages/get", auth, perm('line'), H(async r => {
     const [appr, arr, succ, pass, canc] = await redis.mget(KEYS.LINE.MSG.APPROACH, KEYS.LINE.MSG.ARRIVAL, KEYS.LINE.MSG.SUCCESS, KEYS.LINE.MSG.PASSED, KEYS.LINE.MSG.CANCEL);
     return { 
@@ -359,6 +373,25 @@ app.post("/api/admin/line-messages/save", auth, perm('line'), H(async r => {
     await redis.mset(KEYS.LINE.MSG.APPROACH, approach, KEYS.LINE.MSG.ARRIVAL, arrival, KEYS.LINE.MSG.SUCCESS, success, KEYS.LINE.MSG.PASSED, passed, KEYS.LINE.MSG.CANCEL, cancel);
     addLog(r.user.nickname, "💬 更新 LINE 自定義訊息");
 }));
+
+// [新增] 關鍵字自動回覆 API
+app.post("/api/admin/line-autoreply/list", auth, perm('line'), H(async r => await redis.hgetall(KEYS.LINE.AUTOREPLY)));
+app.post("/api/admin/line-autoreply/save", auth, perm('line'), H(async r => { 
+    if(!r.body.keyword || !r.body.reply) throw new Error("無效內容");
+    await redis.hset(KEYS.LINE.AUTOREPLY, r.body.keyword.trim(), r.body.reply); 
+    addLog(r.user.nickname, `➕ LINE 關鍵字: ${r.body.keyword}`);
+}));
+app.post("/api/admin/line-autoreply/del", auth, perm('line'), H(async r => { 
+    await redis.hdel(KEYS.LINE.AUTOREPLY, r.body.keyword); 
+    addLog(r.user.nickname, `🗑️ 移除 LINE 關鍵字: ${r.body.keyword}`);
+}));
+// [新增] 預設回覆 API
+app.post("/api/admin/line-default-reply/get", auth, perm('line'), H(async r => ({ reply: await redis.get(KEYS.LINE.MSG.DEFAULT) })));
+app.post("/api/admin/line-default-reply/save", auth, perm('line'), H(async r => { 
+    await redis.set(KEYS.LINE.MSG.DEFAULT, r.body.reply); 
+    addLog(r.user.nickname, "🔧 更新 LINE 預設回覆"); 
+}));
+
 
 // --- Notifications ---
 async function checkLine(curr) {
@@ -397,4 +430,4 @@ io.on("connection", async s => {
     s.emit("updateSoundSetting",snd==="1"); s.emit("updatePublicStatus",pub!=="0"); s.emit("updateSystemMode",m||'ticketing'); s.emit("updateWaitTime",await calcWaitTime());
 });
 
-initDatabase().then(() => { server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v18.3 running on ${PORT}`)); }).catch(err => { console.error("❌ DB Error:", err); process.exit(1); });
+initDatabase().then(() => { server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v18.4 running on ${PORT}`)); }).catch(err => { console.error("❌ DB Error:", err); process.exit(1); });
