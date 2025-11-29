@@ -1,12 +1,20 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v19.5 Role Matrix Update
+ * 後台邏輯 (admin.js) - v20.0 Secured & Dynamic
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
-const mk = (t, c, txt, ev={}, ch=[]) => { 
-    const e = document.createElement(t); if(c) e.className=c; if(txt) e.innerHTML=txt; // Modified to allow innerHTML for icons
+
+// [Security] Enhanced mk function: Default textContent, explicit isHtml for icons
+const mk = (t, c, txt, ev={}, ch=[], isHtml=false) => { 
+    const e = document.createElement(t); 
+    if(c) e.className=c; 
+    if(txt) {
+        if(isHtml) e.innerHTML = txt; 
+        else e.textContent = txt;
+    }
     Object.entries(ev).forEach(([k,v])=>e[k.startsWith('on')?k.toLowerCase():k]=v); 
     ch.forEach(x=>x&&e.appendChild(x)); return e; 
 };
+
 const toast = (m, t='info') => { 
     const el=$("toast-notification"); el.textContent=m; 
     el.className = `show ${t}`; setTimeout(()=>el.className="", 3000); 
@@ -39,7 +47,7 @@ const i18n = {
         card_booking: "預約管理", lbl_add_appt: "新增預約", wait: "等待...",
         loading: "載入中...", empty: "[ 空 ]", no_logs: "[ 無日誌 ]", no_appt: "暫無預約",
         role_operator: "操作員", role_manager: "經理", role_admin: "管理員",
-        msg_recall_confirm: "確定要重呼 %s 嗎？", msg_sent: "📢 已發送", msg_calibrated: "校正完成",
+        msg_recall_confirm: "確定要重呼 %s 嗎？\n(當前叫號將移入過號名單)", msg_sent: "📢 已發送", msg_calibrated: "校正完成",
         perm_role: "角色權限", perm_call: "叫號/指揮", perm_issue: "發號", perm_stats: "數據/日誌", 
         perm_settings: "系統設定", perm_line: "LINE設定", perm_appointment: "預約管理", perm_users: "帳號管理"
     },
@@ -69,7 +77,7 @@ const i18n = {
         card_booking: "Booking Manager", lbl_add_appt: "Add Booking", wait: "Waiting...",
         loading: "Loading...", empty: "[ Empty ]", no_logs: "[ No Logs ]", no_appt: "No Appointments",
         role_operator: "Operator", role_manager: "Manager", role_admin: "Admin",
-        msg_recall_confirm: "Recall number %s?", msg_sent: "📢 Sent", msg_calibrated: "Calibrated",
+        msg_recall_confirm: "Recall number %s?\n(Current number will be moved to passed list)", msg_sent: "📢 Sent", msg_calibrated: "Calibrated",
         perm_role: "Role", perm_call: "Role", perm_issue: "Ticketing", perm_stats: "Stats/Logs", 
         perm_settings: "Settings", perm_line: "Line Config", perm_appointment: "Booking", perm_users: "Users"
     }
@@ -110,7 +118,10 @@ const updateLangUI = () => {
     if(checkPerm('stats')) loadStats(); 
     if(checkPerm('appointment')) loadAppointments(); 
     if(isSuperAdmin()) loadRoles(); 
-    if(checkPerm('settings')) req("/api/featured/get").then(l => renderList("featured-list-ui", l, renderFeaturedItem));
+    if(checkPerm('settings')) {
+        req("/api/featured/get").then(l => renderList("featured-list-ui", l, renderFeaturedItem));
+        initBusinessHoursUI(); // Dynamic injection
+    }
     
     if($("section-settings").classList.contains("active") && checkPerm('line')) {
         if(cachedLine) renderLineSettings(); else loadLineSettings();
@@ -122,7 +133,11 @@ const updateLangUI = () => {
 function renderList(ulId, list, fn, emptyMsgKey="empty") {
     const ul = $(ulId); if(!ul) return; 
     while (ul.firstChild) ul.removeChild(ul.firstChild); 
-    if(!list?.length) { ul.innerHTML=`<li class="list-item" style="justify-content:center;color:var(--text-sub);">${T[emptyMsgKey] || T.empty}</li>`; return; }
+    if(!list?.length) { 
+        ul.innerHTML=""; // Clear first
+        ul.appendChild(mk("li", "list-item", T[emptyMsgKey] || T.empty, {style:"justify-content:center;color:var(--text-sub);"})); 
+        return; 
+    }
     const frag = document.createDocumentFragment();
     list.forEach(x => { const el = fn(x); if(el) frag.appendChild(el); });
     ul.appendChild(frag);
@@ -190,6 +205,7 @@ const showPanel = () => {
     ['resetNumber','resetIssued','resetPassed','resetFeaturedContents','btn-clear-logs','btn-clear-stats','btn-reset-line-msg','resetAll'].forEach(id => setBlock(id, isSuper));
     socket.connect(); 
     upgradeSystemModeUI();
+    initBusinessHoursUI();
 };
 
 function upgradeSystemModeUI() {
@@ -230,6 +246,45 @@ function updateSegmentedVisuals(wrapper) {
     });
 }
 
+// [New] Dynamic Business Hours UI
+async function initBusinessHoursUI() {
+    if(!checkPerm('settings')) return;
+    const card = $("card-sys"); if(!card || card.querySelector('#business-hours-group')) return;
+    
+    // Create Config Elements
+    const container = mk("div", "control-group", null, {id:"business-hours-group", style:"margin-top:10px; border-top:1px dashed var(--border-color); padding-top:10px;"});
+    const label = mk("label", null, "營業時間控制");
+    
+    const wrapper = mk("div", null, null, {style:"display:flex; gap:10px; align-items:center;"});
+    const toggle = mk("input", "toggle-switch", null, {type:"checkbox", id:"bh-enabled"});
+    const startIn = mk("input", null, null, {type:"number", min:0, max:23, placeholder:"Start", style:"width:60px;text-align:center;"});
+    const arrow = mk("span", null, "➜");
+    const endIn = mk("input", null, null, {type:"number", min:0, max:24, placeholder:"End", style:"width:60px;text-align:center;"});
+    const btnSave = mk("button", "btn-secondary success", "儲存", {style:"margin-left:auto;"});
+
+    wrapper.append(toggle, startIn, arrow, endIn, btnSave);
+    container.append(label, wrapper);
+    
+    // Insert before reset button
+    const resetBtn = $("resetAll");
+    if(resetBtn) card.insertBefore(container, resetBtn);
+    else card.appendChild(container);
+
+    // Load Data
+    const d = await req("/api/admin/settings/hours/get");
+    if(d) {
+        toggle.checked = d.enabled;
+        startIn.value = d.start;
+        endIn.value = d.end;
+    }
+
+    btnSave.onclick = async () => {
+        if(await req("/api/admin/settings/hours/save", {enabled: toggle.checked, start: startIn.value, end: endIn.value})) {
+            toast(T.saved, "success");
+        }
+    };
+}
+
 socket.on("connect", () => { $("status-bar").classList.remove("visible"); toast(`${T.status_conn} (${username})`, "success"); });
 socket.on("disconnect", () => $("status-bar").classList.add("visible"));
 socket.on("updateQueue", d => { $("number").textContent=d.current; $("issued-number").textContent=d.issued; $("waiting-count").textContent=Math.max(0, d.issued-d.current); if(checkPerm('stats')) loadStats(); });
@@ -251,7 +306,7 @@ socket.on("updateOnlineAdmins", l => {
             const card = mk("li", "user-card-item online-mode");
             const avatar = mk("div", "user-avatar-fancy", displayNick.charAt(0).toUpperCase(), { style: `background: ${getGradient(u.username)}` });
             const pulse = mk("span", "status-pulse-indicator");
-            const nickDiv = mk("div", "user-nick-fancy", null, {}, [pulse, mk("span", null, displayNick)]);
+            const nickDiv = mk("div", "user-nick-fancy", null, {}, [pulse, mk("span", null, displayNick)]); // Safe
             const infoDiv = mk("div", "user-info-fancy", null, {}, [nickDiv, mk("div", "user-id-fancy", `IP/ID: @${u.username}`), mk("div", `role-badge-fancy ${roleClass.includes('admin')?'admin':roleClass}`, roleLabel)]);
             const header = mk("div", "user-card-header", null, {}, [avatar, infoDiv]);
             const actions = mk("div", "user-card-actions", null, {style:"justify-content:flex-end; opacity:0.7; font-size:0.8rem;"}, [mk("span", null, "🟢 Active Now")]);
@@ -266,10 +321,12 @@ socket.on("updatePassed", l => renderList("passed-list-ui", l, n => {
         mk("button", "btn-secondary", T.recall, {onclick:()=>{ if(confirm(T.msg_recall_confirm.replace('%s', n))) req("/api/control/recall-passed",{number:n}); }}),
         (b => { confirmBtn(b, T.del, ()=>req("/api/passed/remove",{number:n})); return b; })(mk("button", "btn-secondary", T.del))
     ]);
+    // mk updated: 3rd arg is textContent. Use style for color.
     return mk("li", "list-item", null, {}, [mk("span","list-main-text",`${n} 號`,{style:"font-size:1rem;color:var(--primary);"}), acts]);
 }, "empty"));
 
 const renderFeaturedItem = (item) => {
+    // mk updated: safely handle text.
     const view = mk("div", "list-info", null, {}, [mk("span","list-main-text",item.linkText), mk("span","list-sub-text",item.linkUrl)]);
     const form = mk("div", "edit-form-wrapper", null, {style:"display:none; position:relative;"}, [
         mk("input",null,null,{value:item.linkText, placeholder:"Name"}), mk("input",null,null,{value:item.linkUrl, placeholder:"URL"}),
@@ -367,7 +424,7 @@ async function loadUsers() {
     }
 }
 
-// [UPDATED] Matrix Table for Role Permissions
+// Matrix Table for Role Permissions
 async function loadRoles() {
     const cfg = globalRoleConfig || await req("/api/admin/roles/get"); 
     const ctr = $("role-editor-content"); if(!cfg || !ctr) return; ctr.innerHTML="";
@@ -401,7 +458,9 @@ async function loadRoles() {
     targetRoles.forEach(r => {
         const meta = roleMeta[r];
         const th = mk("th", `th-role ${meta.class}`);
-        th.innerHTML = `<div class="th-content"><span class="th-icon">${meta.icon}</span><span>${meta.label}</span></div>`;
+        // mk updated: pass true for isHtml
+        const iconHtml = `<div class="th-content"><span class="th-icon">${meta.icon}</span><span>${meta.label}</span></div>`;
+        th.innerHTML = iconHtml; 
         trHead.appendChild(th);
     });
     thead.appendChild(trHead);
@@ -447,7 +506,12 @@ async function loadStats() {
             d.hourlyCounts.forEach((v, i) => chart.appendChild(mk("div", `chart-col ${i===d.serverHour?'current':''}`, null, {onclick:()=>openStatModal(i,v)}, [
                 mk("div","chart-val",v||""), mk("div","chart-bar",null,{style:`height:${Math.max(v/max*100,2)}%;background:${v===0?'var(--border-color)':''}`}), mk("div","chart-label",String(i).padStart(2,'0'))
             ])));
-            renderList("stats-list-ui", d.history||[], h => mk("li","list-item",null,{},[mk("span",null,null,{innerHTML:`${new Date(h.timestamp).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})} - <b style="color:var(--primary)">${h.number}</b> <small style="color:var(--text-sub)">(${h.operator})</small>`})]), "no_logs");
+            renderList("stats-list-ui", d.history||[], h => {
+                const li = mk("li","list-item");
+                // Manual innerHTML for color formatting
+                li.innerHTML = `<span>${new Date(h.timestamp).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})} - <b style="color:var(--primary)">${h.number}</b> <small style="color:var(--text-sub)">(${h.operator})</small></span>`;
+                return li;
+            }, "no_logs");
         }
     } catch(e){}
 }
@@ -548,6 +612,7 @@ bind("btn-logout", logout); bind("btn-logout-mobile", logout);
             toast(T.saved, "success"); 
         }
         if(id === 'btn-clear-logs') { $("admin-log-ui").innerHTML=`<li class='list-item'>${T.no_logs}</li>`; toast(T.saved, "success"); }
+        if(id.includes('Passed')) { $("passed-list-ui").innerHTML = `<li class="list-item" style="justify-content:center;color:var(--text-sub);">${T.empty}</li>`; }
     });
 });
 
