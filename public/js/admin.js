@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v19.6 Fixed Layout
+ * 後台邏輯 (admin.js) - v19.7 Fixed Layout & Modal Overlay
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, h, e={}, k=[]) => { 
@@ -61,18 +61,19 @@ const checkSession = async () => {
     uniqueUser=localStorage.getItem('callsys_user'); userRole=localStorage.getItem('callsys_role'); username=localStorage.getItem('callsys_nick');
     if(uniqueUser==='superadmin' && userRole!=='ADMIN') localStorage.setItem('callsys_role', userRole='ADMIN');
     
+    // 強制隱藏彈窗，防止在登入畫面顯示
+    const m = $("edit-stats-overlay"); if(m) m.style.display = "none";
+
     if(uniqueUser) {
         $("login-container").style.display="none"; 
         $("admin-panel").style.display="flex";
         
-        // 1. 先取得權限
         Object.assign(globalRoleConfig, await req("/api/admin/roles/get"));
         
-        // 2. 設定 UI 顯示狀態
         $$('[data-perm]').forEach(e => {
             const allowed = checkPerm(e.dataset.perm);
             if(e.classList.contains('admin-card')) e.style.display = allowed ? 'flex' : 'none';
-            else e.style.display = allowed ? '' : 'none'; // 對於 Sidebar li 元素，移除 display:none 讓其回歸 CSS 定義 (block/flex)
+            else e.style.display = allowed ? '' : 'none';
         });
         
         ['card-role-management','btn-export-csv','mode-switcher-group','unlock-pwd-group','resetNumber','resetIssued','resetPassed','resetFeaturedContents','btn-clear-logs','btn-clear-stats','btn-reset-line-msg','resetAll'].forEach(id=>$(id)&&($(id).style.display=isSuper()?"block":"none"));
@@ -81,7 +82,7 @@ const checkSession = async () => {
         upgradeModeUI(); 
         updateLangUI();
 
-        // [關鍵修正]：如果目前沒有任何區塊被激活，自動點擊第一個可見的導航按鈕
+        // 自動點擊第一個分頁
         if(!document.querySelector('.section-group.active')) {
             const firstNav = document.querySelector('.nav-btn:not([style*="display: none"])');
             if(firstNav) firstNav.click();
@@ -115,9 +116,7 @@ socket.on("updateOnlineAdmins", l => checkPerm('users') && renderList("online-us
 
 /* --- Logic & Renderers --- */
 function upgradeModeUI() {
-    // 增加保護，避免找不到元素報錯
-    const c=$('#card-sys .control-group:nth-of-type(3)'); 
-    if(!c) return; 
+    const c=$('#card-sys .control-group:nth-of-type(3)'); if(!c) return; 
     if(c.querySelector('.segmented-control')) return;
     const w=mk('div','segmented-control'), radios=c.querySelectorAll('input[type="radio"]');
     if(!radios.length) return;
@@ -219,7 +218,15 @@ const applyTheme=()=>{ document.body.classList.toggle('dark-mode',isDark); local
 document.addEventListener("DOMContentLoaded", () => {
     applyTheme();
     
-    // 綁定導航點擊邏輯
+    // 強制隱藏數據編輯彈窗，避免在登入頁面出現
+    const m = $("edit-stats-overlay");
+    if(m) {
+        m.style.display = "none";
+        bindClick("btn-modal-close",()=>m.style.display="none");
+        window.openStatModal=(h,v)=>{$("modal-current-count").textContent=v;eHr=h;m.style.display="flex"};
+        ["btn-stats-minus","btn-stats-plus"].forEach((id,i)=>bindClick(id,async()=>{if(eHr!=null){await req("/api/admin/stats/adjust",{hour:eHr,delta:i?1:-1});$("modal-current-count").textContent=Math.max(0,+($("modal-current-count").textContent)+(i?1:-1));loadStats()}}));
+    }
+
     $$('.nav-btn').forEach(b=>b.onclick=()=>{
         $$('.nav-btn').forEach(x=>x.classList.remove('active'));
         b.classList.add('active');
@@ -231,7 +238,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if(b.dataset.target==='section-settings'){
                 loadAppts();
                 loadUsers();
-                if(checkPerm('line')) cachedLine ? renderLine() : loadLineSettings(); // Note: loadLineSettings renamed to inline logic in original, simplified here
+                if(checkPerm('line')) cachedLine ? renderLine() : loadLineSettings();
             }
         }
     });
@@ -254,12 +261,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     bindClick("btn-calibrate-stats",async()=>confirm(`${T.confirm} ${T.btn_calibrate}?`)&&toast(`${T.msg_calibrated} (Diff: ${(await req("/api/admin/stats/calibrate"))?.diff})`,"success")&&loadStats());
-    let eHr; const m=$("edit-stats-overlay"); 
-    if(m) {
-        bindClick("btn-modal-close",()=>m.style.display="none");
-        window.openStatModal=(h,v)=>{$("modal-current-count").textContent=v;eHr=h;m.style.display="flex"};
-        ["btn-stats-minus","btn-stats-plus"].forEach((id,i)=>bindClick(id,async()=>{if(eHr!=null){await req("/api/admin/stats/adjust",{hour:eHr,delta:i?1:-1});$("modal-current-count").textContent=Math.max(0,+($("modal-current-count").textContent)+(i?1:-1));loadStats()}}));
-    }
 
     ["admin-lang-selector","admin-lang-selector-mobile"].forEach(i=>{const e=$(i);if(e){e.value=curLang;e.onchange=()=>{curLang=e.value;localStorage.setItem('callsys_lang',curLang);updateLangUI()}}});
     if($("appt-time")) flatpickr("#appt-time",{enableTime:true,dateFormat:"Y-m-d H:i",time_24hr:true,locale:"zh_tw",minDate:"today",disableMobile:"true"});
@@ -268,7 +269,7 @@ document.addEventListener("DOMContentLoaded", () => {
     $$('input[name="systemMode"]').forEach(r=>r.onchange=()=>confirm(T.confirm+" Switch?")?req("/set-system-mode",{mode:r.value}):(r.checked=!r.checked));
     document.addEventListener("keydown",e=>{ if(document.activeElement.tagName==="INPUT" || document.activeElement.tagName==="TEXTAREA"){if(e.key==="Enter"&&!e.shiftKey)({username:"login-button",manualNumber:"setNumber",manualIssuedNumber:"setIssuedNumber"}[document.activeElement.id.split('-')[0]]?$(document.activeElement.id.split('-')[0]+"btn")?.click():null);return} if(e.key==="ArrowRight")$("btn-call-next")?.click();if(e.key==="ArrowLeft")$("btn-call-prev")?.click();if(e.key.toLowerCase()==="p")$("btn-mark-passed")?.click(); });
 
-    // 最後才執行 Session 檢查，確保事件都綁定好了
+    // 最後才執行 Session 檢查，確保 DOM 與變數都初始化完畢
     checkSession();
 });
 
