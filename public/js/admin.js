@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v17.9 Final Polish
+ * 後台邏輯 (admin.js) - v18.0 Fixed & Polished
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, txt, ev={}, ch=[]) => { 
@@ -306,23 +306,26 @@ function renderAppointments(list) {
     }, "no_appt");
 }
 
-/* --- [Fixed & Polished] Load Users Function --- */
+/* --- [UI Fixed] Load Users Function --- */
 async function loadUsers() {
     const d = await req("/api/admin/users"); if(!d?.users) return;
     const isSuper = isSuperAdmin(); 
     
+    // 漸層生成
     const getGradient = (str) => {
         const hash = str.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-        const hue1 = hash % 360; const hue2 = (hue1 + 50) % 360;
-        return `linear-gradient(135deg, hsl(${hue1}, 75%, 60%), hsl(${hue2}, 75%, 50%))`;
+        return `linear-gradient(135deg, hsl(${hash%360}, 75%, 60%), hsl(${(hash+50)%360}, 75%, 50%))`;
     };
 
+    // 渲染卡片列表
     renderList("user-list-ui", d.users, u => {
         const roleClass = (u.role||'OPERATOR').toLowerCase();
         const roleLabel = u.role === 'OPERATOR' ? 'Op (操作員)' : (u.role === 'MANAGER' ? 'Mgr (經理)' : 'Adm (管理員)');
         
+        // 1. 卡片本體
         const card = mk("li", "user-card-item");
         
+        // 2. 資訊區 (Header)
         const avatar = mk("div", "user-avatar-fancy", (u.nickname||u.username).charAt(0).toUpperCase(), { style: `background: ${getGradient(u.username)}` });
         const infoDiv = mk("div", "user-info-fancy", null, {}, [
             mk("div", "user-nick-fancy", u.nickname || u.username),
@@ -331,11 +334,13 @@ async function loadUsers() {
         ]);
         const header = mk("div", "user-card-header", null, {}, [avatar, infoDiv]);
 
+        // 3. 底部操作區 (Footer)
         const actions = mk("div", "user-card-actions");
         
+        // 4. 編輯覆蓋層
         const editForm = mk("div", "edit-form-wrapper", null, {style: "display:none;"}, [
-            mk("div", null, "修改暱稱:", {style:"font-weight:700;font-size:0.9rem;margin-bottom:4px;"}),
-            mk("input", null, null, {value: u.nickname, placeholder: T.ph_nick}),
+            mk("h4", null, "修改暱稱", {style:"margin:0 0 10px 0; color:var(--text-main);"}),
+            mk("input", null, null, {value: u.nickname, placeholder: T.ph_nick, style:"margin-bottom:10px;"}),
             mk("div", "edit-form-actions", null, {}, [
                 mk("button", "btn-secondary", T.cancel, {onclick: (e) => { e.stopPropagation(); editForm.style.display = "none"; }}),
                 mk("button", "btn-secondary success", T.save, {onclick: async (e) => {
@@ -347,10 +352,13 @@ async function loadUsers() {
             ])
         ]);
 
+        // 操作按鈕邏輯
         if (u.username === uniqueUser || isSuper) {
             const btnEdit = mk("button", "btn-action-icon", "✎", { title: T.edit });
             btnEdit.onclick = () => { editForm.style.display = "flex"; };
             actions.appendChild(btnEdit);
+        } else {
+            actions.appendChild(mk("span")); // 佔位
         }
 
         if (u.username !== 'superadmin' && isSuper) {
@@ -358,6 +366,7 @@ async function loadUsers() {
             
             const roleSel = mk("select", "role-select", null, {
                 title: "變更權限",
+                style: "height:32px; font-size:0.8rem; padding:0 8px;",
                 onchange: async () => { if(await req("/api/admin/set-role", {targetUsername: u.username, newRole: roleSel.value})) { toast(T.saved, "success"); loadUsers(); } }
             });
             ['OPERATOR', 'MANAGER', 'ADMIN'].forEach(r => roleSel.add(new Option(r, r, false, u.role === r)));
@@ -367,32 +376,47 @@ async function loadUsers() {
 
             rightGrp.append(roleSel, btnDel);
             actions.appendChild(rightGrp);
-        } else {
-            actions.appendChild(mk("span"));
         }
 
         card.append(header, actions, editForm);
         return card;
     }, "loading");
 
-    const addSection = document.querySelector('#card-user-management .control-group.compact-group');
+    // 重繪 "新增使用者" 區塊 (從卡片列表分離出來)
+    const cardContainer = $("card-user-management");
+    let addSection = document.getElementById("add-user-section-fixed");
+    
+    if(!addSection && cardContainer) {
+        // 清理舊的結構
+        const oldControls = cardContainer.querySelectorAll('.control-group.compact-group, .add-user-container');
+        oldControls.forEach(el => el.remove());
+
+        // 建立新的新增區塊卡片
+        const containerDiv = mk("div", "admin-card", null, {id: "add-user-wrapper", style:"margin-top: 20px; padding: 24px;"});
+        const header = mk("h3", null, null, {}, [mk("span", "card-icon", "👤"), mk("span", null, T.lbl_add_user)]);
+        
+        addSection = mk("div", "add-user-grid", null, {id:"add-user-section-fixed", style:"margin-top:16px;"});
+        
+        containerDiv.append(header, addSection);
+        cardContainer.appendChild(containerDiv);
+    }
+    
     if(addSection) {
-        addSection.innerHTML = ''; addSection.className = "add-user-container";
-        const grid = mk("div", "add-user-grid");
+        addSection.innerHTML = '';
         const iUser = mk("input", null, null, {id:"new-user-username", placeholder: T.ph_account});
         const iPass = mk("input", null, null, {id:"new-user-password", type:"password", placeholder: "Pwd"});
         const iNick = mk("input", null, null, {id:"new-user-nickname", placeholder: T.ph_nick});
         const iRole = mk("select", null, null, {id:"new-user-role"});
         iRole.add(new Option("Operator", "OPERATOR")); iRole.add(new Option("Manager", "MANAGER")); iRole.add(new Option("Admin", "ADMIN"));
-        const btnAdd = mk("button", "btn-add-user-fancy", `+ ${T.lbl_add_user}`);
+        
+        const btnAdd = mk("button", "btn-hero", `+ ${T.lbl_add_user}`, {style: "height:46px; font-size:1rem; grid-column: 1 / -1;"});
         btnAdd.onclick = async()=>{ 
             if(!iUser.value || !iPass.value) return toast("請輸入帳號密碼", "error");
             if(await req("/api/admin/add-user", {newUsername:iUser.value, newPassword:iPass.value, newNickname:iNick.value, newRole:iRole.value})) { 
                 toast(T.saved,"success"); loadUsers(); iUser.value=""; iPass.value=""; iNick.value="";
             } 
         };
-        grid.append(iUser, iPass, iNick, iRole, btnAdd);
-        addSection.appendChild(grid);
+        addSection.append(iUser, iPass, iNick, iRole, btnAdd);
     }
 }
 
