@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v19.5 Optimized
+ * 後台邏輯 (admin.js) - v19.6 Fixed Layout
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, h, e={}, k=[]) => { 
@@ -7,7 +7,7 @@ const mk = (t, c, h, e={}, k=[]) => {
     Object.entries(e).forEach(([k,v])=>x[k.startsWith('on')?k.toLowerCase():k]=v); 
     k.forEach(c=>c&&x.append(c)); return x; 
 };
-const toast = (m, t='info') => { const e=$("toast-notification"); e.textContent=m; e.className=`show ${t}`; setTimeout(()=>e.className="",3000); };
+const toast = (m, t='info') => { const e=$("toast-notification"); if(!e)return; e.textContent=m; e.className=`show ${t}`; setTimeout(()=>e.className="",3000); };
 let curLang=localStorage.getItem('callsys_lang')||'zh-TW', T, userRole, username, uniqueUser, cachedLine, isDark=localStorage.getItem('callsys_admin_theme')==='dark';
 const socket = io({ autoConnect: false }), globalRoleConfig = {};
 
@@ -38,13 +38,13 @@ const updateLangUI = () => {
     $$('[data-i18n-ph]').forEach(e=>e.placeholder=T[e.dataset.i18nPh]||"");
     $$('button[data-k]').forEach(b=>{if(!b.classList.contains('ing')) b.textContent=T[b.dataset.k]});
     if(uniqueUser) {
-        $("sidebar-user-info").textContent = username;
+        if($("sidebar-user-info")) $("sidebar-user-info").textContent = username;
         if(checkPerm('users')) loadUsers();
         if(checkPerm('stats')) loadStats();
         if(checkPerm('appointment')) loadAppts();
         if(isSuper()) loadRoles();
         if(checkPerm('settings')) req("/api/featured/get").then(l=>renderList("featured-list-ui",l,renderFeatured));
-        if($("section-settings").classList.contains("active") && checkPerm('line')) cachedLine ? renderLine() : req("/api/admin/line-settings/get").then(r=>{cachedLine=r;renderLine()});
+        if($("section-settings")?.classList.contains("active") && checkPerm('line')) cachedLine ? renderLine() : req("/api/admin/line-settings/get").then(r=>{cachedLine=r;renderLine()});
     }
 };
 
@@ -60,13 +60,37 @@ const isSuper = () => uniqueUser==='superadmin' || ['super','ADMIN'].includes(us
 const checkSession = async () => {
     uniqueUser=localStorage.getItem('callsys_user'); userRole=localStorage.getItem('callsys_role'); username=localStorage.getItem('callsys_nick');
     if(uniqueUser==='superadmin' && userRole!=='ADMIN') localStorage.setItem('callsys_role', userRole='ADMIN');
+    
     if(uniqueUser) {
-        $("login-container").style.display="none"; $("admin-panel").style.display="flex";
+        $("login-container").style.display="none"; 
+        $("admin-panel").style.display="flex";
+        
+        // 1. 先取得權限
         Object.assign(globalRoleConfig, await req("/api/admin/roles/get"));
-        $$('[data-perm]').forEach(e => e.style.display = checkPerm(e.dataset.perm) ? (e.classList.contains('admin-card')?'flex':'') : 'none');
+        
+        // 2. 設定 UI 顯示狀態
+        $$('[data-perm]').forEach(e => {
+            const allowed = checkPerm(e.dataset.perm);
+            if(e.classList.contains('admin-card')) e.style.display = allowed ? 'flex' : 'none';
+            else e.style.display = allowed ? '' : 'none'; // 對於 Sidebar li 元素，移除 display:none 讓其回歸 CSS 定義 (block/flex)
+        });
+        
         ['card-role-management','btn-export-csv','mode-switcher-group','unlock-pwd-group','resetNumber','resetIssued','resetPassed','resetFeaturedContents','btn-clear-logs','btn-clear-stats','btn-reset-line-msg','resetAll'].forEach(id=>$(id)&&($(id).style.display=isSuper()?"block":"none"));
-        socket.connect(); upgradeModeUI(); updateLangUI();
-    } else { $("login-container").style.display="block"; $("admin-panel").style.display="none"; socket.disconnect(); }
+        
+        socket.connect(); 
+        upgradeModeUI(); 
+        updateLangUI();
+
+        // [關鍵修正]：如果目前沒有任何區塊被激活，自動點擊第一個可見的導航按鈕
+        if(!document.querySelector('.section-group.active')) {
+            const firstNav = document.querySelector('.nav-btn:not([style*="display: none"])');
+            if(firstNav) firstNav.click();
+        }
+    } else { 
+        $("login-container").style.display="block"; 
+        $("admin-panel").style.display="none"; 
+        socket.disconnect(); 
+    }
 };
 
 const logout = () => { localStorage.clear(); document.cookie="token=;expires=0;path=/;"; location.reload(); };
@@ -74,12 +98,12 @@ const logout = () => { localStorage.clear(); document.cookie="token=;expires=0;p
 /* --- Socket & Realtime --- */
 socket.on("connect", () => { $("status-bar").classList.remove("visible"); toast(`${T.status_conn} (${username})`, "success"); });
 socket.on("disconnect", () => $("status-bar").classList.add("visible"));
-socket.on("updateQueue", d => { $("number").textContent=d.current; $("issued-number").textContent=d.issued; $("waiting-count").textContent=Math.max(0, d.issued-d.current); if(checkPerm('stats')) loadStats(); });
-socket.on("update", n => { $("number").textContent=n; if(checkPerm('stats')) loadStats(); });
+socket.on("updateQueue", d => { if($("number")) $("number").textContent=d.current; if($("issued-number")) $("issued-number").textContent=d.issued; if($("waiting-count")) $("waiting-count").textContent=Math.max(0, d.issued-d.current); if(checkPerm('stats')) loadStats(); });
+socket.on("update", n => { if($("number")) $("number").textContent=n; if(checkPerm('stats')) loadStats(); });
 socket.on("initAdminLogs", l => checkPerm('stats') && renderLogs(l,1));
 socket.on("newAdminLog", l => checkPerm('stats') && renderLogs([l],0));
-socket.on("updatePublicStatus", b => $("public-toggle").checked=b);
-socket.on("updateSoundSetting", b => $("sound-toggle").checked=b);
+socket.on("updatePublicStatus", b => { if($("public-toggle")) $("public-toggle").checked=b });
+socket.on("updateSoundSetting", b => { if($("sound-toggle")) $("sound-toggle").checked=b });
 socket.on("updateSystemMode", m => { $$('input[name="systemMode"]').forEach(r=>r.checked=(r.value===m)); $$('.segmented-option').forEach(l=>l.classList.toggle('active', l.querySelector('input').value===m)); });
 socket.on("updateAppointments", l => checkPerm('appointment') && renderAppts(l));
 socket.on("updatePassed", l => renderList("passed-list-ui", l, n => mk("li","list-item",null,{},[mk("span","list-main-text",`${n} #`,{style:"color:var(--primary)"}), mk("div","list-actions",null,{},[mk("button","btn-secondary",T.recall,{onclick:()=>confirm(T.msg_recall_confirm.replace('%s',n))&&req("/api/control/recall-passed",{number:n})}), (b=>{confirmBtn(b,T.del,()=>req("/api/passed/remove",{number:n}));return b})(mk("button","btn-secondary",T.del))])]), "empty"));
@@ -91,8 +115,12 @@ socket.on("updateOnlineAdmins", l => checkPerm('users') && renderList("online-us
 
 /* --- Logic & Renderers --- */
 function upgradeModeUI() {
-    const c=$('#card-sys .control-group:nth-of-type(3)'); if(!c||c.querySelector('.segmented-control'))return;
+    // 增加保護，避免找不到元素報錯
+    const c=$('#card-sys .control-group:nth-of-type(3)'); 
+    if(!c) return; 
+    if(c.querySelector('.segmented-control')) return;
     const w=mk('div','segmented-control'), radios=c.querySelectorAll('input[type="radio"]');
+    if(!radios.length) return;
     radios.forEach(r=>{ const l=mk('label','segmented-option',T[r.value==='ticketing'?'mode_online':'mode_manual']||r.value); l.dataset.i18n=r.value==='ticketing'?'mode_online':'mode_manual'; l.append(r); w.append(l); l.onclick=()=>updateSeg(w); });
     const t=c.querySelector('label:not(.segmented-option)'); c.innerHTML=''; if(t)c.append(t); c.append(w); updateSeg(w);
 }
@@ -148,8 +176,11 @@ async function loadStats() {
     try {
         const d=await req("/api/admin/stats"); if(!d?.hourlyCounts) return;
         if($("stats-today-count")) $("stats-today-count").textContent=d.todayCount||0;
-        const chart=$("hourly-chart"), max=Math.max(...d.hourlyCounts,1); chart.innerHTML="";
-        d.hourlyCounts.forEach((v,i)=>chart.append(mk("div",`chart-col ${i===d.serverHour?'current':''}`,null,{onclick:()=>openStatModal(i,v)},[mk("div","chart-val",v||""),mk("div","chart-bar",null,{style:`height:${Math.max(v/max*100,2)}%;background:${v?null:'var(--border-color)'}`}),mk("div","chart-label",String(i).padStart(2,'0'))])));
+        const chart=$("hourly-chart");
+        if(chart) {
+            const max=Math.max(...d.hourlyCounts,1); chart.innerHTML="";
+            d.hourlyCounts.forEach((v,i)=>chart.append(mk("div",`chart-col ${i===d.serverHour?'current':''}`,null,{onclick:()=>openStatModal(i,v)},[mk("div","chart-val",v||""),mk("div","chart-bar",null,{style:`height:${Math.max(v/max*100,2)}%;background:${v?null:'var(--border-color)'}`}),mk("div","chart-label",String(i).padStart(2,'0'))])));
+        }
         renderList("stats-list-ui",d.history||[],h=>mk("li","list-item",null,{innerHTML:`${new Date(h.timestamp).toLocaleTimeString()} - <b style="color:var(--primary)">${h.number}</b> <small>(${h.operator})</small>`}),"no_logs");
     } catch(e){}
 }
@@ -186,7 +217,25 @@ const bindings = {
 const applyTheme=()=>{ document.body.classList.toggle('dark-mode',isDark); localStorage.setItem('callsys_admin_theme',isDark?'dark':'light'); ["admin-theme-toggle","admin-theme-toggle-mobile"].forEach(i=>$(i)&&($(i).textContent=isDark?'☀️':'🌙')); };
 
 document.addEventListener("DOMContentLoaded", () => {
-    checkSession(); applyTheme();
+    applyTheme();
+    
+    // 綁定導航點擊邏輯
+    $$('.nav-btn').forEach(b=>b.onclick=()=>{
+        $$('.nav-btn').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active');
+        $$('.section-group').forEach(s=>s.classList.remove('active'));
+        const t=$(b.dataset.target);
+        if(t){
+            t.classList.add('active');
+            if(b.dataset.target==='section-stats') loadStats();
+            if(b.dataset.target==='section-settings'){
+                loadAppts();
+                loadUsers();
+                if(checkPerm('line')) cachedLine ? renderLine() : loadLineSettings(); // Note: loadLineSettings renamed to inline logic in original, simplified here
+            }
+        }
+    });
+
     Object.entries(bindings).forEach(([id, act]) => $(id)?.addEventListener("click", typeof act==="function" ? act : async()=>{
         const n=$("number"), v=n?parseInt(n.textContent):0; if(n&&act[0].includes('call')&&act[1]?.direction) {n.textContent=v+(act[1].direction==='next'?1:-1); n.style.opacity=".6";}
         try{ await req(act[0], act[1]); } catch(e){if(n)n.textContent=v} finally{if(n)n.style.opacity="1"}
@@ -205,17 +254,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     bindClick("btn-calibrate-stats",async()=>confirm(`${T.confirm} ${T.btn_calibrate}?`)&&toast(`${T.msg_calibrated} (Diff: ${(await req("/api/admin/stats/calibrate"))?.diff})`,"success")&&loadStats());
-    let eHr; const m=$("edit-stats-overlay"); bindClick("btn-modal-close",()=>m.style.display="none");
-    window.openStatModal=(h,v)=>{$("modal-current-count").textContent=v;eHr=h;m.style.display="flex"};
-    ["btn-stats-minus","btn-stats-plus"].forEach((id,i)=>bindClick(id,async()=>{if(eHr!=null){await req("/api/admin/stats/adjust",{hour:eHr,delta:i?1:-1});$("modal-current-count").textContent=Math.max(0,+($("modal-current-count").textContent)+(i?1:-1));loadStats()}}));
+    let eHr; const m=$("edit-stats-overlay"); 
+    if(m) {
+        bindClick("btn-modal-close",()=>m.style.display="none");
+        window.openStatModal=(h,v)=>{$("modal-current-count").textContent=v;eHr=h;m.style.display="flex"};
+        ["btn-stats-minus","btn-stats-plus"].forEach((id,i)=>bindClick(id,async()=>{if(eHr!=null){await req("/api/admin/stats/adjust",{hour:eHr,delta:i?1:-1});$("modal-current-count").textContent=Math.max(0,+($("modal-current-count").textContent)+(i?1:-1));loadStats()}}));
+    }
 
     ["admin-lang-selector","admin-lang-selector-mobile"].forEach(i=>{const e=$(i);if(e){e.value=curLang;e.onchange=()=>{curLang=e.value;localStorage.setItem('callsys_lang',curLang);updateLangUI()}}});
-    $$('.nav-btn').forEach(b=>b.onclick=()=>{$$('.nav-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');$$('.section-group').forEach(s=>s.classList.remove('active'));const t=$(b.dataset.target);if(t){t.classList.add('active');if(b.dataset.target==='section-stats')loadStats();if(b.dataset.target==='section-settings'){loadAppts();loadUsers();if(checkPerm('line'))cachedLine?renderLine():loadLineSettings();}}});
     if($("appt-time")) flatpickr("#appt-time",{enableTime:true,dateFormat:"Y-m-d H:i",time_24hr:true,locale:"zh_tw",minDate:"today",disableMobile:"true"});
     $("sound-toggle")?.addEventListener("change",e=>req("/set-sound-enabled",{enabled:e.target.checked}));
     $("public-toggle")?.addEventListener("change",e=>req("/set-public-status",{isPublic:e.target.checked}));
     $$('input[name="systemMode"]').forEach(r=>r.onchange=()=>confirm(T.confirm+" Switch?")?req("/set-system-mode",{mode:r.value}):(r.checked=!r.checked));
-    document.addEventListener("keydown",e=>{ if(["INPUT","TEXTAREA"].includes(document.activeElement.tagName)){if(e.key==="Enter"&&!e.shiftKey)({username:"login-button",manualNumber:"setNumber",manualIssuedNumber:"setIssuedNumber"}[document.activeElement.id.split('-')[0]]?$(document.activeElement.id.split('-')[0]+"btn")?.click():null);return} if(e.key==="ArrowRight")$("btn-call-next")?.click();if(e.key==="ArrowLeft")$("btn-call-prev")?.click();if(e.key.toLowerCase()==="p")$("btn-mark-passed")?.click(); });
+    document.addEventListener("keydown",e=>{ if(document.activeElement.tagName==="INPUT" || document.activeElement.tagName==="TEXTAREA"){if(e.key==="Enter"&&!e.shiftKey)({username:"login-button",manualNumber:"setNumber",manualIssuedNumber:"setIssuedNumber"}[document.activeElement.id.split('-')[0]]?$(document.activeElement.id.split('-')[0]+"btn")?.click():null);return} if(e.key==="ArrowRight")$("btn-call-next")?.click();if(e.key==="ArrowLeft")$("btn-call-prev")?.click();if(e.key.toLowerCase()==="p")$("btn-mark-passed")?.click(); });
+
+    // 最後才執行 Session 檢查，確保事件都綁定好了
+    checkSession();
 });
 
 function bindClick(i,f){$(i)?.addEventListener("click",f)}
