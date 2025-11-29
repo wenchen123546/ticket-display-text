@@ -1,9 +1,10 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v19.8 Language Switch Fixes
+ * 後台邏輯 (admin.js) - v19.9 Fully Merged & Fixed
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const mk = (t, c, h, e={}, k=[]) => { 
-    const x=document.createElement(t); if(c)x.className=c; if(h)x.innerHTML=h; 
+    const x=document.createElement(t); if(c)x.className=c; 
+    if(h)x.innerHTML=h; // [Merge] 支援 HTML 內容 (icon)
     Object.entries(e).forEach(([k,v])=>x[k.startsWith('on')?k.toLowerCase():k]=v); 
     k.forEach(c=>c&&x.append(c)); return x; 
 };
@@ -11,9 +12,28 @@ const toast = (m, t='info') => { const e=$("toast-notification"); if(!e)return; 
 let curLang=localStorage.getItem('callsys_lang')||'zh-TW', T, userRole, username, uniqueUser, cachedLine, isDark=localStorage.getItem('callsys_admin_theme')==='dark';
 const socket = io({ autoConnect: false }), globalRoleConfig = {};
 
+// [Merge] 補回 v19.5 完整的翻譯字典，確保 Sidebar 和 Card Title 顯示正常
 const i18n = {
-    "zh-TW":{status_conn:"✅ 已連線",status_dis:"⚠️ 連線中斷",saved:"✅ 已儲存",denied:"❌ 權限不足",confirm:"⚠️ 確認",recall:"↩️ 重呼",edit:"✎ 編輯",del:"✕ 刪除",save:"✓ 儲存",cancel:"✕ 取消",login_title:"請登入",ph_account:"帳號",ph_password:"密碼",login_btn:"登入",logout:"登出",dash_curr:"目前叫號",dash_issued:"已發號至",dash_wait:"等待組數",btn_next:"下一號 ▶",btn_prev:"◀ 上一號",btn_pass:"過號",btn_reset_call:"↺ 重置叫號",btn_recall:"➖ 收回",btn_issue:"發號 ➕",btn_fix:"修正",btn_reset_issue:"↺ 重置發號",btn_clear_passed:"清空過號",lbl_today:"今日人次",btn_calibrate:"校正",btn_clear_stats:"🗑️ 清空統計",btn_clear_logs:"清除日誌",lbl_mode:"取號模式",mode_online:"線上取號",mode_manual:"手動輸入",btn_reset_all:"💥 全域重置",btn_save_roles:"儲存權限變更",btn_restore:"恢復預設值",role_operator:"操作員",role_manager:"經理",role_admin:"管理員",msg_recall_confirm:"確定要重呼 %s 嗎？",msg_sent:"📢 已發送",perm_role:"角色權限",perm_call:"叫號/指揮",perm_issue:"發號",perm_stats:"數據/日誌",perm_settings:"系統設定",perm_line:"LINE設定",perm_appointment:"預約管理",perm_users:"帳號管理",empty:"[ 空 ]",no_logs:"[ 無日誌 ]",no_appt:"暫無預約",loading:"載入中...",wait:"等待..."},
-    "en":{status_conn:"✅ Connected",status_dis:"⚠️ Disconnected",saved:"✅ Saved",denied:"❌ Denied",confirm:"⚠️ Confirm",recall:"↩️ Recall",edit:"✎ Edit",del:"✕ Del",save:"✓ Save",cancel:"✕ Cancel",login_title:"Login",ph_account:"Username",ph_password:"Password",login_btn:"Login",logout:"Logout",dash_curr:"Current Serving",dash_issued:"Last Issued",dash_wait:"Waiting",btn_next:"Next ▶",btn_prev:"◀ Prev",btn_pass:"Pass",btn_reset_call:"↺ Reset Call",btn_recall:"➖ Recall",btn_issue:"Issue ➕",btn_fix:"Fix",btn_reset_issue:"↺ Reset Issue",btn_clear_passed:"Clear Passed",lbl_today:"Today Count",btn_calibrate:"Calibrate",btn_clear_stats:"🗑️ Clear Stats",btn_clear_logs:"Clear Logs",lbl_mode:"Mode",mode_online:"Online Ticket",mode_manual:"Manual Input",btn_reset_all:"💥 Factory Reset",btn_save_roles:"Save Roles",btn_restore:"Restore",role_operator:"Operator",role_manager:"Manager",role_admin:"Admin",msg_recall_confirm:"Recall %s?",msg_sent:"📢 Sent",perm_role:"Role",perm_call:"Control",perm_issue:"Ticketing",perm_stats:"Stats",perm_settings:"Settings",perm_line:"Line Config",perm_appointment:"Booking",perm_users:"Users",empty:"[ Empty ]",no_logs:"[ No Logs ]",no_appt:"No Appt",loading:"Loading...",wait:"Waiting..."}
+    "zh-TW":{
+        status_conn:"✅ 已連線",status_dis:"⚠️ 連線中斷",saved:"✅ 已儲存",denied:"❌ 權限不足",confirm:"⚠️ 確認",recall:"↩️ 重呼",edit:"✎ 編輯",del:"✕ 刪除",save:"✓ 儲存",cancel:"✕ 取消",login_title:"請登入",ph_account:"帳號",ph_password:"密碼",login_btn:"登入",logout:"登出",
+        admin_panel: "管理後台", nav_live: "現場控台", nav_stats: "數據報表", nav_booking: "預約管理", nav_settings: "系統設定", nav_line: "LINE設定",
+        dash_curr:"目前叫號",dash_issued:"已發號至",dash_wait:"等待組數",btn_next:"下一號 ▶",btn_prev:"◀ 上一號",btn_pass:"過號",btn_reset_call:"↺ 重置叫號",btn_recall:"➖ 收回",btn_issue:"發號 ➕",btn_fix:"修正",btn_reset_issue:"↺ 重置發號",btn_clear_passed:"清空過號",lbl_today:"今日人次",btn_calibrate:"校正",btn_clear_stats:"🗑️ 清空統計",btn_clear_logs:"清除日誌",
+        card_call: "指揮中心", card_issue: "發號管理", card_passed: "過號名單", card_stats: "流量分析", card_logs: "操作日誌", card_sys: "系統", card_online: "在線管理", card_links: "連結管理", card_users: "帳號管理", card_roles: "權限設定", card_booking: "預約管理",
+        lbl_mode:"取號模式",mode_online:"線上取號",mode_manual:"手動輸入",btn_reset_all:"💥 全域重置",btn_save_roles:"儲存權限變更",btn_restore:"恢復預設值",role_operator:"操作員",role_manager:"經理",role_admin:"管理員",msg_recall_confirm:"確定要重呼 %s 嗎？",msg_sent:"📢 已發送",msg_calibrated: "校正完成",
+        perm_role:"角色權限",perm_call:"叫號/指揮",perm_issue:"發號",perm_stats:"數據/日誌",perm_settings:"系統設定",perm_line:"LINE設定",perm_appointment:"預約管理",perm_users:"帳號管理",
+        lbl_add_user: "新增帳號", ph_nick: "暱稱", lbl_public: "開放前台", lbl_sound: "提示音效", lbl_add_appt: "新增預約",
+        empty:"[ 空 ]",no_logs:"[ 無日誌 ]",no_appt:"暫無預約",loading:"載入中...",wait:"等待..."
+    },
+    "en":{
+        status_conn:"✅ Connected",status_dis:"⚠️ Disconnected",saved:"✅ Saved",denied:"❌ Denied",confirm:"⚠️ Confirm",recall:"↩️ Recall",edit:"✎ Edit",del:"✕ Del",save:"✓ Save",cancel:"✕ Cancel",login_title:"Login",ph_account:"Username",ph_password:"Password",login_btn:"Login",logout:"Logout",
+        admin_panel: "Admin Panel", nav_live: "Live Console", nav_stats: "Statistics", nav_booking: "Booking", nav_settings: "Settings", nav_line: "Line Config",
+        dash_curr:"Current Serving",dash_issued:"Last Issued",dash_wait:"Waiting",btn_next:"Next ▶",btn_prev:"◀ Prev",btn_pass:"Pass",btn_reset_call:"↺ Reset Call",btn_recall:"➖ Recall",btn_issue:"Issue ➕",btn_fix:"Fix",btn_reset_issue:"↺ Reset Issue",btn_clear_passed:"Clear Passed",lbl_today:"Today Count",btn_calibrate:"Calibrate",btn_clear_stats:"🗑️ Clear Stats",btn_clear_logs:"Clear Logs",
+        card_call: "Command Center", card_issue: "Ticketing", card_passed: "Passed List", card_stats: "Analytics", card_logs: "Action Logs", card_sys: "System", card_online: "Online Users", card_links: "Links Manager", card_users: "User Manager", card_roles: "Role Permissions", card_booking: "Booking Manager",
+        lbl_mode:"Mode",mode_online:"Online Ticket",mode_manual:"Manual Input",btn_reset_all:"💥 Factory Reset",btn_save_roles:"Save Roles",btn_restore:"Restore",role_operator:"Operator",role_manager:"Manager",role_admin:"Admin",msg_recall_confirm:"Recall %s?",msg_sent:"📢 Sent",msg_calibrated: "Calibrated",
+        perm_role:"Role",perm_call:"Control",perm_issue:"Ticketing",perm_stats:"Stats",perm_settings:"Settings",perm_line:"Line Config",perm_appointment:"Booking",perm_users:"Users",
+        lbl_add_user: "Add User", ph_nick: "Nickname", lbl_public: "Public Access", lbl_sound: "Sound FX", lbl_add_appt: "Add Booking",
+        empty:"[ Empty ]",no_logs:"[ No Logs ]",no_appt:"No Appt",loading:"Loading...",wait:"Waiting..."
+    }
 };
 
 async function req(u, d={}, b=null) {
@@ -28,7 +48,7 @@ async function req(u, d={}, b=null) {
 
 const confirmBtn = (el, txt, act) => {
     if(!el) return; let t, c=5; 
-    // [Fix] 嚴格比對，只有在字典裡找到對應的 key 才設定 data-k，避免將「✕」等符號誤設為 key
+    // [Fix] 嚴格比對翻譯 Key，防止符號消失
     const foundKey = Object.keys(T).find(k=>T[k]===txt);
     if(foundKey) el.dataset.k = foundKey;
 
@@ -38,29 +58,12 @@ const confirmBtn = (el, txt, act) => {
 
 const updateLangUI = () => {
     T = i18n[curLang]||i18n["zh-TW"];
-    
-    // 1. 更新一般文字
-    $$('[data-i18n]').forEach(e => {
-        // [Fix] 只有當新翻譯存在時才更新，避免 undefined
-        const val = T[e.dataset.i18n];
-        if(val) e.textContent = val;
-        else if(!e.dataset.i18nPh) e.textContent = e.dataset.i18n; // Fallback
-    });
-
-    // 2. 更新 Placeholder
+    $$('[data-i18n]').forEach(e => { const v = T[e.dataset.i18n]; if(v) e.textContent = v; else if(!e.dataset.i18nPh) e.textContent = e.dataset.i18n; });
     $$('[data-i18n-ph]').forEach(e => e.placeholder = T[e.dataset.i18nPh]||"");
-
-    // 3. 更新動態按鈕 (防止符號按鈕變空白)
-    $$('button[data-k]').forEach(b => {
-        if(!b.classList.contains('ing')) {
-            const val = T[b.dataset.k];
-            if(val) b.textContent = val;
-        }
-    });
+    $$('button[data-k]').forEach(b => { if(!b.classList.contains('ing')) { const v = T[b.dataset.k]; if(v) b.textContent = v; } });
 
     if(uniqueUser) {
         if($("sidebar-user-info")) $("sidebar-user-info").textContent = username;
-        // 重新載入列表以套用新語言
         if(checkPerm('users')) loadUsers();
         if(checkPerm('stats')) loadStats();
         if(checkPerm('appointment')) loadAppts();
@@ -83,6 +86,7 @@ const checkSession = async () => {
     uniqueUser=localStorage.getItem('callsys_user'); userRole=localStorage.getItem('callsys_role'); username=localStorage.getItem('callsys_nick');
     if(uniqueUser==='superadmin' && userRole!=='ADMIN') localStorage.setItem('callsys_role', userRole='ADMIN');
     
+    // [Fix] 強制隱藏 Modal
     const m = $("edit-stats-overlay"); if(m) m.style.display = "none";
 
     if(uniqueUser) {
@@ -100,9 +104,10 @@ const checkSession = async () => {
         ['card-role-management','btn-export-csv','mode-switcher-group','unlock-pwd-group','resetNumber','resetIssued','resetPassed','resetFeaturedContents','btn-clear-logs','btn-clear-stats','btn-reset-line-msg','resetAll'].forEach(id=>$(id)&&($(id).style.display=isSuper()?"block":"none"));
         
         socket.connect(); 
-        updateLangUI(); // [Important] 初始化 T 與介面語言
-        upgradeModeUI(); // [Important] 在 T 初始化後再建立 UI
+        updateLangUI(); 
+        upgradeModeUI(); 
         
+        // [Fix] 自動切換到第一個可用分頁
         if(!document.querySelector('.section-group.active')) {
             const firstNav = document.querySelector('.nav-btn:not([style*="display: none"])');
             if(firstNav) firstNav.click();
@@ -114,7 +119,8 @@ const checkSession = async () => {
     }
 };
 
-const logout = () => { localStorage.clear(); document.cookie="token=;expires=0;path=/;"; location.reload(); };
+// [Merge] 使用 v19.5 更乾淨的 Logout 邏輯
+const logout = () => { localStorage.clear(); document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"; location.reload(); };
 
 /* --- Socket & Realtime --- */
 socket.on("connect", () => { $("status-bar").classList.remove("visible"); toast(`${T.status_conn} (${username})`, "success"); });
@@ -140,21 +146,16 @@ function upgradeModeUI() {
     if(c.querySelector('.segmented-control')) return;
     const w=mk('div','segmented-control'), radios=c.querySelectorAll('input[type="radio"]');
     if(!radios.length) return;
-    
-    // [Fix] 重構 HTML 結構：將 input 放在 label 內，文字放在 span 內並加上 data-i18n
-    // 這樣 updateLangUI 更新文字時，才不會把 input 元素覆蓋掉
     radios.forEach(r=>{ 
+        // [Fix] Input inside Label (better UX)
         const l=mk('label','segmented-option');
         const txtKey = r.value==='ticketing'?'mode_online':'mode_manual';
         const sp = mk('span', null, T[txtKey]||r.value);
         sp.dataset.i18n = txtKey;
-        
-        l.append(r); // Input first
-        l.append(sp); // Then text
+        l.append(r); l.append(sp);
         w.append(l); 
         l.onclick=()=>updateSeg(w); 
     });
-    
     const t=c.querySelector('label:not(.segmented-option)'); c.innerHTML=''; if(t)c.append(t); c.append(w); updateSeg(w);
 }
 const updateSeg = w => w.querySelectorAll('input').forEach(r=>r.closest('label').classList.toggle('active',r.checked));
@@ -181,10 +182,8 @@ async function loadUsers() {
         const act=mk("div","user-card-actions"), form=mk("div","edit-form-wrapper",{style:"display:none"},{},[mk("input",null,null,{value:u.nickname,placeholder:T.ph_nick,style:"margin-bottom:10px"}), mk("div","edit-form-actions",null,{},[mk("button","btn-secondary",T.cancel,{onclick:e=>{e.stopPropagation();form.style.display="none"}}),mk("button","btn-secondary success",T.save,{onclick:async e=>{e.stopPropagation();if(await req("/api/admin/set-nickname",{targetUsername:u.username,nickname:form.children[0].value})){toast(T.saved,"success");loadUsers()}}})])]);
         if(isMe||sup) { const b=mk("button","btn-action-icon","✎",{title:T.edit}); b.onclick=()=>form.style.display="flex"; act.append(b); }
         if(u.username!=='superadmin'&&sup) {
-            // [Fix] 讓角色下拉選單也能翻譯
             const s=mk("select","role-select",null,{onchange:async()=>await req("/api/admin/set-role",{targetUsername:u.username,newRole:s.value})&&toast(T.saved)&&loadUsers()});
             ['OPERATOR','MANAGER','ADMIN'].forEach(r=>s.add(new Option(T['role_'+r.toLowerCase()]||r, r, false, u.role===r)));
-            
             const b=mk("button","btn-action-icon danger","✕"); confirmBtn(b,"✕",async()=>await req("/api/admin/del-user",{delUsername:u.username})&&loadUsers());
             const w=mk("div",null,null,{style:"display:flex;gap:8px;align-items:center"},[s,b]); act.append(w);
         }
@@ -202,7 +201,10 @@ async function loadUsers() {
 async function loadRoles() {
     const c=globalRoleConfig||await req("/api/admin/roles/get"), ctr=$("role-editor-content"); if(!c||!ctr)return; ctr.innerHTML="";
     const roles=['OPERATOR','MANAGER'], perms=[{k:'call',t:T.perm_call},{k:'issue',t:T.perm_issue},{k:'stats',t:T.perm_stats},{k:'settings',t:T.perm_settings},{k:'appointment',t:T.perm_appointment},{k:'line',t:T.perm_line},{k:'users',t:T.perm_users}];
-    const ths=roles.map(r=>mk("th",`th-role role-${r==='OPERATOR'?'op':'mgr'}`,null,{innerHTML:`<div class="th-content"><span class="th-icon">${r==='OPERATOR'?'🎮':'🛡️'}</span><span>${T['role_'+r.toLowerCase()]}</span></div>`}));
+    // [Merge] 使用 v19.5 的圖示與樣式
+    const roleMeta = { 'OPERATOR': { icon: '🎮', class: 'role-op' }, 'MANAGER': { icon: '🛡️', class: 'role-mgr' } };
+    
+    const ths=roles.map(r=>mk("th",`th-role ${roleMeta[r].class}`,null,{innerHTML:`<div class="th-content"><span class="th-icon">${roleMeta[r].icon}</span><span>${T['role_'+r.toLowerCase()]}</span></div>`}));
     const trs=perms.map(p=>mk("tr",null,null,{},[mk("td","td-perm-name",p.t),...roles.map(r=>mk("td","td-check",null,{},[mk("label","custom-check",null,{},[mk("input","role-chk",null,{type:"checkbox",dataset:{role:r,perm:p.k},checked:(c[r]?.can||[]).includes(p.k)}),mk("span","checkmark")])]))]));
     ctr.append(mk("div","perm-table-wrapper",null,{},[mk("table","perm-matrix",null,{},[mk("thead",null,null,{},[mk("tr",null,null,{},[mk("th",null,"Perm / Role"),...ths])]),mk("tbody",null,null,{},trs)])]));
 }
@@ -245,7 +247,7 @@ const bindings = {
     "btn-save-roles": async()=>{ const c={OPERATOR:{level:1,can:[]},MANAGER:{level:2,can:[]},ADMIN:{level:9,can:['*']}}; $$(".role-chk:checked").forEach(k=>c[k.dataset.role].can.push(k.dataset.perm)); if(await req("/api/admin/roles/update",{rolesConfig:c})) { toast(T.saved,"success"); Object.assign(globalRoleConfig,c); $$('[data-perm]').forEach(e=>e.style.display=checkPerm(e.dataset.perm)?'':'none'); } },
     "btn-save-unlock-pwd": async()=>{ if(await req("/api/admin/line-settings/save-pass",{password:$("line-unlock-pwd").value})) toast(T.saved,"success"); },
     "btn-export-csv": async()=>{ const d=await req("/api/admin/export-csv",{date:new Date().toLocaleDateString("zh-TW")}); if(d?.csvData) { const a=mk("a",null,null,{href:URL.createObjectURL(new Blob(["\uFEFF"+d.csvData],{type:'text/csv'})),download:d.fileName}); a.click(); } },
-    "login-button": async()=>{ const r=await req("/login",{username:$("username-input").value,password:$("password-input").value}); if(r){localStorage.setItem('callsys_user',r.username);localStorage.setItem('callsys_role',r.userRole);localStorage.setItem('callsys_nick',r.nickname);checkSession();}else $("login-error").textContent=T.login_fail; },
+    "login-button": async()=>{ const r=await req("/login",{username:$("username-input").value,password:$("password-input").value}); if(r&&r.success!==false){localStorage.setItem('callsys_user',r.username);localStorage.setItem('callsys_role',r.userRole);localStorage.setItem('callsys_nick',r.nickname);checkSession();}else $("login-error").textContent=T.login_fail; },
     "btn-logout": logout, "btn-logout-mobile": logout,
     "admin-theme-toggle": ()=>{ isDark=!isDark; applyTheme(); }, "admin-theme-toggle-mobile": ()=>{ isDark=!isDark; applyTheme(); }
 };
@@ -254,6 +256,7 @@ const applyTheme=()=>{ document.body.classList.toggle('dark-mode',isDark); local
 document.addEventListener("DOMContentLoaded", () => {
     applyTheme();
     
+    // [Fix] Modal 預設隱藏
     const m = $("edit-stats-overlay");
     if(m) {
         m.style.display = "none";
@@ -273,7 +276,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if(b.dataset.target==='section-settings'){
                 loadAppts();
                 loadUsers();
-                if(checkPerm('line')) cachedLine ? renderLine() : loadLineSettings();
+                if(checkPerm('line')) cachedLine ? renderLine() : req("/api/admin/line-settings/get").then(r=>{cachedLine=r;renderLine()});
             }
         }
     });
