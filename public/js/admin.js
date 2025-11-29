@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v20.3 Auto Reply
+ * 後台邏輯 (admin.js) - v20.3 Auto Reply (Fixed Syntax)
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 
@@ -335,7 +335,7 @@ socket.on("updateAppointments", l => { if(checkPerm('appointment')) renderAppoin
 
 socket.on("updateOnlineAdmins", l => { 
     if(checkPerm('users')) {
-        const getGradient = (str) => `linear-gradient(135deg, hsl(${str.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%360}, 75%, 60%), hsl(${(str.split('').reduce((a,c)=>a+c.charCodeAt(0),0)+50)%360}, 75%, 50%))`;
+        const getGradient = (str) => { const n=str.split('').reduce((a,c)=>a+c.charCodeAt(0),0); return `linear-gradient(135deg, hsl(${n%360}, 75%, 60%), hsl(${(n+50)%360}, 75%, 50%))`; };
         renderList("online-users-list", (l||[]).sort((a,b)=>(a.role==='super'?-1:1)), u => {
             const roleClass = (u.userRole || u.role || 'OPERATOR').toLowerCase();
             const roleLabel = (u.userRole || u.role) === 'ADMIN' ? 'ADMIN' : ((u.userRole || u.role) === 'MANAGER' ? 'MANAGER' : 'OPERATOR');
@@ -393,7 +393,7 @@ function renderAppointments(list) {
 async function loadUsers() {
     const d = await req("/api/admin/users"); if(!d?.users) return;
     const isSuper = isSuperAdmin(); 
-    const getGradient = (str) => `linear-gradient(135deg, hsl(${str.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%360}, 75%, 60%), hsl(${(str.split('').reduce((a,c)=>a+c.charCodeAt(0)+50)%360}, 75%, 50%))`;
+    const getGradient = (str) => { const n=str.split('').reduce((a,c)=>a+c.charCodeAt(0),0); return `linear-gradient(135deg, hsl(${n%360}, 75%, 60%), hsl(${(n+50)%360}, 75%, 50%))`; };
 
     renderList("user-list-ui", d.users, u => {
         const roleClass = (u.role||'OPERATOR').toLowerCase();
