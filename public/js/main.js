@@ -1,5 +1,5 @@
 /* ==========================================
- * 前台邏輯 (main.js) - v109.1 UX/Kiosk Optimized
+ * 前台邏輯 (main.js) - v109.2 UX Optimized
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 const on = (el, ev, fn) => el?.addEventListener(ev, fn), show = (el, v) => el && (el.style.display = v ? 'block' : 'none');
@@ -51,15 +51,11 @@ const speak = (txt) => {
     if(!localMute && sndEnabled && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel(); 
         const u = new SpeechSynthesisUtterance(txt); 
-        // [Optimization] Robust Voice Selection for Mobile Devices
         let v = window.speechSynthesis.getVoices().find(v => v.lang === 'zh-TW' || v.lang === 'zh_TW');
         if(!v) v = window.speechSynthesis.getVoices().find(v => v.lang.includes('zh'));
-        
-        u.lang = 'zh-TW'; // Default fallback
+        u.lang = 'zh-TW'; 
         if(v) u.voice = v; 
-        
-        // Fix for some browsers cutting off speech
-        u.onend = () => { /* Optional: post-speech actions */ };
+        u.onend = () => { };
         window.speechSynthesis.speak(u);
     }
 };
@@ -110,6 +106,20 @@ const toggleClosedOverlay = (isClosed) => {
     ov.style.display = isClosed ? 'flex' : 'none';
 };
 
+// [Fix] Check for stale tickets
+const checkStaleTicket = (serverCurrent, serverIssued) => {
+    if (!myTicket) return;
+    // 條件: 系統重置 (issued=0 且 myTicket>5) 或 號碼過期太久 (差20號以上)
+    if ((serverIssued === 0 && myTicket > 5) || (myTicket < serverCurrent - 20)) {
+        ls.removeItem('callsys_ticket');
+        myTicket = null;
+        renderMode();
+        const b = $("btn-take-ticket");
+        if(b) { b.disabled = false; b.textContent = T.take; }
+        toast("票號已過期或系統重置", "info");
+    }
+};
+
 // --- Socket Events ---
 socket.on("connect", () => { socket.emit('joinRoom', 'public'); clearTimeout(connTimer); $("status-bar").textContent=T.conn; $("status-bar").classList.remove("visible"); })
     .on("disconnect", () => connTimer = setTimeout(() => { $("status-bar").textContent=T.off; $("status-bar").classList.add("visible"); }, 1000))
@@ -117,6 +127,9 @@ socket.on("connect", () => { socket.emit('joinRoom', 'public'); clearTimeout(con
     .on("updateQueue", d => {
         if($("issued-number-main")) $("issued-number-main").textContent = d.issued;
         if($("hero-waiting-count")) $("hero-waiting-count").textContent = Math.max(0, d.issued - d.current);
+        
+        checkStaleTicket(d.current, d.issued); // [Fix] Check Stale
+
         const el = $("number");
         if(el.textContent !== String(d.current)) {
             playDing(); setTimeout(()=>speak(`現在號碼，${d.current}號`), 800);
@@ -154,7 +167,6 @@ const isKioskMode = () => new URLSearchParams(window.location.search).get('mode'
 // --- Interactions ---
 doc.addEventListener("DOMContentLoaded", () => {
     if(isKioskMode()) {
-        // [Optimization] Use CSS class instead of JS injection
         doc.body.classList.add('kiosk-mode');
         toggleWakeLock(true);
     }
@@ -162,8 +174,8 @@ doc.addEventListener("DOMContentLoaded", () => {
     if($("language-selector")) $("language-selector").value = lang;
     applyTheme(); applyText(); renderMode(); socket.connect();
     
-    // [UX] Prevent duplicate ticket via local check
-    if(ls.getItem('callsys_ticket')) { $("btn-take-ticket").disabled = true; $("btn-take-ticket").textContent = "已取號"; }
+    // [Fix] 不依賴單純的 disabled = true，由 renderMode 決定
+    // if(ls.getItem('callsys_ticket')) { $("btn-take-ticket").disabled = true; $("btn-take-ticket").textContent = "已取號"; }
 
     const unlock = () => { unlockAudio(); doc.body.removeEventListener('click', unlock); }; doc.body.addEventListener('click', unlock);
     if($("qr-code-placeholder")) try{ new QRCode($("qr-code-placeholder"), {text:location.href, width:120, height:120}); }catch(e){}
@@ -173,9 +185,27 @@ doc.addEventListener("DOMContentLoaded", () => {
         if(ls.getItem('callsys_ticket')) return toast("您已有號碼", "error"); 
         
         unlockAudio(); if(Notification.permission!=='granted') Notification.requestPermission();
+        
+        // [Fix] Button State Handling
         b.disabled = true;
-        try { const r = await fetch("/api/ticket/take", {method:"POST"}).then(d=>d.json()); if(r.success) { myTicket=r.ticket; ls.setItem('callsys_ticket', myTicket); renderMode(); toast(T.ok, "success"); } else toast(r.error||T.fail, "error"); } catch(e) { toast(T.off, "error"); }
-        setTimeout(() => { if(!myTicket) b.disabled = false; }, 1000);
+        const origText = b.textContent;
+        b.textContent = "處理中...";
+
+        try { 
+            const r = await fetch("/api/ticket/take", {method:"POST"}).then(d=>d.json()); 
+            if(r.success) { 
+                myTicket=r.ticket; 
+                ls.setItem('callsys_ticket', myTicket); 
+                renderMode(); 
+                toast(T.ok, "success"); 
+            } else {
+                toast(r.error||T.fail, "error");
+                b.disabled = false; b.textContent = origText;
+            } 
+        } catch(e) { 
+            toast(T.off, "error"); 
+            b.disabled = false; b.textContent = origText;
+        }
     });
     on($("btn-track-ticket"), "click", () => {
         unlockAudio(); const v = $("manual-ticket-input").value; if(!v) return toast(T.no_in, "error");
