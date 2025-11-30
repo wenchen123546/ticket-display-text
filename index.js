@@ -1,4 +1,4 @@
-/* Server v18.10 Refactored (Minified Logic) */
+/* Server v18.11 Refactored with Business Hours Broadcast */
 require('dotenv').config();
 const { Server } = require("http"), express = require("express"), socketio = require("socket.io"), Redis = require("ioredis"),
       helmet = require('helmet'), rateLimit = require('express-rate-limit'), { v4: uuidv4 } = require('uuid'),
@@ -154,7 +154,12 @@ app.post("/set-system-mode", auth, perm('settings'), H(async r=>{ await redis.se
 app.post("/reset", auth, perm('settings'), H(async r => resetSys(r.user.nickname)));
 app.post("/api/admin/broadcast", auth, H(async r => { io.emit("adminBroadcast", r.body.message); addLog(r.user.nickname, `📢 廣播: ${r.body.message}`); }));
 app.post("/api/admin/settings/hours/get", auth, H(async r => JSON.parse(await redis.get(KEYS.HOURS)) || { enabled: false, start: 8, end: 22 }));
-app.post("/api/admin/settings/hours/save", auth, perm('settings'), H(async r => { await redis.set(KEYS.HOURS, JSON.stringify({ start: parseInt(r.body.start), end: parseInt(r.body.end), enabled: !!r.body.enabled })); addLog(r.user.nickname, "🔧 更新營業時間"); }));
+app.post("/api/admin/settings/hours/save", auth, perm('settings'), H(async r => { 
+    const cfg = { start: parseInt(r.body.start), end: parseInt(r.body.end), enabled: !!r.body.enabled };
+    await redis.set(KEYS.HOURS, JSON.stringify(cfg)); 
+    addLog(r.user.nickname, "🔧 更新營業時間"); 
+    io.emit("updateBusinessHours", cfg); 
+}));
 
 app.post("/api/admin/line-settings/get", auth, perm('line'), H(async r => ({ "LINE Access Token": await redis.get(KEYS.LINE.CFG_TOKEN), "LINE Channel Secret": await redis.get(KEYS.LINE.CFG_SECRET) })));
 app.post("/api/admin/line-settings/save", auth, perm('line'), H(async r => { if(r.body["LINE Access Token"]) await redis.set(KEYS.LINE.CFG_TOKEN, r.body["LINE Access Token"]); if(r.body["LINE Channel Secret"]) await redis.set(KEYS.LINE.CFG_SECRET, r.body["LINE Channel Secret"]); initLine(); addLog(r.user.nickname, "🔧 更新 LINE 設定"); }));
@@ -180,7 +185,8 @@ cron.schedule('0 4 * * *', () => { resetSys('系統自動'); run("DELETE FROM hi
 io.use(async (s, next) => { try { const t = s.handshake.auth.token || parseCookie(s.request.headers.cookie||'')['token']; if(t) { const u = JSON.parse(await redis.get(`${KEYS.SESSION}${t}`)); if(u) s.user = u; } next(); } catch(e) { next(); } });
 io.on("connection", async s => {
     if(s.user) { s.join("admin"); const socks = await io.in("admin").fetchSockets(); io.to("admin").emit("updateOnlineAdmins", [...new Map(socks.map(x=>x.user&&[x.user.username, x.user]).filter(Boolean)).values()]); s.emit("initAdminLogs", await redis.lrange(KEYS.LOGS,0,99)); broadcastAppts(); }
-    s.join('public'); const [c,i,p,f,snd,pub,m] = await Promise.all([redis.get(KEYS.CURRENT),redis.get(KEYS.ISSUED),redis.zrange(KEYS.PASSED,0,-1),redis.lrange(KEYS.FEATURED,0,-1),redis.get("callsys:soundEnabled"),redis.get("callsys:isPublic"),redis.get(KEYS.MODE)]);
+    s.join('public'); const [c,i,p,f,snd,pub,m,h] = await Promise.all([redis.get(KEYS.CURRENT),redis.get(KEYS.ISSUED),redis.zrange(KEYS.PASSED,0,-1),redis.lrange(KEYS.FEATURED,0,-1),redis.get("callsys:soundEnabled"),redis.get("callsys:isPublic"),redis.get(KEYS.MODE), redis.get(KEYS.HOURS)]);
     s.emit("update",Number(c)); s.emit("updateQueue",{current:Number(c),issued:Number(i)}); s.emit("updatePassed",p.map(Number)); s.emit("updateFeaturedContents",f.map(JSON.parse)); s.emit("updateSoundSetting",snd==="1"); s.emit("updatePublicStatus",pub!=="0"); s.emit("updateSystemMode",m||'ticketing'); s.emit("updateWaitTime",await calcWaitTime());
+    s.emit("updateBusinessHours", h ? JSON.parse(h) : {enabled:false});
 });
-initDB().then(() => server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v18.10 running on ${PORT}`))).catch(e => { console.error(e); process.exit(1); });
+initDB().then(() => server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server v18.11 running on ${PORT}`))).catch(e => { console.error(e); process.exit(1); });
