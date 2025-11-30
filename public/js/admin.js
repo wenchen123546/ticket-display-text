@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v20.14 Line Enhanced
+ * 後台邏輯 (admin.js) - v20.15 Line Fully Configurable
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 
@@ -114,7 +114,6 @@ const updateLangUI = () => {
     $$('[data-i18n-ph]').forEach(e => e.placeholder = T[e.getAttribute('data-i18n-ph')]||"");
     $$('button[data-original-key]').forEach(b => { if(!b.classList.contains('is-confirming')) b.textContent = T[b.dataset.originalKey]; });
     
-    // [Fix] 強制重新載入列表以更新翻譯
     if(checkPerm('users')) loadUsers(); 
     if(checkPerm('stats')) loadStats(); 
     if(checkPerm('appointment')) loadAppointments(); 
@@ -271,7 +270,7 @@ async function initBusinessHoursUI() {
     btnSave.onclick = async () => { if(await req("/api/admin/settings/hours/save", {enabled: toggle.checked, start: startIn.value, end: endIn.value})) toast(T.saved, "success"); };
 }
 
-// [Updated] Load Line Messages (includes help)
+// [Updated] Load Line Messages (Includes ALL System Messages)
 async function loadLineMessages() {
     if(!$("msg-success")) return;
     const d = await req("/api/admin/line-messages/get");
@@ -282,14 +281,20 @@ async function loadLineMessages() {
         $("msg-passed").value = d.passed;
         $("msg-cancel").value = d.cancel;
         if($("msg-help")) $("msg-help").value = d.help || "";
+        
+        // 新增: 系統訊息擴充
+        if($("msg-login-prompt")) $("msg-login-prompt").value = d.loginPrompt || "";
+        if($("msg-login-success")) $("msg-login-success").value = d.loginSuccess || "";
+        if($("msg-no-tracking")) $("msg-no-tracking").value = d.noTracking || "";
+        if($("msg-no-passed")) $("msg-no-passed").value = d.noPassed || "";
+        if($("msg-passed-prefix")) $("msg-passed-prefix").value = d.passedPrefix || "";
     }
 }
 
-// [Updated] Load System Commands (New fields for passed, help, etc.)
+// [Updated] Load System Commands
 async function loadLineSystemCommands() {
     const section = $("line-cmd-section");
     if(!section) {
-        // Find "LINE Settings" card
         const parent = $("msg-success") ? $("msg-success").closest('.admin-card') : null;
         const defaultMsgInput = $("line-default-msg");
         
@@ -300,7 +305,6 @@ async function loadLineSystemCommands() {
 
                 const container = mk("div", null, null, {id: "line-cmd-section", style: "margin: 20px 0; padding-top: 20px; border-top: 1px dashed var(--border-color);"});
                 
-                // Enhanced HTML for system commands
                 container.innerHTML = `
                     <h4 style="margin: 0 0 15px 0; color: var(--text-main);">🤖 系統指令設定</h4>
                     <div class="control-group">
@@ -590,7 +594,6 @@ async function loadRoles() {
             const isChecked = roleCan.includes('*') || roleCan.includes(p.k);
             const label = mk("label", "custom-check"); 
             
-            // [Fix] 這裡修正了 dataset 在 mk 函式中無法正確賦值的問題
             const chk = mk("input", "role-chk", null, {type: "checkbox", checked: isChecked}); 
             chk.dataset.role = r;
             chk.dataset.perm = p.k;
@@ -688,7 +691,7 @@ bind("btn-save-roles", async()=>{
 bind("btn-save-unlock-pwd", async()=>{ const p=$("line-unlock-pwd").value; if(await req("/api/admin/line-settings/save-pass", {password:p})) toast(T.saved,"success"); });
 bind("btn-export-csv", async()=>{ const d=await req("/api/admin/export-csv", { date: new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Taipei"}) }); if(d?.csvData) { const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\uFEFF"+d.csvData],{type:'text/csv'})); a.download=d.fileName; a.click(); } });
 
-// [Updated] Save Line Messages (includes help)
+// [Updated] Save Line Messages (includes all system messages)
 bind("btn-save-line-msgs", async () => {
     const data = {
         success: $("msg-success").value,
@@ -696,7 +699,13 @@ bind("btn-save-line-msgs", async () => {
         arrival: $("msg-arrival").value,
         passed: $("msg-passed").value,
         cancel: $("msg-cancel").value,
-        help: $("msg-help") ? $("msg-help").value : ""
+        help: $("msg-help") ? $("msg-help").value : "",
+        // 儲存新增的擴充欄位
+        loginPrompt: $("msg-login-prompt") ? $("msg-login-prompt").value : "",
+        loginSuccess: $("msg-login-success") ? $("msg-login-success").value : "",
+        noTracking: $("msg-no-tracking") ? $("msg-no-tracking").value : "",
+        noPassed: $("msg-no-passed") ? $("msg-no-passed").value : "",
+        passedPrefix: $("msg-passed-prefix") ? $("msg-passed-prefix").value : ""
     };
     if(await req("/api/admin/line-messages/save", data, $("btn-save-line-msgs"))) {
         toast(T.saved, "success");
