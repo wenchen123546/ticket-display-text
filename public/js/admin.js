@@ -1,13 +1,20 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - Refactored & Condensed
+ * 後台邏輯 (admin.js) - Fixed "Save Roles" Issue
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
+
+// 修復：改進 mk 函數，正確處理 data-* 屬性
 const mk = (t, c, txt, ev={}, ch=[]) => {
     const e = document.createElement(t); if(c) e.className=c;
     if(txt) e[txt.startsWith('<')?'innerHTML':'textContent'] = txt;
-    Object.entries(ev).forEach(([k,v])=>e[k.startsWith('on')?k.toLowerCase():k]=v);
+    Object.entries(ev).forEach(([k,v])=>{
+        if(k.startsWith('on')) e[k.toLowerCase()]=v;
+        else if(k.includes('-')) e.setAttribute(k, v); // 關鍵修正：對於 data-role 等屬性使用 setAttribute
+        else e[k]=v;
+    });
     (Array.isArray(ch)?ch:[ch]).forEach(x=>x&&e.appendChild(x)); return e;
 };
+
 const toast = (m, t='info') => { const el=$("toast-notification"); el.textContent=m; el.className=`show ${t}`; setTimeout(()=>el.className="",3000); };
 const req = async (url, data={}, btn=null) => {
     if(btn) btn.disabled=true;
