@@ -239,9 +239,9 @@ input[type="radio"] { display: none; }
     .nav-btn { flex-direction: row; padding: 8px 12px; font-size: 0.85rem; border-radius: 20px; height: 36px; background: var(--bg-input); border: 1px solid var(--border-color); margin: 0; flex-shrink: 0; display: block; }
     .nav-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
     
-    .content-area { padding: 16px; width: 100%; display: block; min-height: calc(100vh - 60px); height: auto !important; flex: none; overflow: visible; padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
-    .card-container, .dashboard-header { display: flex !important; flex-direction: column; gap: 16px; }
-    .admin-card { height: auto !important; min-height: auto; padding: 20px; gap: 16px; }
+    .content-area { padding: 8px; width: 100%; display: block; min-height: calc(100vh - 60px); height: auto !important; flex: none; overflow: visible; padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+    .card-container, .dashboard-header { display: flex !important; flex-direction: column; gap: 8px; }
+    .admin-card { height: auto !important; min-height: auto; padding: 12px; gap: 8px; }
     .admin-card { gap: 0 !important; padding-bottom: 10px; } /* Override for chart fix */
     
     .btn-hero, .btn-secondary { white-space: normal; line-height: 1.2; padding: 0 8px; text-align: center; }
@@ -259,7 +259,7 @@ input[type="radio"] { display: none; }
     #btn-logout-mobile { margin-top: 16px; padding: 12px; border-radius: 12px; background-color: var(--danger-bg); color: var(--danger-text); font-weight: 700; }
     
     /* Stats Layout Fix for Mobile */
-    #section-stats .dashboard-header { display: flex !important; flex-direction: row; justify-content: space-between; align-items: flex-end; margin-bottom: 0 !important; padding-bottom: 10px; }
+    #section-stats .dashboard-header { display: flex !important; flex-direction: row; justify-content: space-between; align-items: flex-end; margin-bottom: 0 !important; padding-bottom: 6px; }
     #section-stats .dashboard-header p { margin-bottom: 0 !important; line-height: 1.2; }
     #section-stats #stats-today-count { line-height: 1; margin-top: 4px; display: block; }
     #section-stats .quick-actions { display: flex; gap: 8px; margin-bottom: 4px; flex-direction: row; }
@@ -359,12 +359,12 @@ textarea.multi-line-input {
 
     /* 3. 內容區域間距縮減 */
     .content-area {
-        padding: 12px;
+        padding: 8px; /* 縮小 Padding (原16px) */
         padding-bottom: 80px; /* 預留底部空間給 Toast */
     }
 
     .card-container, .dashboard-header {
-        gap: 10px !important; /* 原本 16px-24px */
+        gap: 8px !important; /* 縮小 Gap (原16px) */
     }
 
     /* 4. 關鍵數據儀表板 (Dashboard) 改為 Grid 佈局 */
@@ -372,11 +372,11 @@ textarea.multi-line-input {
     .dashboard-header {
         display: grid !important;
         grid-template-columns: 1fr 1fr;
-        margin-bottom: 12px !important;
+        margin-bottom: 8px !important; /* 縮小 Margin (原12px) */
     }
 
     .dashboard-item {
-        padding: 12px 16px;
+        padding: 10px 12px; /* 縮小 Padding (原24px) */
         min-height: auto;
     }
 
@@ -388,41 +388,41 @@ textarea.multi-line-input {
     }
     
     .dashboard-item.main-stat .label { margin-bottom: 0; }
-    .dashboard-item.main-stat .big-number { margin-top: 0; font-size: 2.8rem; }
+    .dashboard-item.main-stat .big-number { margin-top: 0; font-size: 2.5rem; }
     
-    .sub-number { font-size: 1.8rem; margin-top: 4px; }
+    .sub-number { font-size: 1.6rem; margin-top: 4px; }
 
     /* 5. 卡片內部緊湊化 */
     .admin-card {
-        padding: 16px;
-        gap: 12px !important;
+        padding: 12px; /* 縮小 Padding (原20px) */
+        gap: 8px !important; /* 縮小 Gap (原12px) */
         min-height: auto;
     }
 
     .admin-card h3 {
-        padding-bottom: 10px;
+        padding-bottom: 8px; /* 縮小 Padding (原10px) */
         margin-bottom: 0;
         font-size: 0.95rem;
     }
 
     /* 6. 按鈕群組優化 */
     .hero-control-row .btn-hero {
-        height: 56px; /* 原本 64px+ */
+        height: 54px; /* 原本 64px+ */
         padding: 0;
         font-size: 1.1rem;
     }
 
     .secondary-actions-row {
-        margin-top: 10px;
-        gap: 10px;
+        margin-top: 8px; /* 縮小 Margin (原10px) */
+        gap: 8px;
     }
 
     .big-action-row {
-        gap: 10px;
+        gap: 8px;
     }
     
     .btn-big {
-        height: 60px; /* 原本 80px */
+        height: 56px; /* 原本 80px */
         font-size: 1rem;
         gap: 2px;
     }
@@ -478,7 +478,7 @@ textarea.multi-line-input {
 
     /* 3. 特別針對「操作日誌」做緊湊化 */
     #admin-log-ui li.list-item {
-        padding: 6px 12px;     /* 減少單行內距 */
+        padding: 4px 10px;     /* 減少單行內距 */
         font-size: 0.75rem;    /* 縮小字體 */
         line-height: 1.3;
         min-height: 0;
@@ -486,12 +486,12 @@ textarea.multi-line-input {
 
     /* 4. 特別針對「過號名單」做緊湊化 */
     #passed-list-ui li.list-item {
-        padding: 8px 12px;
+        padding: 6px 10px;
     }
     
     /* 修正列表內按鈕大小 */
     .list-actions button {
-        height: 28px;
+        height: 26px;
         padding: 0 8px;
         font-size: 0.75rem;
     }
