@@ -9,6 +9,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@700;900&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
+<style>
+/* 營業時間 Badge 樣式 */
+.business-hours-badge{display:inline-flex;align-items:center;gap:6px;background:var(--primary-soft);color:var(--primary);padding:6px 16px;border-radius:20px;font-size:0.9rem;font-weight:700;margin-bottom:16px;border:1px solid rgba(79,70,229,0.1);}
+body.dark-mode .business-hours-badge{background:rgba(99,102,241,0.15);border-color:rgba(99,102,241,0.2);}
+body.kiosk-mode .business-hours-badge{font-size:1.5rem;padding:10px 24px;margin-bottom:30px;}
+</style>
 </head>
 <body>
 <div class="bg-decoration"><div class="orb orb-1"></div><div class="orb orb-2"></div></div>
@@ -24,6 +30,8 @@
     </header>
 
     <section class="hero-section glass">
+        <div id="business-hours-badge" class="business-hours-badge" style="display:none;"></div>
+        
         <span class="hero-label" data-i18n="current_number">目前叫號</span><div id="number">0</div>
         <div class="hero-stats-grid">
             <div class="stat-item"><span class="s-label" data-i18n="issued_number">已發至</span><span class="s-value" id="issued-number-main">0</span></div>
