@@ -1,5 +1,5 @@
 /* ==========================================
- * 前台樣式 (style.css) - v109.1 Kiosk Integrated
+ * 前台樣式 (style.css) - v109.1 Kiosk Integrated & Scroll Fixed
  * ========================================== */
 :root {
     --primary:#4f46e5; --primary-dark:#4338ca; --primary-soft:#eef2ff; --text-main:#1e293b; --text-sub:#64748b; --text-light:#94a3b8;
@@ -12,6 +12,18 @@ body.dark-mode {
     --shadow-card:0 10px 40px -10px rgba(0,0,0,0.7); --num-start:#e2e8f0; --num-end:#818cf8;
 }
 
+/* ==========================================
+ * Scrollbar Fixes (前台捲軸修復)
+ * ========================================== */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+body.dark-mode ::-webkit-scrollbar-thumb { background: #475569; }
+body.dark-mode ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+* { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+body.dark-mode * { scrollbar-color: #475569 transparent; }
+
+/* Core Layout */
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { margin:0; width:100%; min-height:100dvh; font-family:'DM Sans','Noto Sans TC',sans-serif; background:var(--bg-body); color:var(--text-main); display:flex; flex-direction:column; align-items:center; overflow-x:hidden; transition:background .4s ease, color .3s ease; }
 
@@ -61,7 +73,8 @@ body.dark-mode .my-ticket-card { background:linear-gradient(145deg,#312e81 0%,#1
 /* Lists & Footer */
 .list-section { padding:16px 20px; display:flex; flex-direction:column; min-height:0; } .list-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border); }
 .list-title { font-weight:800; color:var(--text-main); display:flex; align-items:center; gap:8px; font-size:1rem; } .badge { background:var(--text-main); color:var(--bg-body); padding:2px 8px; border-radius:10px; font-size:.75rem; font-weight:700; }
-.scroll-view { overflow-y:auto; max-height:150px; } .tag-list { display:grid!important; grid-template-columns:repeat(auto-fill,minmax(60px,1fr))!important; gap:10px; list-style:none; padding:0; margin:0; width:100%; }
+.scroll-view { overflow-y:auto; max-height:150px; padding-right:4px; -webkit-overflow-scrolling:touch; }
+.tag-list { display:grid!important; grid-template-columns:repeat(auto-fill,minmax(60px,1fr))!important; gap:10px; list-style:none; padding:0; margin:0; width:100%; }
 .tag-list li { font-size:.9rem; font-weight:700; color:var(--accent-red); background:var(--accent-bg-red); padding:8px 4px; border-radius:14px; border:1px solid rgba(225,29,72,.1); width:100%!important; display:flex; justify-content:center; align-items:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:.2s; }
 .tag-list li:hover { transform:translateY(-2px); } .empty-state { color:var(--text-light); font-size:.9rem; text-align:center; padding:10px; font-style:italic; opacity:.7; }
 .footer-tools { margin-top:20px; padding-top:20px; border-top:1px dashed var(--border); } .links-label { font-size:.75rem; color:var(--text-sub); font-weight:800; margin-bottom:10px; text-transform:uppercase; letter-spacing:1px; }
@@ -82,36 +95,9 @@ body.dark-mode .toast-message { background:rgba(255,255,255,.95); color:#0f172a;
     #qr-code-container { display:block; position:fixed; bottom:30px; left:30px; padding:20px; background:#fff; border-radius:20px; box-shadow:0 10px 40px rgba(0,0,0,.15); text-align:center; font-size:.85rem; color:var(--text-sub); } #qr-code-placeholder img { display:block; margin:0 auto 8px; }
 }
 
-/* ==========================================
- * Kiosk Mode Overrides (Native CSS)
- * ========================================== */
-body.kiosk-mode .hero-section {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
-    z-index: 100; padding: 0; margin: 0; border-radius: 0;
-    display: flex; flex-direction: column; justify-content: center;
-    box-shadow: none; background: var(--bg-body);
-}
-
-body.kiosk-mode #number { 
-    font-size: clamp(15rem, 35vw, 30rem); 
-    margin: 20px 0; 
-}
-
-body.kiosk-mode .hero-stats-grid { 
-    transform: scale(1.5); 
-    margin-top: 5vh; 
-    width: 80%; 
-    max-width: 800px;
-    background: var(--surface); 
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--border);
-}
-
-/* Hide other elements in Kiosk Mode */
-body.kiosk-mode .side-panel, 
-body.kiosk-mode .app-header, 
-body.kiosk-mode #qr-code-container { 
-    display: none !important; 
-}
-
+/* Kiosk Mode Overrides */
+body.kiosk-mode .hero-section { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; z-index: 100; padding: 0; margin: 0; border-radius: 0; display: flex; flex-direction: column; justify-content: center; box-shadow: none; background: var(--bg-body); }
+body.kiosk-mode #number { font-size: clamp(15rem, 35vw, 30rem); margin: 20px 0; }
+body.kiosk-mode .hero-stats-grid { transform: scale(1.5); margin-top: 5vh; width: 80%; max-width: 800px; background: var(--surface); backdrop-filter: blur(10px); border: 1px solid var(--border); }
+body.kiosk-mode .side-panel, body.kiosk-mode .app-header, body.kiosk-mode #qr-code-container { display: none !important; }
 body.kiosk-mode .bg-decoration { opacity: 0.8; }
