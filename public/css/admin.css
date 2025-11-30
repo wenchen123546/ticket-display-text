@@ -1,59 +1,55 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
 
 /* ==========================================
- * 核心變數定義 (Color Palette)
+ * 核心變數定義 (Color Palette - Optimized)
  * ========================================== */
 :root {
     /* Light Mode Palette - Clean & Crisp */
-    --bg-body: #f8fafc;        /* Slate-50: 更清爽的背景 */
-    --bg-surface: #ffffff;     /* 純白卡片 */
+    --bg-body: #f8fafc;        /* Slate-50 */
+    --bg-surface: #ffffff;     /* 純白 */
     --bg-sidebar: #ffffff;
     --bg-hover: #f1f5f9;       /* Slate-100 */
-    --bg-input: #ffffff;       /* 輸入框背景改為純白，對比更好 */
+    --bg-input: #ffffff;
     
-    --text-main: #0f172a;      /* Slate-900: 深邃黑藍，比純黑易讀 */
+    --text-main: #0f172a;      /* Slate-900 */
     --text-sub: #64748b;       /* Slate-500 */
     --text-light: #94a3b8;     /* Slate-400 */
     
     --border-color: #e2e8f0;   /* Slate-200 */
     --border-focus: #6366f1;   /* Indigo-500 */
     
-    /* Primary Colors - Indigo */
     --primary: #4f46e5; 
     --primary-hover: #4338ca; 
-    --primary-soft: #e0e7ff;   /* Indigo-100 */
+    --primary-soft: #e0e7ff;
     --primary-glow: rgba(79, 70, 229, 0.25);
     
-    /* Status Colors */
     --success: #10b981; --success-bg: #ecfdf5; --success-text: #047857;
     --warning: #f59e0b; --warning-bg: #fffbeb; --warning-text: #b45309;
     --danger: #ef4444; --danger-bg: #fef2f2; --danger-text: #b91c1c;
     
-    /* Dimensions & Shadows */
     --sidebar-w: 260px; --header-h: 64px; --card-radius: 16px; --btn-radius: 10px; --input-h: 46px;
     
-    /* Modern Shadows */
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
     --shadow-float: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
 }
 
 body.dark-mode {
-    /* Dark Mode Palette - Deep Slate (High Quality) */
-    --bg-body: #0f172a;        /* Slate-900: 深邃藍黑背景 */
-    --bg-surface: #1e293b;     /* Slate-800: 卡片背景 */
+    /* Dark Mode Palette - Deep Slate */
+    --bg-body: #0f172a;        /* Slate-900 */
+    --bg-surface: #1e293b;     /* Slate-800 */
     --bg-sidebar: #1e293b;
     --bg-hover: #334155;       /* Slate-700 */
-    --bg-input: #020617;       /* Slate-950: 輸入框更深，增加層次 */
+    --bg-input: #020617;       /* Slate-950 */
     
     --text-main: #f8fafc;      /* Slate-50 */
     --text-sub: #94a3b8;       /* Slate-400 */
     --text-light: #64748b;     /* Slate-500 */
     
     --border-color: rgba(255, 255, 255, 0.08);
-    --border-focus: #818cf8;   /* Indigo-400 */
+    --border-focus: #818cf8;
     
-    --primary: #6366f1;        /* Indigo-500: 在深色上更亮 */
+    --primary: #6366f1;
     --primary-hover: #818cf8; 
     --primary-soft: rgba(99, 102, 241, 0.15);
     --primary-glow: rgba(99, 102, 241, 0.4);
@@ -278,55 +274,62 @@ input[type="radio"] { display: none; }
 .btn-circle:hover { background: var(--primary); color: white; border-color: var(--primary); transform: scale(1.1); }
 @keyframes modalPop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
-/* 1. 調整標題區域：強制水平排列 */
+/* ==========================================
+ * 流量分析卡片佈局修正 (Global Stats Fix)
+ * ========================================== */
 #section-stats .dashboard-header {
-    display: flex !important;           /* 覆蓋預設的 grid */
-    flex-direction: row !important;     /* 強制水平方向 */
-    justify-content: space-between;     /* 左右撐開 */
-    align-items: flex-end;              /* 底部對齊 (讓數字底部對齊按鈕) */
-    margin-bottom: 10px !important;     /* 減少與圖表的間距 */
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 10px !important;
     padding-bottom: 0 !important;
-    gap: 0 !important;                  /* 移除多餘間距 */
+    gap: 0 !important;
 }
-
-/* 2. 左側數字微調 */
 #section-stats #stats-today-count {
     line-height: 1;
-    margin-bottom: -2px; /* 微調讓視覺上與按鈕對齊 */
+    margin-bottom: -2px;
     display: block;
 }
-
-/* 3. 右側按鈕群組：水平排列 */
 #section-stats .quick-actions {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 8px;            /* 按鈕之間的間距 */
+    gap: 8px;
     margin-bottom: 0;
 }
-
-/* 4. 按鈕樣式優化：改為緊湊型 */
 #section-stats .quick-actions button {
-    width: auto !important;       /* 取消 100% 寬度 */
+    width: auto !important;
     min-width: 60px;
-    height: 32px;                 /* 降低高度 */
+    height: 32px;
     padding: 0 14px;
     margin: 0 !important;
     font-size: 0.85rem;
     white-space: nowrap;
 }
-
-/* 5. 圖表區域：減少上方空白，最大化顯示空間 */
 #hourly-chart.chart-container {
     margin-top: 0 !important;
-    padding-top: 25px !important; /* 上方保留一點空間給浮動數值 */
-    height: 260px !important;     /* 設定固定高度，避免過長或過短 */
-    align-items: flex-end;        /* 確保長條圖從底部長出 */
+    padding-top: 25px !important;
+    height: 260px !important;
+    align-items: flex-end;
     border-bottom: 1px dashed var(--border-color);
 }
-
-/* 6. 卡片本體間距縮減 */
 #section-stats .admin-card {
     padding-bottom: 16px;
     gap: 12px;
+}
+
+/* 多行輸入框專用樣式 */
+textarea.multi-line-input {
+    height: auto !important;
+    min-height: 80px;
+    padding: 12px 16px;
+    line-height: 1.4;
+    resize: vertical;
+    white-space: pre-wrap;
+}
+.list-sub-text {
+    white-space: pre-wrap !important;
+    line-height: 1.4;
+    margin-top: 4px;
 }
