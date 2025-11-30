@@ -109,7 +109,7 @@ body.kiosk-mode .bg-decoration { opacity: 0.8; }
 @media (max-width: 768px) {
     /* 1. 減少整體容器邊距與間距 */
     .app-container {
-        gap: 12px; /* 原本 20px */
+        gap: 8px; /* 原本 20px */
         padding: 12px 12px 20px; /* 減少邊框留白 */
         min-height: 100dvh;
     }
@@ -141,7 +141,7 @@ body.kiosk-mode .bg-decoration { opacity: 0.8; }
 
     /* 3. 控制面板與列表緊湊化 */
     .side-panel {
-        gap: 12px;
+        gap: 8px;
     }
 
     .control-section, .list-section {
