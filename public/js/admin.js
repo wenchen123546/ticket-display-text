@@ -1,5 +1,5 @@
 /* ==========================================
- * 後台邏輯 (admin.js) - v20.9 Fixes (Role Save Fix)
+ * 後台邏輯 (admin.js) - v20.12 Final Integrated
  * ========================================== */
 const $ = i => document.getElementById(i), $$ = s => document.querySelectorAll(s);
 
@@ -114,6 +114,7 @@ const updateLangUI = () => {
     $$('[data-i18n-ph]').forEach(e => e.placeholder = T[e.getAttribute('data-i18n-ph')]||"");
     $$('button[data-original-key]').forEach(b => { if(!b.classList.contains('is-confirming')) b.textContent = T[b.dataset.originalKey]; });
     
+    // [Fix] 強制重新載入列表以更新翻譯
     if(checkPerm('users')) loadUsers(); 
     if(checkPerm('stats')) loadStats(); 
     if(checkPerm('appointment')) loadAppointments(); 
